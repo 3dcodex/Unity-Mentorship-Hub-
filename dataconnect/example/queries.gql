@@ -1,0 +1,51 @@
+mutation AddNewScholarship(
+  $universityId: UUID!
+  $amount: Float!
+  $applicationLink: String
+  $deadline: Timestamp
+  $description: String!
+  $eligibilityCriteria: String!
+  $name: String!
+) @auth(level: USER) {
+  scholarship_insert(
+    data: {
+      universityId: $universityId
+      amount: $amount
+      applicationLink: $applicationLink
+      deadline: $deadline
+      description: $description
+      eligibilityCriteria: $eligibilityCriteria
+      name: $name
+    }
+  )
+}
+
+query GetScholarshipsForUniversity($universityId: UUID!) @auth(level: PUBLIC, insecureReason: "This operation is safe to expose to the public") {
+  scholarships(where: { universityId: { eq: $universityId } }) {
+    id
+    name
+    amount
+    description
+    deadline
+    applicationLink
+    eligibilityCriteria
+  }
+}
+
+mutation UpdateUserBio($bio: String) @auth(level: USER) {
+  user_update(key: { id_expr: "auth.uid" }, data: { bio: $bio })
+}
+
+query GetUserProfile @auth(level: USER) {
+  user(key: { id_expr: "auth.uid" }) {
+    id
+    displayName
+    email
+    photoUrl
+    bio
+    university {
+      id
+      name
+    }
+  }
+}

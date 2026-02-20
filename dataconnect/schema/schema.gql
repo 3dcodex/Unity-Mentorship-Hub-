@@ -1,0 +1,53 @@
+type User @table {
+  displayName: String!
+  email: String!
+  userType: String!
+  university: University!
+  photoUrl: String
+  bio: String
+  academicProgram: String
+  interests: [String]
+  backgroundInfo: [String]
+}
+
+type University @table {
+  name: String!
+  location: String!
+  website: String
+  scholarshipFund: Float
+}
+
+type Resource @table {
+  title: String!
+  description: String!
+  resourceType: String!
+  university: University
+  url: String
+  contactInfo: String
+}
+
+type MentorshipRequest @table {
+  student: User!
+  mentor: User!
+  status: String!
+  createdAt: Timestamp!
+  message: String
+}
+
+type Scholarship @table {
+  name: String!
+  amount: Float!
+  description: String!
+  eligibilityCriteria: String!
+  university: University
+  applicationLink: String
+  deadline: Timestamp
+}
+
+type ForumPost @table {
+  title: String!
+  content: String!
+  createdAt: Timestamp!
+  author: User
+  parentPost: ForumPost
+}

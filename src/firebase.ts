@@ -1,0 +1,37 @@
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
+import type { FirebaseOptions } from "firebase/app";
+
+// Your web app's Firebase configuration
+const firebaseConfig: FirebaseOptions = {
+  apiKey: "AIzaSyDC3ZItYS0WU-n5cIOUwlyeQzDxcM5j-uA",
+  authDomain: "unity-mentorship-hub-ca76e.firebaseapp.com",
+  projectId: "unity-mentorship-hub-ca76e",
+  storageBucket: "unity-mentorship-hub-ca76e.firebasestorage.app",
+  messagingSenderId: "538275309573",
+  appId: "1:538275309573:web:41c34922ec7004e1ec946c",
+  measurementId: "G-W277069DZ0",
+};
+
+// Initialize Firebase app
+export const app = initializeApp(firebaseConfig);
+
+// Initialize Analytics (browser-only)
+export const analytics = ((): ReturnType<typeof getAnalytics> | null => {
+  try {
+    if (typeof window === "undefined") return null;
+    return getAnalytics(app);
+  } catch (e) {
+    return null;
+  }
+})();
+
+// Export other services
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+export const storage = getStorage(app);
+
+export default firebaseConfig;
