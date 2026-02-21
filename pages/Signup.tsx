@@ -1,12 +1,12 @@
+import { createUserProfile } from '../services/userService';
+import { Role } from '../types';
+import PublicHeader from '../components/PublicHeader';
+import Footer from '../components/Footer';
 
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../src/firebase';
-import { createUserProfile } from '../services/userService';
-import { Role } from '../types';
-import PublicHeader from '../components/PublicHeader';
-import Footer from '../components/Footer';
 
 const roles: { id: Role, title: string, desc: string, img: string }[] = [
   { 
@@ -39,6 +39,8 @@ const offerTags = ['Life Skills', 'Career Advice', 'Study Tips', 'Language Excha
 const seekingTags = ['Industry Trends', 'Resume Review', 'DEI Advocacy', 'Research Collab', 'Cultural Guidance'];
 
 const Signup: React.FC = () => {
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [step, setStep] = useState(1);
   const [selectedRole, setSelectedRole] = useState<Role | ''>('');
   const [selectedOffer, setSelectedOffer] = useState<string[]>([]);
@@ -204,11 +206,47 @@ const Signup: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Choose Password</label>
-                  <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-gray-50 border-none rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 outline-none" placeholder="••••••••" />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full bg-gray-50 border-none rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 outline-none pr-10"
+                      placeholder="••••••••"
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-primary"
+                      onClick={() => setShowPassword((v) => !v)}
+                      tabIndex={-1}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      <span className="material-symbols-outlined">{showPassword ? "visibility_off" : "visibility"}</span>
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Confirm Password</label>
-                  <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full bg-gray-50 border-none rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 outline-none" placeholder="••••••••" />
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? "text" : "password"}
+                      required
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full bg-gray-50 border-none rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 outline-none pr-10"
+                      placeholder="••••••••"
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-primary"
+                      onClick={() => setShowConfirmPassword((v) => !v)}
+                      tabIndex={-1}
+                      aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                    >
+                      <span className="material-symbols-outlined">{showConfirmPassword ? "visibility_off" : "visibility"}</span>
+                    </button>
+                  </div>
                 </div>
                 {error && <div className="text-sm text-red-600 text-center font-bold">{error}</div>}
                 <div className="flex items-start gap-2 sm:gap-3 px-1 pt-2">

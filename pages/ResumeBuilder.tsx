@@ -1,15 +1,18 @@
-
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { doc, setDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../src/firebase';
 import { useAuth } from '../App';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 interface ResumeData {
   fullName: string;
   email: string;
   phone: string;
   linkedin: string;
+  github: string;
+  website: string;
   location: string;
   summary: string;
   experiences: Array<{
@@ -19,6 +22,7 @@ interface ResumeData {
     startDate: string;
     endDate: string;
     description: string;
+    logoUrl?: string;
   }>;
   education: Array<{
     id: string;
@@ -26,36 +30,178 @@ interface ResumeData {
     degree: string;
     field: string;
     graduationDate: string;
+    gpa?: string;
   }>;
-  skills: string[];
+  skills: Array<{ name: string; level: 'Beginner' | 'Intermediate' | 'Expert' }>;
   certifications: Array<{
     id: string;
     title: string;
     issuer: string;
     date: string;
   }>;
+  projects: Array<{
+    id: string;
+    title: string;
+    description: string;
+    technologies: string;
+    links: string;
+  }>;
+  achievements: Array<{
+    id: string;
+    title: string;
+    description: string;
+    date: string;
+  }>;
+  hobbies: string[];
+  references: Array<{ name: string; contact: string }>;
+  languages: Array<{ name: string; proficiency: string }>;
+  volunteer: Array<{
+    id: string;
+    organization: string;
+    role: string;
+    startDate: string;
+    endDate: string;
+    description: string;
+  }>;
+  sectionVisibility: {
+    summary: boolean;
+    experiences: boolean;
+    education: boolean;
+    skills: boolean;
+    certifications: boolean;
+    projects: boolean;
+    achievements: boolean;
+    hobbies: boolean;
+    references: boolean;
+    languages: boolean;
+    volunteer: boolean;
+  };
 }
 
 const ResumeBuilder: React.FC = () => {
-  const navigate = useNavigate();
+    // Auto-save toggle from ProfileSettings
+    const [autoSave, setAutoSave] = useState(localStorage.getItem('unity_resume_auto_save') === 'true');
+    React.useEffect(() => {
+      const handler = () => setAutoSave(localStorage.getItem('unity_resume_auto_save') === 'true');
+      window.addEventListener('storage', handler);
+      return () => window.removeEventListener('storage', handler);
+    }, []);
+  const [undoStack, setUndoStack] = useState<ResumeData[]>([]);
+  const [redoStack, setRedoStack] = useState<ResumeData[]>([]);
   const { user } = useAuth();
-  const resumePreviewRef = useRef<HTMLDivElement>(null);
-  const [step, setStep] = useState(1);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [language, setLanguage] = useState('en');
+  const [selectedTemplate, setSelectedTemplate] = useState('classic');
+  const [themeColor, setThemeColor] = useState('#1d4ed8');
+  const [fontStyle, setFontStyle] = useState('sans-serif');
+  const [fontSize, setFontSize] = useState(14);
   const [resumeData, setResumeData] = useState<ResumeData>({
     fullName: localStorage.getItem('unity_user_name') || '',
-    email: user?.email || '',
+    email: '',
     phone: '',
     linkedin: '',
+    github: '',
+    website: '',
     location: '',
     summary: '',
     experiences: [],
     education: [],
     skills: [],
     certifications: [],
+    projects: [],
+    achievements: [],
+    hobbies: [],
+    references: [],
+    languages: [],
+    volunteer: [],
+    sectionVisibility: {
+      summary: true,
+      experiences: true,
+      education: true,
+      skills: true,
+      certifications: true,
+      projects: true,
+      achievements: true,
+      hobbies: true,
+      references: true,
+      languages: true,
+      volunteer: true,
+    },
   });
+  // Local save always
+  React.useEffect(() => {
+    localStorage.setItem('unity_resume_data', JSON.stringify(resumeData));
+  }, [resumeData]);
+
+  // Auto-save to Firestore if enabled
+  React.useEffect(() => {
+    if (!autoSave || !user) return;
+    const save = async () => {
+      try {
+        const resumeId = 'autosave';
+        const basicInfo = {
+          fullName: resumeData.fullName,
+          email: resumeData.email,
+          phone: resumeData.phone,
+          links: {
+            LinkedIn: resumeData.linkedin,
+            GitHub: resumeData.github,
+            Portfolio: resumeData.website,
+          },
+        };
+        const templateSettings = {
+          font: fontStyle,
+          color: themeColor,
+          layout: selectedTemplate,
+        };
+        await setDoc(
+          doc(db, 'Users', user.uid, 'resumes', resumeId),
+          {
+            basicInfo,
+            workExperience: resumeData.experiences,
+            education: resumeData.education,
+            skills: resumeData.skills,
+            projects: resumeData.projects,
+            awards: resumeData.achievements,
+            languages: resumeData.languages,
+            hobbies: resumeData.hobbies,
+            templateSettings,
+            lastEditedTimestamp: Timestamp.now(),
+          },
+          { merge: true }
+        );
+      } catch (err) {
+        // Optionally handle error
+      }
+    };
+    save();
+  }, [resumeData, fontStyle, themeColor, selectedTemplate, user, autoSave]);
+  const handleUndo = () => {
+    if (undoStack.length > 0) {
+      setRedoStack([resumeData, ...redoStack]);
+      setResumeData(undoStack[0]);
+      setUndoStack(undoStack.slice(1));
+    }
+  };
+  const handleRedo = () => {
+    if (redoStack.length > 0) {
+      setUndoStack([resumeData, ...undoStack]);
+      setResumeData(redoStack[0]);
+      setRedoStack(redoStack.slice(1));
+    }
+  };
+  const languageOptions = [
+    { code: 'en', label: 'English' },
+    { code: 'fr', label: 'Français' },
+    { code: 'es', label: 'Español' },
+    { code: 'zh', label: '中文' },
+    { code: 'hi', label: 'हिन्दी' },
+  ];
+  const navigate = useNavigate();
+  const resumePreviewRef = useRef<HTMLDivElement>(null);
+  const [step, setStep] = useState(1);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
   const handleInputChange = (field: keyof ResumeData, value: any) => {
     setResumeData(prev => ({
@@ -131,11 +277,39 @@ const ResumeBuilder: React.FC = () => {
     }
     setIsSaving(true);
     try {
-      await setDoc(doc(db, 'resumes', user.uid), {
-        ...resumeData,
-        userId: user.uid,
-        savedAt: Timestamp.now(),
-      });
+      // Generate a new resumeId
+      const resumeId = Date.now().toString();
+      // Prepare Firestore structure
+      const basicInfo = {
+        fullName: resumeData.fullName,
+        email: resumeData.email,
+        phone: resumeData.phone,
+        links: {
+          LinkedIn: resumeData.linkedin,
+          GitHub: resumeData.github,
+          Portfolio: resumeData.website,
+        },
+      };
+      const templateSettings = {
+        font: fontStyle,
+        color: themeColor,
+        layout: selectedTemplate,
+      };
+      await setDoc(
+        doc(db, 'Users', user.uid, 'resumes', resumeId),
+        {
+          basicInfo,
+          workExperience: resumeData.experiences,
+          education: resumeData.education,
+          skills: resumeData.skills,
+          projects: resumeData.projects,
+          awards: resumeData.achievements,
+          languages: resumeData.languages,
+          hobbies: resumeData.hobbies,
+          templateSettings,
+          lastEditedTimestamp: Timestamp.now(),
+        }
+      );
       setShowSuccessMessage(true);
       setTimeout(() => setShowSuccessMessage(false), 3000);
     } catch (err) {
@@ -147,19 +321,21 @@ const ResumeBuilder: React.FC = () => {
 
   const downloadPDF = async () => {
     if (!resumePreviewRef.current) return;
-    
     setIsDownloading(true);
     try {
-      const content = generateResumeText();
-      const element = document.createElement('a');
-      element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(content));
-      element.setAttribute('download', `${resumeData.fullName || 'Resume'}.txt`);
-      element.style.display = 'none';
-      document.body.appendChild(element);
-      element.click();
-      document.body.removeChild(element);
+      // Capture the resume preview as an image
+      const canvas = await html2canvas(resumePreviewRef.current);
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      // Calculate image dimensions to fit page
+      const imgWidth = pageWidth - 40;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      pdf.addImage(imgData, 'PNG', 20, 20, imgWidth, imgHeight);
+      pdf.save(`${resumeData.fullName || 'Resume'}.pdf`);
     } catch (err) {
-      alert('Failed to download resume');
+      alert('Failed to download resume as PDF');
     } finally {
       setIsDownloading(false);
     }
@@ -197,6 +373,63 @@ const ResumeBuilder: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto py-6 sm:py-8 md:py-12 px-4 sm:px-6 animate-in fade-in duration-700 space-y-6 sm:space-y-8 md:space-y-12">
+      {/* Template & Design Controls */}
+      <div className="flex flex-wrap gap-4 mb-6">
+              <div>
+                <label className="font-bold text-xs">Language</label>
+                <select value={language} onChange={e => setLanguage(e.target.value)} className="ml-2 p-2 rounded-xl border">
+                  {languageOptions.map(opt => (
+                    <option key={opt.code} value={opt.code}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+        <div>
+          <label className="font-bold text-xs">Template</label>
+          <select value={selectedTemplate} onChange={e => setSelectedTemplate(e.target.value)} className="ml-2 p-2 rounded-xl border">
+            <option value="classic">Classic</option>
+            <option value="modern">Modern</option>
+            <option value="minimal">Minimal</option>
+            <option value="creative">Creative</option>
+          </select>
+        </div>
+        <div>
+          <label className="font-bold text-xs">Theme Color</label>
+          <input type="color" value={themeColor} onChange={e => setThemeColor(e.target.value)} className="ml-2 w-8 h-8 border rounded-full" />
+        </div>
+        <div>
+          <label className="font-bold text-xs">Font Style</label>
+          <select value={fontStyle} onChange={e => setFontStyle(e.target.value)} className="ml-2 p-2 rounded-xl border">
+            <option value="sans-serif">Sans-serif</option>
+            <option value="serif">Serif</option>
+            <option value="monospace">Monospace</option>
+          </select>
+        </div>
+        <div>
+          <label className="font-bold text-xs">Font Size</label>
+          <input type="number" min={10} max={24} value={fontSize} onChange={e => setFontSize(Number(e.target.value))} className="ml-2 w-16 p-2 rounded-xl border" />
+        </div>
+        <div>
+          <label className="font-bold text-xs">Section Visibility</label>
+          <div className="flex flex-wrap gap-2 ml-2">
+            {Object.keys(resumeData.sectionVisibility).map(section => (
+              <label key={section} className="flex items-center gap-1 text-xs">
+                <input
+                  type="checkbox"
+                  checked={resumeData.sectionVisibility[section]}
+                  onChange={e => setResumeData(prev => ({
+                    ...prev,
+                    sectionVisibility: {
+                      ...prev.sectionVisibility,
+                      [section]: e.target.checked,
+                    },
+                  }))}
+                />
+                {section.charAt(0).toUpperCase() + section.slice(1)}
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
       {showSuccessMessage && (
         <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
           <span className="material-symbols-outlined text-green-600">check_circle</span>
@@ -210,6 +443,20 @@ const ResumeBuilder: React.FC = () => {
           <p className="text-sm sm:text-base text-gray-500 font-medium mt-1">Create, preview, and download your professional resume.</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
+                    <button 
+                      onClick={handleUndo}
+                      className="px-4 sm:px-6 py-2.5 sm:py-3 bg-gray-200 text-gray-700 font-black rounded-xl shadow-lg hover:scale-105 transition-all text-xs sm:text-sm flex items-center justify-center gap-2"
+                    >
+                      <span className="material-symbols-outlined text-sm">undo</span>
+                      Undo
+                    </button>
+                    <button 
+                      onClick={handleRedo}
+                      className="px-4 sm:px-6 py-2.5 sm:py-3 bg-gray-200 text-gray-700 font-black rounded-xl shadow-lg hover:scale-105 transition-all text-xs sm:text-sm flex items-center justify-center gap-2"
+                    >
+                      <span className="material-symbols-outlined text-sm">redo</span>
+                      Redo
+                    </button>
           <button 
             onClick={() => navigate('/career')} 
             className="px-4 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-bold text-gray-500 hover:text-gray-900 border border-gray-200 rounded-xl transition-all"
@@ -222,7 +469,21 @@ const ResumeBuilder: React.FC = () => {
             className="px-4 sm:px-6 py-2.5 sm:py-3 bg-secondary text-white font-black rounded-xl shadow-lg shadow-secondary/20 hover:scale-105 transition-all disabled:opacity-50 text-xs sm:text-sm flex items-center justify-center gap-2"
           >
             <span className="material-symbols-outlined text-sm">download</span>
-            {isDownloading ? 'Downloading...' : 'Download'}
+            {isDownloading ? 'Downloading...' : 'Download PDF'}
+          </button>
+          <button 
+            onClick={() => alert('DOCX export coming soon!')}
+            className="px-4 sm:px-6 py-2.5 sm:py-3 bg-secondary text-white font-black rounded-xl shadow-lg shadow-secondary/20 hover:scale-105 transition-all text-xs sm:text-sm flex items-center justify-center gap-2"
+          >
+            <span className="material-symbols-outlined text-sm">description</span>
+            Export DOCX
+          </button>
+          <button 
+            onClick={() => alert('Shareable link coming soon!')}
+            className="px-4 sm:px-6 py-2.5 sm:py-3 bg-secondary text-white font-black rounded-xl shadow-lg shadow-secondary/20 hover:scale-105 transition-all text-xs sm:text-sm flex items-center justify-center gap-2"
+          >
+            <span className="material-symbols-outlined text-sm">link</span>
+            Share Link
           </button>
           <button 
             onClick={handleSaveResume}

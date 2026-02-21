@@ -1,14 +1,94 @@
 
 import React from 'react';
+import { rolePrivileges } from '../rolePrivileges';
+import { Role } from '../types';
 import { useNavigate, Link } from 'react-router-dom';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const userName = localStorage.getItem('unity_user_name') || 'Alex';
-  const userRole = localStorage.getItem('unity_user_role') || 'Student';
+  const userRole: Role = (localStorage.getItem('unity_user_role') as Role) || 'Domestic Student';
+  const privileges = rolePrivileges[userRole] || [];
+  // Badge and icon for each role
+  let badgeIcon = null;
+  let badgeLabel = '';
+  if (userRole === 'International Student') {
+    badgeIcon = <span className="material-symbols-outlined text-3xl text-blue-500">public</span>;
+    badgeLabel = '🌎 Global Explorer';
+  } else if (userRole === 'Domestic Student') {
+    badgeIcon = <span className="material-symbols-outlined text-3xl text-yellow-600">school</span>;
+    badgeLabel = '🏛 Campus Connector';
+  } else if (userRole === 'Alumni') {
+    badgeIcon = <span className="material-symbols-outlined text-3xl text-blue-600">workspace_premium</span>;
+    badgeLabel = '🎖 Alumni Mentor';
+  } else if (userRole === 'Professional') {
+    badgeIcon = <span className="material-symbols-outlined text-3xl text-green-600">business_center</span>;
+    badgeLabel = '💼 Industry Partner';
+  }
+
+  let roleSection = null;
+  if (userRole === 'Alumni') {
+    roleSection = (
+      <div className="bg-blue-50 border-blue-200 border rounded-2xl p-6 mb-6">
+        <h2 className="text-xl font-black text-blue-900 mb-2 flex items-center gap-2">
+          <span className="material-symbols-outlined text-blue-600">workspace_premium</span>
+          Alumni Dashboard
+        </h2>
+        <p className="text-sm text-blue-800 mb-2">Welcome, Alumni! Access exclusive career resources, mentorship opportunities, and alumni-only events.</p>
+        {privileges.includes('createCareerPrograms') && (
+          <Link to="/alumni/career" className="text-blue-700 underline font-bold">Career Center</Link>
+        )}
+        {privileges.includes('accessAlumniForum') && (
+          <Link to="/alumni/forum" className="ml-4 text-blue-700 underline font-bold">Alumni Forum</Link>
+        )}
+      </div>
+    );
+  } else if (userRole === 'Professional') {
+    roleSection = (
+      <div className="bg-green-50 border-green-200 border rounded-2xl p-6 mb-6">
+        <h2 className="text-xl font-black text-green-900 mb-2 flex items-center gap-2">
+          <span className="material-symbols-outlined text-green-600">business_center</span>
+          Professional Dashboard
+        </h2>
+        <p className="text-sm text-green-800 mb-2">Welcome, Professional! Share your expertise, network, and join industry panels.</p>
+        {privileges.includes('createCompanyProfiles') && (
+          <Link to="/professional/network" className="text-green-700 underline font-bold">Networking Hub</Link>
+        )}
+        {privileges.includes('accessAnalytics') && (
+          <Link to="/professional/analytics" className="ml-4 text-green-700 underline font-bold">Analytics Dashboard</Link>
+        )}
+      </div>
+    );
+  } else if (userRole === 'International Student' || userRole === 'Domestic Student') {
+    roleSection = (
+      <div className="bg-yellow-50 border-yellow-200 border rounded-2xl p-6 mb-6">
+        <h2 className="text-xl font-black text-yellow-900 mb-2 flex items-center gap-2">
+          <span className="material-symbols-outlined text-yellow-600">school</span>
+          Student Dashboard
+        </h2>
+        <p className="text-sm text-yellow-800 mb-2">Welcome, Student! Explore mentorship, events, and resources tailored for your journey.</p>
+        {privileges.includes('requestMentorship') && (
+          <Link to="/mentorship/match" className="text-yellow-700 underline font-bold">Find a Mentor</Link>
+        )}
+        {privileges.includes('joinCulturalGroups') && (
+          <Link to="/community/cultural-groups" className="ml-4 text-yellow-700 underline font-bold">Cultural Communities</Link>
+        )}
+        {privileges.includes('offerPeerMentoring') && (
+          <Link to="/mentorship/offer" className="ml-4 text-yellow-700 underline font-bold">Offer Peer Mentoring</Link>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="animate-in fade-in duration-700 space-y-6 sm:space-y-8 md:space-y-10">
+      {/* Role Badge */}
+      <div className="flex items-center gap-3 mb-2">
+        {badgeIcon}
+        <span className="text-xs font-bold text-gray-700 dark:text-white">{badgeLabel}</span>
+      </div>
+      {roleSection}
+      {/* ...existing dashboard content... */}
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-6">
         <div className="space-y-1">
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 tracking-tight">Hello, {userName}! 👋</h1>

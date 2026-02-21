@@ -13,6 +13,7 @@ const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+    const [showPassword, setShowPassword] = useState(false);
 
   // If already signed in, go to dashboard
   if (!loading && user) {
@@ -88,14 +89,25 @@ const Login: React.FC = () => {
                 <label className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">Password</label>
                 <button type="button" className="text-[9px] sm:text-[10px] font-black text-primary hover:underline uppercase tracking-widest">Forgot?</button>
               </div>
-              <input 
-                type="password" 
-                required 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-gray-50 border-none rounded-xl sm:rounded-2xl p-3 sm:p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 outline-none transition-all" 
-                placeholder="••••••••" 
-              />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-gray-50 border-none rounded-xl sm:rounded-2xl p-3 sm:p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 outline-none transition-all pr-10"
+                    placeholder="••••••••"
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-primary"
+                    onClick={() => setShowPassword((v) => !v)}
+                    tabIndex={-1}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    <span className="material-symbols-outlined">{showPassword ? "visibility_off" : "visibility"}</span>
+                  </button>
+                </div>
             </div>
           </div>
 
