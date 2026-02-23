@@ -4,6 +4,7 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { initializeFirestore, persistentLocalCache } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { getDatabase } from "firebase/database";
 import type { FirebaseOptions } from "firebase/app";
 // Connectivity check
 console.log("Navigator online?", typeof navigator !== "undefined" ? navigator.onLine : "N/A");
@@ -37,11 +38,13 @@ export const auth = getAuth(app);
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache(),
 });
+export const storage = getStorage(app);
+export const rtdb = getDatabase(app);
+
 // Force Firestore online
 import { enableNetwork } from "firebase/firestore";
 enableNetwork(db)
   .then(() => console.log("Firestore is online"))
   .catch((err) => console.error("Failed to enable network:", err));
-export const storage = getStorage(app);
 
 export default firebaseConfig;

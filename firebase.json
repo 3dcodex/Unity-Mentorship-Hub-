@@ -1,11 +1,14 @@
 {
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "database": {
+    "rules": "database.rules.json"
+  },
   "emulators": {
     "dataconnect": {
       "dataDir": "dataconnect/.dataconnect/pgliteData"
     }
-  },
-  "dataconnect": {
-    "source": "dataconnect"
   },
   "hosting": {
     "public": "dist",
@@ -20,5 +23,8 @@
         "destination": "/index.html"
       }
     ]
+  },
+  "functions": {
+    "source": "functions"
   }
 }

@@ -32,19 +32,41 @@ const Login: React.FC = () => {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const user = userCredential.user;
-      // mark onboarding as complete and store a friendly name if available
+      
+      // Wait a moment for auth to settle
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Fetch user data from Firestore
+      const { doc, getDoc } = await import('firebase/firestore');
+      const { db } = await import('../src/firebase');
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      
+      let isAdmin = false;
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        localStorage.setItem('unity_user_name', userData.displayName || user.email || 'User');
+        localStorage.setItem('unity_user_role', userData.role || 'Domestic Student');
+        isAdmin = userData.role === 'admin' || userData.role === 'super_admin';
+        console.log('User role:', userData.role, 'isAdmin:', isAdmin);
+      } else {
+        localStorage.setItem('unity_user_name', user.email || 'User');
+      }
+      
       localStorage.setItem('unity_onboarding_complete', 'true');
-      if (user.displayName) localStorage.setItem('unity_user_name', user.displayName);
-      else localStorage.setItem('unity_user_name', user.email ?? 'Returning User');
-      navigate('/dashboard');
+      
+      // Force navigation after a brief delay
+      setTimeout(() => {
+        navigate(isAdmin ? '/admin' : '/dashboard', { replace: true });
+      }, 100);
     } catch (err: any) {
+      console.error('Login error:', err);
       setError(err?.message ?? 'Sign-in failed');
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-white p-4 sm:p-6">
+    <div className="flex flex-col min-h-screen bg-white dark:bg-slate-900 p-4 sm:p-6">
       <div className="flex items-center justify-center flex-1">
       <div className="max-w-md w-full space-y-8 sm:space-y-12">
         <div className="text-center space-y-4 sm:space-y-6">
@@ -66,8 +88,8 @@ const Login: React.FC = () => {
             </div>
           </Link>
           <div className="space-y-2">
-            <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">Welcome back</h1>
-            <p className="text-sm sm:text-base text-gray-500 font-medium">Log in to your inclusive student success hub.</p>
+            <h1 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">Welcome back</h1>
+            <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 font-medium">Log in to your inclusive student success hub.</p>
           </div>
         </div>
 
@@ -80,7 +102,7 @@ const Login: React.FC = () => {
                 required 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-gray-50 border-none rounded-xl sm:rounded-2xl p-3 sm:p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 outline-none transition-all" 
+                className="w-full bg-gray-50 dark:bg-slate-800 border-none rounded-xl sm:rounded-2xl p-3 sm:p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 dark:focus:ring-blue-500/20 outline-none transition-all dark:text-white" 
                 placeholder="alex@university.edu" 
               />
             </div>
@@ -95,12 +117,12 @@ const Login: React.FC = () => {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-gray-50 border-none rounded-xl sm:rounded-2xl p-3 sm:p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 outline-none transition-all pr-10"
+                    className="w-full bg-gray-50 dark:bg-slate-800 border-none rounded-xl sm:rounded-2xl p-3 sm:p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 dark:focus:ring-blue-500/20 outline-none transition-all pr-10 dark:text-white"
                     placeholder="••••••••"
                   />
                   <button
                     type="button"
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-primary"
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-primary dark:hover:text-blue-400"
                     onClick={() => setShowPassword((v) => !v)}
                     tabIndex={-1}
                     aria-label={showPassword ? "Hide password" : "Show password"}
@@ -114,7 +136,7 @@ const Login: React.FC = () => {
           <button 
             type="submit" 
             disabled={isLoading}
-            className="w-full py-4 sm:py-5 bg-primary text-white font-black rounded-xl sm:rounded-2xl shadow-xl shadow-primary/20 hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base"
+            className="w-full py-4 sm:py-5 bg-primary dark:bg-blue-600 text-white font-black rounded-xl sm:rounded-2xl shadow-xl shadow-primary/20 dark:shadow-blue-600/20 hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base"
           >
             {isLoading ? (
               <span className="material-symbols-outlined animate-spin text-lg sm:text-xl">progress_activity</span>
@@ -127,20 +149,20 @@ const Login: React.FC = () => {
         )}
 
         <div className="relative">
-          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100"></div></div>
-          <div className="relative flex justify-center text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-gray-400"><span className="bg-white px-4">Or continue with</span></div>
+          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100 dark:border-gray-700"></div></div>
+          <div className="relative flex justify-center text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500"><span className="bg-white dark:bg-slate-900 px-4">Or continue with</span></div>
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:gap-4">
-          <button className="flex items-center justify-center gap-2 sm:gap-3 py-3 sm:py-4 border border-gray-100 rounded-xl sm:rounded-2xl hover:bg-gray-50 transition-all font-bold text-xs">
+          <button className="flex items-center justify-center gap-2 sm:gap-3 py-3 sm:py-4 border border-gray-100 dark:border-gray-700 rounded-xl sm:rounded-2xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-all font-bold text-xs dark:text-gray-300">
             <img src="https://developers.google.com/static/identity/images/branding_guideline/logo_standard_cO8025APcVccDE5DMsy59Euqo9G7M35xfDCulqWkQg.png" className="size-4 sm:size-5" alt="Google" onError={(e) => (e.currentTarget.style.display = 'none')} /> Google
           </button>
-          <button className="flex items-center justify-center gap-2 sm:gap-3 py-3 sm:py-4 border border-gray-100 rounded-xl sm:rounded-2xl hover:bg-gray-50 transition-all font-bold text-xs">
+          <button className="flex items-center justify-center gap-2 sm:gap-3 py-3 sm:py-4 border border-gray-100 dark:border-gray-700 rounded-xl sm:rounded-2xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-all font-bold text-xs dark:text-gray-300">
             <img src="https://cdn.worldvectorlogo.com/logos/linkedin-icon-2.svg" className="size-4 sm:size-5" alt="LinkedIn" onError={(e) => (e.currentTarget.style.display = 'none')} /> LinkedIn
           </button>
         </div>
 
-        <p className="text-center text-xs font-bold text-gray-400">
+        <p className="text-center text-xs font-bold text-gray-400 dark:text-gray-500">
           New to Unity? <Link to="/signup" className="text-primary hover:underline">Create an account</Link>
         </p>
       </div>

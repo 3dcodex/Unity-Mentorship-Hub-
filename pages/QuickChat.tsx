@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { db } from '../src/firebase';
 import { useAuth } from '../App';
-import { doc, setDoc, collection, query, orderBy, onSnapshot, getDocs, where, Timestamp, serverTimestamp, addDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, query, orderBy, onSnapshot, getDocs, where, serverTimestamp, addDoc } from 'firebase/firestore';
+import { subscribeToUserStatus, setUserOnline, setUserOffline } from '../services/presenceService';
 
 interface Contact {
   id: string;
@@ -42,24 +42,63 @@ const QuickChat: React.FC = () => {
   const queryParams = new URLSearchParams(location.search);
   const targetUserId = queryParams.get('user');
 
-  const [contacts, setContacts] = useState<Contact[]>(DEFAULT_CONTACTS);
-  const [activeContactId, setActiveContactId] = useState<string>(targetUserId || 'jordan');
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [activeContactId, setActiveContactId] = useState<string>(targetUserId || '');
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [userStatuses, setUserStatuses] = useState<{[key: string]: boolean}>({});
   
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Set current user online
+  useEffect(() => {
+    if (!user) return;
+    setUserOnline(user.uid);
+    return () => setUserOffline(user.uid);
+  }, [user]);
+
   // Load messages from Firestore
   useEffect(() => {
     if (!user) return;
+    getDocs(collection(db, 'users')).then(snapshot => {
+      const realContacts = snapshot.docs
+        .filter(doc => doc.id !== user.uid)
+        .map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            name: data.displayName || data.email || 'User',
+            role: data.role || 'Member',
+            img: data.photoURL || 'https://i.pravatar.cc/100',
+            online: false,
+            lastMsg: '',
+            lastMsgTime: null,
+          };
+        });
+      setContacts(realContacts);
+      
+      realContacts.forEach(contact => {
+        subscribeToUserStatus(contact.id, (isOnline) => {
+          setUserStatuses(prev => ({ ...prev, [contact.id]: isOnline }));
+        });
+      });
+      
+      if (targetUserId && realContacts.some(c => c.id === targetUserId)) {
+        setActiveContactId(targetUserId);
+      } else if (realContacts.length > 0 && !activeContactId) {
+        setActiveContactId(realContacts[0].id);
+      }
+    });
+  }, [user, targetUserId]);
 
+  useEffect(() => {
+    if (!user || !activeContactId) return;
     const conversationId = [user.uid, activeContactId].sort().join('_');
     const messagesRef = collection(db, 'conversations', conversationId, 'messages');
     const q = query(messagesRef, orderBy('createdAt', 'asc'));
-
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const loadedMessages = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -68,21 +107,15 @@ const QuickChat: React.FC = () => {
       setMessages(loadedMessages);
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 0);
     });
-
     return () => unsubscribe();
   }, [user, activeContactId]);
-
-  useEffect(() => {
-    if (targetUserId && DEFAULT_CONTACTS.some(c => c.id === targetUserId)) {
-      setActiveContactId(targetUserId);
-    }
-  }, [targetUserId]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const activeContact = contacts.find(c => c.id === activeContactId) || contacts[0];
+  const activeContact = contacts.find(c => c.id === activeContactId);
+  const isActiveContactOnline = activeContact ? userStatuses[activeContact.id] || false : false;
 
   const handleSendMessage = async (text?: string, file?: Message['file']) => {
     if (!text?.trim() && !file) return;
@@ -115,6 +148,29 @@ const QuickChat: React.FC = () => {
         updatedAt: serverTimestamp(),
       }, { merge: true });
 
+      // Create notification for recipient
+      try {
+        const recipientDoc = await getDocs(query(collection(db, 'users'), where('__name__', '==', activeContactId)));
+        const senderName = localStorage.getItem('unity_user_name') || user.email || 'Someone';
+        const senderDoc = await getDocs(query(collection(db, 'users'), where('__name__', '==', user.uid)));
+        const senderPhoto = senderDoc.docs[0]?.data()?.photoURL || '';
+        
+        await addDoc(collection(db, 'notifications'), {
+          userId: activeContactId,
+          type: 'message',
+          title: 'New Message',
+          message: `${senderName} sent you a message`,
+          read: false,
+          createdAt: serverTimestamp(),
+          actionUrl: `/quick-chat?user=${user.uid}`,
+          fromUser: user.uid,
+          fromUserName: senderName,
+          fromUserPhoto: senderPhoto,
+        });
+      } catch (err) {
+        console.error('Error creating notification:', err);
+      }
+
       setInputText('');
 
       // Update contact's last message
@@ -123,22 +179,6 @@ const QuickChat: React.FC = () => {
           ? { ...c, lastMsg: newMessage.text, lastMsgTime: new Date() } 
           : c
       ));
-
-      // Simulated reply after 2 seconds
-      setTimeout(async () => {
-        try {
-          const reply = {
-            senderId: activeContactId,
-            displayName: activeContact.name,
-            text: file ? "I'll take a look at this document right away!" : "Got it! Let's discuss this further during our next sync.",
-            createdAt: serverTimestamp(),
-            file: null,
-          };
-          await addDoc(messagesRef, reply);
-        } catch (err) {
-          console.error('Error sending reply:', err);
-        }
-      }, 2000);
     } catch (err) {
       console.error('Error sending message:', err);
       alert('Failed to send message');
@@ -182,6 +222,18 @@ const QuickChat: React.FC = () => {
 
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-140px)] gap-6 animate-in fade-in duration-500 px-4 sm:px-6">
+      {contacts.length === 0 ? (
+        <div className="w-full h-full flex flex-col items-center justify-center text-center text-gray-400">
+          <span className="material-symbols-outlined text-6xl mb-4">person_off</span>
+          <p className="text-lg font-bold">No users available to chat.</p>
+        </div>
+      ) : !activeContact ? (
+        <div className="w-full h-full flex flex-col items-center justify-center text-center text-gray-400">
+          <span className="material-symbols-outlined text-6xl mb-4">chat_bubble_outline</span>
+          <p className="text-lg font-bold">Select a user to start chatting.</p>
+        </div>
+      ) : (
+        <>
       {/* Sidebar */}
       <aside className="w-full md:w-80 bg-white rounded-2xl md:rounded-3xl border border-gray-100 shadow-sm flex flex-col overflow-hidden">
         <div className="p-4 sm:p-6 border-b border-gray-50 flex items-center justify-between">
@@ -199,7 +251,7 @@ const QuickChat: React.FC = () => {
             >
               <div className="relative flex-shrink-0">
                 <img src={contact.img} className="size-10 sm:size-12 rounded-lg sm:rounded-xl object-cover" alt={contact.name} />
-                {contact.online && <div className="absolute -bottom-1 -right-1 size-3 bg-green-500 rounded-full border-2 border-white"></div>}
+                {userStatuses[contact.id] && <div className="absolute -bottom-1 -right-1 size-3 bg-green-500 rounded-full border-2 border-white"></div>}
               </div>
               <div className="flex-1 text-left overflow-hidden min-w-0">
                 <div className="flex justify-between items-center gap-2">
@@ -222,12 +274,12 @@ const QuickChat: React.FC = () => {
             </button>
             <div className="relative flex-shrink-0">
               <img src={activeContact.img} className="size-10 sm:size-12 rounded-lg sm:rounded-xl object-cover" alt={activeContact.name} />
-              {activeContact.online && <div className="absolute -bottom-1 -right-1 size-3 bg-green-500 rounded-full border-2 border-white"></div>}
+              {isActiveContactOnline && <div className="absolute -bottom-1 -right-1 size-3 bg-green-500 rounded-full border-2 border-white"></div>}
             </div>
             <div className="min-w-0">
               <h3 className="text-sm sm:text-base font-black text-gray-900 leading-none truncate">{activeContact.name}</h3>
               <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-widest">
-                {activeContact.online ? 'Active Now' : 'Offline'}
+                {isActiveContactOnline ? 'Active Now' : 'Offline'}
               </p>
             </div>
           </div>
@@ -323,6 +375,8 @@ const QuickChat: React.FC = () => {
           </div>
         </div>
       </section>
+        </>
+      )}
     </div>
   );
 };

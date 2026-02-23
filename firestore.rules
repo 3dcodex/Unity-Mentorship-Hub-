@@ -1,0 +1,161 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && (getUserRole() in ['admin', 'super_admin'] || request.auth.token.admin == true);
+    }
+    
+    function isModerator() {
+      return isAuthenticated() && (getUserRole() in ['moderator', 'admin', 'super_admin']);
+    }
+    
+    function getRoleLevel(role) {
+      return role == 'super_admin' ? 100 :
+             role == 'admin' ? 80 :
+             role == 'moderator' ? 60 :
+             role == 'mentor' ? 40 :
+             role == 'alumni' ? 35 :
+             role == 'professional' ? 30 :
+             role == 'international_student' ? 25 :
+             role == 'domestic_student' ? 22 :
+             role == 'student' ? 20 : 10;
+    }
+    
+    function canManageUser(targetUserId) {
+      let adminRole = getUserRole();
+      let targetRole = get(/databases/$(database)/documents/users/$(targetUserId)).data.role;
+      return getRoleLevel(adminRole) > getRoleLevel(targetRole);
+    }
+    
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        (isAdmin() && canManageUser(userId))
+      );
+      allow delete: if isAuthenticated() && request.auth.uid == userId;
+      
+      match /resumes/{resumeId} {
+        allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      }
+      
+      match /connections/{connectionId} {
+        allow read: if isAuthenticated() && request.auth.uid == userId;
+        allow write: if isAuthenticated() && request.auth.uid == userId;
+      }
+    }
+    
+    match /conversations/{conversationId} {
+      allow read: if isAuthenticated() && request.auth.uid in resource.data.participants;
+      allow create: if isAuthenticated() && request.auth.uid in request.resource.data.participants;
+      allow update: if isAuthenticated() && request.auth.uid in resource.data.participants;
+      
+      match /messages/{messageId} {
+        allow read: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+        allow create: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants && request.auth.uid == request.resource.data.senderId;
+      }
+    }
+    
+    match /mentorshipRequests/{requestId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    match /sessionBookings/{bookingId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (
+        request.auth.uid == resource.data.studentId ||
+        request.auth.uid == resource.data.mentorId ||
+        isAdmin()
+      );
+    }
+    
+    match /bookings/{bookingId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    match /sessions/{sessionId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    match /communityPosts/{postId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.userId || isModerator());
+      
+      match /comments/{commentId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        allow delete: if isAuthenticated() && (request.auth.uid == resource.data.userId || isModerator());
+      }
+    }
+    
+    match /mentorApplications/{applicationId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isModerator();
+    }
+    
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || request.auth.uid == resource.data.userId;
+    }
+    
+    match /payouts/{payoutId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    match /reports/{reportId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    match /reviews/{reviewId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    match /categories/{categoryId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      allow write: if isAuthenticated();
+    }
+    
+    match /securityLogs/{logId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+    
+    match /adminActions/{actionId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin() || isModerator();
+    }
+    
+    match /supportTickets/{ticketId} {
+      allow read: if isAuthenticated() && (isAdmin() || request.auth.uid == resource.data.userId);
+      allow create: if isAuthenticated();
+      allow update: if isAdmin();
+    }
+    
+    match /settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if getUserRole() == 'super_admin';
+    }
+  }
+}

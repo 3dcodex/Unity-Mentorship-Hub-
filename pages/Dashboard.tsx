@@ -1,209 +1,328 @@
-
-import React from 'react';
-import { rolePrivileges } from '../rolePrivileges';
-import { Role } from '../types';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { db } from '../src/firebase';
+import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
+import { useAuth } from '../App';
+import { useTheme } from '../contexts/ThemeContext';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const userName = localStorage.getItem('unity_user_name') || 'Alex';
-  const userRole: Role = (localStorage.getItem('unity_user_role') as Role) || 'Domestic Student';
-  const privileges = rolePrivileges[userRole] || [];
-  // Badge and icon for each role
-  let badgeIcon = null;
-  let badgeLabel = '';
-  if (userRole === 'International Student') {
-    badgeIcon = <span className="material-symbols-outlined text-3xl text-blue-500">public</span>;
-    badgeLabel = '🌎 Global Explorer';
-  } else if (userRole === 'Domestic Student') {
-    badgeIcon = <span className="material-symbols-outlined text-3xl text-yellow-600">school</span>;
-    badgeLabel = '🏛 Campus Connector';
-  } else if (userRole === 'Alumni') {
-    badgeIcon = <span className="material-symbols-outlined text-3xl text-blue-600">workspace_premium</span>;
-    badgeLabel = '🎖 Alumni Mentor';
-  } else if (userRole === 'Professional') {
-    badgeIcon = <span className="material-symbols-outlined text-3xl text-green-600">business_center</span>;
-    badgeLabel = '💼 Industry Partner';
-  }
+  const { user } = useAuth();
+  const { isDark } = useTheme();
+  const [userName, setUserName] = useState('');
+  const [userPhoto, setUserPhoto] = useState<string | null>(null);
+  const [mentors, setMentors] = useState<any[]>([]);
+  const [upcomingSessions, setUpcomingSessions] = useState<any[]>([]);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const [stats, setStats] = useState({ totalSessions: 0, completedSessions: 0, activeMentors: 0 });
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  let roleSection = null;
-  if (userRole === 'Alumni') {
-    roleSection = (
-      <div className="bg-blue-50 border-blue-200 border rounded-2xl p-6 mb-6">
-        <h2 className="text-xl font-black text-blue-900 mb-2 flex items-center gap-2">
-          <span className="material-symbols-outlined text-blue-600">workspace_premium</span>
-          Alumni Dashboard
-        </h2>
-        <p className="text-sm text-blue-800 mb-2">Welcome, Alumni! Access exclusive career resources, mentorship opportunities, and alumni-only events.</p>
-        {privileges.includes('createCareerPrograms') && (
-          <Link to="/alumni/career" className="text-blue-700 underline font-bold">Career Center</Link>
-        )}
-        {privileges.includes('accessAlumniForum') && (
-          <Link to="/alumni/forum" className="ml-4 text-blue-700 underline font-bold">Alumni Forum</Link>
-        )}
-      </div>
-    );
-  } else if (userRole === 'Professional') {
-    roleSection = (
-      <div className="bg-green-50 border-green-200 border rounded-2xl p-6 mb-6">
-        <h2 className="text-xl font-black text-green-900 mb-2 flex items-center gap-2">
-          <span className="material-symbols-outlined text-green-600">business_center</span>
-          Professional Dashboard
-        </h2>
-        <p className="text-sm text-green-800 mb-2">Welcome, Professional! Share your expertise, network, and join industry panels.</p>
-        {privileges.includes('createCompanyProfiles') && (
-          <Link to="/professional/network" className="text-green-700 underline font-bold">Networking Hub</Link>
-        )}
-        {privileges.includes('accessAnalytics') && (
-          <Link to="/professional/analytics" className="ml-4 text-green-700 underline font-bold">Analytics Dashboard</Link>
-        )}
-      </div>
-    );
-  } else if (userRole === 'International Student' || userRole === 'Domestic Student') {
-    roleSection = (
-      <div className="bg-yellow-50 border-yellow-200 border rounded-2xl p-6 mb-6">
-        <h2 className="text-xl font-black text-yellow-900 mb-2 flex items-center gap-2">
-          <span className="material-symbols-outlined text-yellow-600">school</span>
-          Student Dashboard
-        </h2>
-        <p className="text-sm text-yellow-800 mb-2">Welcome, Student! Explore mentorship, events, and resources tailored for your journey.</p>
-        {privileges.includes('requestMentorship') && (
-          <Link to="/mentorship/match" className="text-yellow-700 underline font-bold">Find a Mentor</Link>
-        )}
-        {privileges.includes('joinCulturalGroups') && (
-          <Link to="/community/cultural-groups" className="ml-4 text-yellow-700 underline font-bold">Cultural Communities</Link>
-        )}
-        {privileges.includes('offerPeerMentoring') && (
-          <Link to="/mentorship/offer" className="ml-4 text-yellow-700 underline font-bold">Offer Peer Mentoring</Link>
-        )}
+  useEffect(() => {
+    if (user) {
+      loadDashboardData();
+    }
+  }, [user]);
+
+  const loadDashboardData = async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      // Load user profile
+      const userDoc = await getDocs(query(collection(db, 'users'), where('__name__', '==', user.uid)));
+      if (!userDoc.empty) {
+        const userData = userDoc.docs[0].data();
+        setUserName(userData.displayName || userData.name || 'User');
+        setUserPhoto(userData.photoURL || null);
+      }
+
+      // Load upcoming sessions
+      const sessionsQuery = query(
+        collection(db, 'bookings'),
+        where('menteeId', '==', user.uid),
+        where('status', '!=', 'cancelled'),
+        orderBy('status'),
+        limit(3)
+      );
+      const sessionsSnap = await getDocs(sessionsQuery);
+      const sessions = sessionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setUpcomingSessions(sessions);
+
+      // Load stats
+      const allSessionsSnap = await getDocs(query(collection(db, 'bookings'), where('menteeId', '==', user.uid)));
+      const totalSessions = allSessionsSnap.size;
+      const completedSessions = allSessionsSnap.docs.filter(doc => doc.data().status === 'completed').length;
+
+      // Load mentors
+      const mentorsQuery = query(collection(db, 'users'), where('isMentor', '==', true), limit(6));
+      const mentorsSnap = await getDocs(mentorsQuery);
+      const mentorsList = mentorsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setMentors(mentorsList);
+
+      setStats({ totalSessions, completedSessions, activeMentors: mentorsList.length });
+    } catch (err) {
+      console.error('Error loading dashboard:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredMentors = mentors.filter(mentor =>
+    (mentor.displayName?.toLowerCase().includes(search.toLowerCase()) ||
+    mentor.name?.toLowerCase().includes(search.toLowerCase()) ||
+    mentor.mentorExpertise?.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  if (loading) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-slate-900' : 'bg-gray-50'}`}>
+        <div className="text-center space-y-4">
+          <div className="size-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mx-auto"></div>
+          <p className={`font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Loading dashboard...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="animate-in fade-in duration-700 space-y-6 sm:space-y-8 md:space-y-10">
-      {/* Role Badge */}
-      <div className="flex items-center gap-3 mb-2">
-        {badgeIcon}
-        <span className="text-xs font-bold text-gray-700 dark:text-white">{badgeLabel}</span>
-      </div>
-      {roleSection}
-      {/* ...existing dashboard content... */}
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-6">
-        <div className="space-y-1">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 tracking-tight">Hello, {userName}! 👋</h1>
-          <p className="text-sm sm:text-base text-gray-500 font-medium">Ready to continue your {userRole} journey today?</p>
-        </div>
-        <div className="flex gap-3 sm:gap-4 w-full md:w-auto">
-          <button 
-            onClick={() => navigate('/mentorship/match')}
-            className="bg-primary text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-black shadow-xl shadow-primary/20 hover:scale-105 transition-all flex items-center justify-center gap-2 text-sm sm:text-base flex-1 md:flex-none"
-          >
-            <span className="material-symbols-outlined">auto_awesome</span>
-            Quick Match
-          </button>
-        </div>
-      </header>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
-        {/* Main Stats */}
-        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 md:gap-6">
-          <DashboardCard 
-            title="Next Session"
-            icon="event_upcoming"
-            color="bg-blue-500"
-            content={
-              <div className="flex items-center gap-4">
-                <img src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=100" className="size-12 rounded-xl object-cover" />
-                <div>
-                  <p className="text-sm font-black">Dr. Sarah Jenkins</p>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase">Oct 25 • 01:00 PM</p>
-                </div>
-              </div>
-            }
-            action={() => navigate('/mentorship/history')}
-          />
-          <DashboardCard 
-            title="Unread Messages"
-            icon="chat_bubble"
-            color="bg-amber-500"
-            content={
-              <div className="flex -space-x-3">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="size-10 rounded-full border-2 border-white bg-gray-200 overflow-hidden">
-                    <img src={`https://i.pravatar.cc/100?img=${i+10}`} className="size-full object-cover" />
+    <div className={`min-h-screen py-4 sm:py-8 px-3 sm:px-4 ${isDark ? 'bg-slate-900' : 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50'}`}>
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-8">
+        {/* Welcome Header */}
+        <div className={`rounded-2xl sm:rounded-3xl p-4 sm:p-8 backdrop-blur-sm border shadow-xl relative overflow-hidden ${isDark ? 'bg-slate-800/80 border-gray-700' : 'bg-white/80 border-white/50'}`}>
+          <div className="absolute top-0 right-0 w-32 h-32 sm:w-64 sm:h-64 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full blur-3xl"></div>
+          <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3 sm:gap-6 w-full sm:w-auto">
+              <div className="size-14 sm:size-20 rounded-xl sm:rounded-2xl overflow-hidden border-2 sm:border-4 border-blue-500/20 shadow-xl flex-shrink-0">
+                {userPhoto ? (
+                  <img src={userPhoto} alt={userName} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white text-lg sm:text-2xl font-black">
+                    {userName[0] || 'U'}
                   </div>
-                ))}
-                <div className="size-10 rounded-full border-2 border-white bg-amber-100 flex items-center justify-center text-[10px] font-black text-amber-700">+2</div>
+                )}
               </div>
-            }
-            action={() => navigate('/quick-chat')}
+              <div className="flex-1 min-w-0">
+                <h1 className={`text-xl sm:text-3xl lg:text-4xl font-black ${isDark ? 'text-white' : 'text-gray-900'} truncate`}>
+                  Welcome, {userName}! 👋
+                </h1>
+                <p className={`text-sm sm:text-lg font-medium mt-1 sm:mt-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Ready to continue your journey?
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate('/mentorship/match')}
+              className="w-full sm:w-auto bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:via-indigo-700 hover:to-purple-700 text-white px-4 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-black shadow-2xl shadow-blue-500/50 hover:scale-105 transition-all flex items-center justify-center gap-2 text-sm sm:text-base flex-shrink-0"
+            >
+              <span className="material-symbols-outlined text-xl">auto_awesome</span>
+              Quick Match
+            </button>
+          </div>
+        </div>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6">
+          <StatCard
+            icon="event"
+            label="Total Sessions"
+            value={stats.totalSessions}
+            color="from-blue-600 to-indigo-600"
+            isDark={isDark}
+          />
+          <StatCard
+            icon="check_circle"
+            label="Completed"
+            value={stats.completedSessions}
+            color="from-green-600 to-emerald-600"
+            isDark={isDark}
+          />
+          <StatCard
+            icon="diversity_3"
+            label="Active Mentors"
+            value={stats.activeMentors}
+            color="from-purple-600 to-pink-600"
+            isDark={isDark}
+          />
+          <StatCard
+            icon="chat"
+            label="Unread Messages"
+            value={unreadMessages}
+            color="from-orange-600 to-red-600"
+            isDark={isDark}
+            onClick={() => navigate('/quick-chat')}
           />
         </div>
 
-        {/* Community Feed Preview */}
-        <div className="bg-white rounded-2xl sm:rounded-3xl md:rounded-[40px] border border-gray-100 shadow-sm p-6 sm:p-8 space-y-4 sm:space-y-6">
-          <div className="flex justify-between items-center">
-            <h3 className="text-xs sm:text-sm font-black uppercase tracking-widest text-gray-400">Community Feed</h3>
-            <Link to="/community/feed" className="text-[10px] sm:text-xs font-bold text-primary hover:underline">View All</Link>
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+          {/* Upcoming Sessions */}
+          <div className={`lg:col-span-2 rounded-2xl sm:rounded-3xl p-4 sm:p-8 backdrop-blur-sm border shadow-xl ${isDark ? 'bg-slate-800/80 border-gray-700' : 'bg-white/80 border-white/50'}`}>
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
+              <h2 className={`text-lg sm:text-2xl font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                Upcoming Sessions
+              </h2>
+              <Link to="/mentorship/history" className="text-blue-600 dark:text-blue-400 font-bold hover:underline text-xs sm:text-sm">
+                View All
+              </Link>
+            </div>
+            {upcomingSessions.length === 0 ? (
+              <div className="text-center py-8 sm:py-12">
+                <span className="material-symbols-outlined text-4xl sm:text-6xl text-gray-300 dark:text-gray-600 mb-3 sm:mb-4">event_busy</span>
+                <p className={`font-medium text-sm sm:text-base ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>No upcoming sessions</p>
+                <button
+                  onClick={() => navigate('/mentorship/book')}
+                  className="mt-3 sm:mt-4 px-4 sm:px-6 py-2 sm:py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm sm:text-base"
+                >
+                  Book a Session
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {upcomingSessions.map((session) => (
+                  <SessionCard key={session.id} session={session} isDark={isDark} navigate={navigate} />
+                ))}
+              </div>
+            )}
           </div>
-          <div className="space-y-4">
-            <FeedSnippet name="Elena R." text="Just shared a new scholarship guide!" time="2h" />
-            <FeedSnippet name="Julio M." text="Who's up for a study group tomorrow?" time="5h" />
+
+          {/* Quick Actions */}
+          <div className="space-y-4 sm:space-y-6">
+            <div className={`rounded-2xl sm:rounded-3xl p-4 sm:p-6 backdrop-blur-sm border shadow-xl ${isDark ? 'bg-gradient-to-br from-blue-900 to-indigo-900' : 'bg-gradient-to-br from-blue-600 to-indigo-600'} text-white`}>
+              <h3 className="text-lg sm:text-xl font-black mb-3 sm:mb-4">Quick Actions</h3>
+              <div className="space-y-3">
+                <QuickActionButton icon="admin_panel_settings" label="Admin Dashboard" onClick={() => navigate('/admin')} />
+                <QuickActionButton icon="event" label="Book Session" onClick={() => navigate('/mentorship/book')} />
+                <QuickActionButton icon="chat" label="Messages" onClick={() => navigate('/quick-chat')} />
+                <QuickActionButton icon="description" label="Resume Builder" onClick={() => navigate('/career/resume')} />
+                <QuickActionButton icon="mic" label="Mock Interview" onClick={() => navigate('/career/mock-interview')} />
+                <QuickActionButton icon="school" label="Become a Mentor" onClick={() => navigate('/become-mentor')} />
+              </div>
+            </div>
+
+            <div className={`rounded-2xl sm:rounded-3xl p-4 sm:p-6 backdrop-blur-sm border shadow-xl ${isDark ? 'bg-slate-800/80 border-gray-700' : 'bg-white/80 border-white/50'}`}>
+              <h3 className={`text-base sm:text-lg font-black mb-3 sm:mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Resources</h3>
+              <div className="space-y-2">
+                <ResourceLink icon="payments" label="Financial Aid" to="/resources/financial-aid" isDark={isDark} />
+                <ResourceLink icon="school" label="Academic Support" to="/resources/academics" isDark={isDark} />
+                <ResourceLink icon="verified_user" label="DEI Guides" to="/resources/dei-guides" isDark={isDark} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Featured Mentors */}
+        <div className={`rounded-2xl sm:rounded-3xl p-4 sm:p-8 backdrop-blur-sm border shadow-xl ${isDark ? 'bg-slate-800/80 border-gray-700' : 'bg-white/80 border-white/50'}`}>
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
+            <h2 className={`text-lg sm:text-2xl font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Featured Mentors
+            </h2>
+            <Link to="/mentorship/match" className="text-blue-600 dark:text-blue-400 font-bold hover:underline text-xs sm:text-sm">
+              View All
+            </Link>
+          </div>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search mentors..."
+            className={`w-full mb-4 sm:mb-6 px-3 sm:px-4 py-2 sm:py-3 rounded-xl font-medium text-sm sm:text-base ${isDark ? 'bg-slate-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-200'} border focus:ring-2 focus:ring-blue-500 outline-none`}
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            {filteredMentors.length === 0 ? (
+              <p className={`col-span-full text-center py-8 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                No mentors found
+              </p>
+            ) : (
+              filteredMentors.map((mentor) => (
+                <MentorCard key={mentor.id} mentor={mentor} isDark={isDark} navigate={navigate} />
+              ))
+            )}
           </div>
         </div>
       </div>
-
-      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 md:gap-6">
-        <Link to="/dashboard/tips" className="bg-white p-6 sm:p-8 rounded-2xl sm:rounded-3xl md:rounded-[40px] border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group">
-          <span className="material-symbols-outlined text-primary mb-3 sm:mb-4 text-2xl sm:text-3xl group-hover:scale-110 transition-transform">lightbulb</span>
-          <h3 className="text-base sm:text-lg font-black text-gray-900">Local Tips</h3>
-          <p className="text-xs sm:text-sm text-gray-500 mt-2 font-medium">Insider campus knowledge from peer mentors.</p>
-        </Link>
-        <Link to="/career/resume" className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group">
-          <span className="material-symbols-outlined text-secondary mb-4 text-3xl group-hover:scale-110 transition-transform">description</span>
-          <h3 className="text-lg font-black text-gray-900">Resume AI</h3>
-          <p className="text-xs text-gray-500 mt-2 font-medium">Optimize your resume for 2024 hiring trends.</p>
-        </Link>
-        <Link to="/resources/financial-aid" className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group">
-          <span className="material-symbols-outlined text-green-500 mb-4 text-3xl group-hover:scale-110 transition-transform">payments</span>
-          <h3 className="text-lg font-black text-gray-900">Financial Aid</h3>
-          <p className="text-xs text-gray-500 mt-2 font-medium">Grants and scholarships for diverse students.</p>
-        </Link>
-        <Link to="/resources/dei-guides" className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group">
-          <span className="material-symbols-outlined text-indigo-500 mb-4 text-3xl group-hover:scale-110 transition-transform">verified_user</span>
-          <h3 className="text-lg font-black text-gray-900">DEI Guides</h3>
-          <p className="text-xs text-gray-500 mt-2 font-medium">Safe spaces and rights in the modern workplace.</p>
-        </Link>
-      </section>
     </div>
   );
 };
 
-const DashboardCard: React.FC<{ title: string, icon: string, color: string, content: React.ReactNode, action: () => void }> = ({ title, icon, color, content, action }) => (
-  <div className="bg-white p-6 sm:p-8 rounded-2xl sm:rounded-3xl md:rounded-[40px] border border-gray-100 shadow-sm flex flex-col justify-between h-40 sm:h-48 group cursor-pointer hover:shadow-lg transition-all" onClick={action}>
-    <div className="flex justify-between items-start">
-      <div className={`size-8 sm:size-10 ${color} text-white rounded-lg sm:rounded-xl flex items-center justify-center`}>
-        <span className="material-symbols-outlined text-sm sm:text-base">{icon}</span>
-      </div>
-      <span className="material-symbols-outlined text-gray-200 group-hover:text-primary transition-colors">arrow_forward</span>
+const StatCard: React.FC<{ icon: string; label: string; value: number; color: string; isDark: boolean; onClick?: () => void }> = ({ icon, label, value, color, isDark, onClick }) => (
+  <div
+    onClick={onClick}
+    className={`rounded-2xl sm:rounded-3xl p-3 sm:p-6 backdrop-blur-sm border shadow-xl transition-all hover:scale-105 ${onClick ? 'cursor-pointer' : ''} ${isDark ? 'bg-slate-800/80 border-gray-700' : 'bg-white/80 border-white/50'}`}
+  >
+    <div className={`size-10 sm:size-14 bg-gradient-to-br ${color} rounded-xl sm:rounded-2xl flex items-center justify-center mb-2 sm:mb-4 shadow-lg`}>
+      <span className="material-symbols-outlined text-white text-lg sm:text-2xl">{icon}</span>
     </div>
-    <div>
-      <h3 className="text-xs sm:text-sm font-black uppercase tracking-widest text-gray-400 mb-3 sm:mb-4">{title}</h3>
-      {content}
+    <p className={`text-[10px] sm:text-xs font-black uppercase tracking-wider mb-1 sm:mb-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{label}</p>
+    <p className={`text-2xl sm:text-4xl font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>{value}</p>
+  </div>
+);
+
+const SessionCard: React.FC<{ session: any; isDark: boolean; navigate: any }> = ({ session, isDark, navigate }) => (
+  <div className={`rounded-xl sm:rounded-2xl p-3 sm:p-4 border ${isDark ? 'bg-slate-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'}`}>
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+        <div className="size-10 sm:size-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0">
+          <span className="material-symbols-outlined text-white text-lg sm:text-xl">event</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className={`font-black text-sm sm:text-base truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>Session with Mentor</p>
+          <p className={`text-xs sm:text-sm truncate ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{session.slot || 'TBD'}</p>
+        </div>
+      </div>
+      <button
+        onClick={() => navigate('/mentorship/history')}
+        className="px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm flex-shrink-0"
+      >
+        View
+      </button>
     </div>
   </div>
 );
 
-const FeedSnippet: React.FC<{ name: string, text: string, time: string }> = ({ name, text, time }) => (
-  <div className="flex gap-2 sm:gap-3">
-    <div className="size-2 bg-primary rounded-full mt-1.5 flex-shrink-0"></div>
-    <div className="flex-1">
-      <p className="text-xs sm:text-sm font-medium text-gray-700 leading-relaxed">
-        <span className="font-black text-gray-900">{name}</span> {text}
-      </p>
-      <p className="text-[9px] sm:text-[10px] text-gray-400 font-bold mt-1 uppercase tracking-widest">{time} ago</p>
+const QuickActionButton: React.FC<{ icon: string; label: string; onClick: () => void }> = ({ icon, label, onClick }) => (
+  <button
+    onClick={onClick}
+    className="w-full flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 bg-white/10 hover:bg-white/20 rounded-lg sm:rounded-xl transition-all"
+  >
+    <span className="material-symbols-outlined text-lg sm:text-xl">{icon}</span>
+    <span className="font-bold text-sm sm:text-base">{label}</span>
+  </button>
+);
+
+const ResourceLink: React.FC<{ icon: string; label: string; to: string; isDark: boolean }> = ({ icon, label, to, isDark }) => (
+  <Link
+    to={to}
+    className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg sm:rounded-xl transition-all ${isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-100'}`}
+  >
+    <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 text-lg sm:text-xl">{icon}</span>
+    <span className={`font-bold text-xs sm:text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{label}</span>
+  </Link>
+);
+
+const MentorCard: React.FC<{ mentor: any; isDark: boolean; navigate: any }> = ({ mentor, isDark, navigate }) => (
+  <div className={`rounded-xl sm:rounded-2xl p-4 sm:p-6 border transition-all hover:scale-105 cursor-pointer ${isDark ? 'bg-slate-700/50 border-gray-600' : 'bg-gray-50 border-gray-200'}`}
+    onClick={() => navigate(`/profile-view/${mentor.id}`)}>
+    <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+      <div className="size-12 sm:size-14 rounded-full overflow-hidden border-2 border-blue-500/20 flex-shrink-0">
+        <img src={mentor.photoURL || 'https://i.pravatar.cc/100'} alt={mentor.displayName} className="w-full h-full object-cover" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className={`font-black text-sm sm:text-base truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{mentor.displayName || mentor.name || 'Mentor'}</p>
+        <p className={`text-xs truncate ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{mentor.mentorExpertise || 'General Mentoring'}</p>
+      </div>
     </div>
+    <p className={`text-xs sm:text-sm mb-3 sm:mb-4 line-clamp-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+      {mentor.mentorBio || 'Experienced mentor ready to help you succeed.'}
+    </p>
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        navigate(`/mentorship/book?mentor=${mentor.id}`);
+      }}
+      className="w-full px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm"
+    >
+      Book Session
+    </button>
   </div>
 );
 

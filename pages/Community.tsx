@@ -1,10 +1,25 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { db } from '../src/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
 const Community: React.FC = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
+  const [realUsers, setRealUsers] = useState<any[]>([]);
+  const [userFilter, setUserFilter] = useState('');
+
+  useEffect(() => {
+    getDocs(collection(db, 'users')).then(snapshot => {
+      const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setRealUsers(users.slice(0, 2)); // Show top 2 for demo
+    });
+  }, []);
+
+  const filteredUsers = realUsers.filter(user =>
+    user.displayName?.toLowerCase().includes(userFilter.toLowerCase()) ||
+    (user.isMentor ? 'mentor' : 'student').includes(userFilter.toLowerCase())
+  );
 
   return (
     <div className="animate-in fade-in duration-700 space-y-6 sm:space-y-8 md:space-y-12 pb-20">
@@ -22,6 +37,13 @@ const Community: React.FC = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-white border border-gray-100 rounded-2xl py-3 pl-12 pr-4 text-sm font-medium shadow-sm focus:ring-4 focus:ring-primary/5 outline-none"
+            />
+            <input
+              type="text"
+              value={userFilter}
+              onChange={e => setUserFilter(e.target.value)}
+              placeholder="Filter members by name or role"
+              className="w-full mb-4 px-4 py-2 rounded-xl border border-gray-200"
             />
           </div>
           <button className="bg-primary text-white p-3 rounded-2xl shadow-lg shadow-primary/20 hover:scale-105 transition-all">
@@ -62,8 +84,19 @@ const Community: React.FC = () => {
               <Link to="/community/directory" className="text-sm font-black text-primary hover:underline">See All Members</Link>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <SmallMemberCard name="Jordan Rivera" role="Senior Mentor" img="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200" id="jordan" />
-              <SmallMemberCard name="Elena Rios" role="Student Member" img="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200" id="elena" />
+              {filteredUsers.length === 0 ? (
+                <p className="text-sm text-gray-500">No members found.</p>
+              ) : (
+                filteredUsers.map(user => (
+                  <SmallMemberCard
+                    key={user.id}
+                    name={user.displayName || 'Member'}
+                    role={user.isMentor ? 'Mentor' : 'Student'}
+                    img={user.photoURL || 'https://i.pravatar.cc/100'}
+                    id={user.id}
+                  />
+                ))
+              )}
             </div>
           </div>
 
@@ -131,10 +164,17 @@ const CommunityActionCard: React.FC<{ title: string, desc: string, icon: string,
 const SmallMemberCard: React.FC<{ name: string, role: string, img: string, id: string }> = ({ name, role, img, id }) => {
   const navigate = useNavigate();
   return (
-    <div className="p-4 border border-gray-50 rounded-2xl flex items-center gap-4 hover:bg-gray-50 transition-all cursor-pointer" onClick={() => navigate(`/quick-chat?user=${id}`)}>
-      <img src={img} className="size-7 sm:size-9 md:size-10 rounded-full object-cover" />
+    <div className="p-4 border border-gray-50 rounded-2xl flex items-center gap-4 hover:bg-gray-50 transition-all cursor-pointer" onClick={() => navigate(`/profile-view/${id}`)}>
+      <img
+        src={img}
+        className="size-7 sm:size-9 md:size-10 rounded-full object-cover cursor-pointer hover:ring-2 hover:ring-primary"
+        onClick={e => { e.stopPropagation(); navigate(`/profile-view/${id}`); }}
+      />
       <div>
-        <h4 className="text-xs font-black text-gray-900 leading-none">{name}</h4>
+        <h4
+          className="text-xs font-black text-gray-900 leading-none cursor-pointer hover:text-primary"
+          onClick={e => { e.stopPropagation(); navigate(`/profile-view/${id}`); }}
+        >{name}</h4>
         <p className="text-[9px] font-bold text-primary mt-1 uppercase tracking-widest">{role}</p>
       </div>
     </div>

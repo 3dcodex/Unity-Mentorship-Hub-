@@ -1,21 +1,24 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { db } from '../src/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
 const MemberDirectory: React.FC = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
+  const [realMembers, setRealMembers] = useState<any[]>([]);
 
-  const members = [
-    { id: 'sarah', name: "Sarah Jenkins", role: "Peer Mentor", major: "Psychology", img: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200", status: 'online' },
-    { id: 'marcus', name: "Marcus Johnson", role: "Alumni Mentor", major: "Finance", img: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200", status: 'away' },
-    { id: 'elena', name: "Elena Rios", role: "Student Member", major: "Design", img: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200", status: 'online' },
-    { id: 'jordan', name: "Jordan Rivera", role: "Senior Mentor", major: "Comp Sci", img: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200", status: 'online' },
-    { id: 'taylor', name: "Taylor Smith", role: "Alumni Member", major: "Engineering", img: "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&q=80&w=200", status: 'offline' },
-    { id: 'alex', name: "Alex Chen", role: "Student Member", major: "Bio-Med", img: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=200", status: 'online' }
-  ];
+  useEffect(() => {
+    getDocs(collection(db, 'users')).then(snapshot => {
+      const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setRealMembers(users);
+    });
+  }, []);
 
-  const filteredMembers = members.filter(m => m.name.toLowerCase().includes(searchQuery.toLowerCase()) || m.major.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredMembers = realMembers.filter(m =>
+    m.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    m.major?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="animate-in fade-in duration-700 space-y-6 sm:space-y-8 md:space-y-12">
@@ -40,15 +43,23 @@ const MemberDirectory: React.FC = () => {
         {filteredMembers.map((m) => (
           <div key={m.id} className="bg-white p-6 rounded-xl sm:rounded-2xl md:rounded-[32px] border border-gray-50 shadow-sm flex items-center gap-6 group hover:shadow-xl transition-all">
             <div className="relative">
-              <img src={m.img} className="size-20 rounded-2xl object-cover border-4 border-white shadow-lg" alt={m.name} />
+              <img
+                src={m.photoURL || 'https://i.pravatar.cc/100'}
+                className="size-20 rounded-2xl object-cover border-4 border-white shadow-lg cursor-pointer hover:ring-2 hover:ring-primary"
+                alt={m.displayName || 'Member'}
+                onClick={() => navigate(`/profile-view/${m.id}`)}
+              />
               <div className={`absolute -bottom-1 -right-1 size-4 rounded-full border-2 border-white ${
-                m.status === 'online' ? 'bg-green-500' : m.status === 'away' ? 'bg-amber-500' : 'bg-gray-300'
+                m.online ? 'bg-green-500' : 'bg-gray-300'
               }`}></div>
             </div>
             <div className="flex-1 space-y-1">
-              <h3 className="text-base sm:text-lg font-black text-gray-900 leading-tight">{m.name}</h3>
-              <p className="text-[10px] font-black text-primary uppercase tracking-widest">{m.role}</p>
-              <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">{m.major}</p>
+              <h3
+                className="text-base sm:text-lg font-black text-gray-900 leading-tight cursor-pointer hover:text-primary"
+                onClick={() => navigate(`/profile-view/${m.id}`)}
+              >{m.displayName || 'Member'}</h3>
+              <p className="text-[10px] font-black text-primary uppercase tracking-widest">{m.isMentor ? 'Mentor' : 'Student'}</p>
+              <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">{m.major || ''}</p>
               <div className="flex gap-2 pt-3">
                 <button 
                   onClick={() => navigate(`/quick-chat?user=${m.id}`)}
@@ -56,7 +67,9 @@ const MemberDirectory: React.FC = () => {
                 >
                   Message
                 </button>
-                <button className="bg-gray-50 text-gray-500 text-[10px] font-black px-4 py-2 rounded-xl hover:bg-gray-100 transition-all">Profile</button>
+                <button className="bg-gray-50 text-gray-500 text-[10px] font-black px-4 py-2 rounded-xl hover:bg-gray-100 transition-all"
+                  onClick={() => navigate(`/profile-view/${m.id}`)}
+                >Profile</button>
               </div>
             </div>
           </div>

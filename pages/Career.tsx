@@ -93,21 +93,27 @@ const Career: React.FC = () => {
             tag="FIRST-GEN ALUMNI" 
             desc="Happy to help with resume reviews and systems design prep!"
             img="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200"
-          />
+              mentorId="sarah-chen-001"
+              onClick={() => navigate('/profile-view/sarah-chen-001')}
+            />
           <ExpertCard 
             name="Marcus Johnson" 
             role="Investment Banking Analyst" 
             tag="ALUMNI CLASS OF '21" 
             desc="Expert in technical finance interviews and case studies."
             img="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200"
-          />
+              mentorId="marcus-johnson-002"
+              onClick={() => navigate('/profile-view/marcus-johnson-002')}
+            />
           <ExpertCard 
             name="Elena Rodriguez" 
             role="Brand Manager @ Retail Leader" 
             tag="MARKETING MENTOR" 
             desc="Passionate about storytelling and building personal brands."
             img="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=200"
-          />
+              mentorId="elena-rodriguez-003"
+              onClick={() => navigate('/profile-view/elena-rodriguez-003')}
+            />
         </div>
       </section>
     </div>
@@ -156,7 +162,10 @@ const ToolkitItem: React.FC<{ icon: string, title: string, desc: string, onClick
 );
 
 const ExpertCard: React.FC<{ name: string, role: string, tag: string, desc: string, img: string }> = ({ name, role, tag, desc, img }) => (
-  <div className="bg-white p-4 sm:p-6 md:p-8 rounded-2xl sm:rounded-3xl md:rounded-[40px] border border-gray-100 shadow-sm space-y-6 text-center group">
+  <div className="bg-white p-4 sm:p-6 md:p-8 rounded-2xl sm:rounded-3xl md:rounded-[40px] border border-gray-100 shadow-sm space-y-6 text-center group cursor-pointer hover:shadow-xl transition-all"
+    onClick={typeof onClick === 'function' ? onClick : undefined}
+    title="View mentor profile"
+  >
     <div className="relative mx-auto size-24">
       <img src={img} className="size-full rounded-full object-cover border-4 border-white shadow-lg" />
     </div>

@@ -90,8 +90,8 @@ const Footer: React.FC<FooterProps> = ({ variant = 'full' }) => {
               <Link to="/help" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Help Center</Link>
               <Link to="/about" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">About Us</Link>
               <Link to="/who-we-serve" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Who We Serve</Link>
-              <a href="#" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Blog</a>
-              <a href="#" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">FAQs</a>
+              <Link to="/blog" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Blog</Link>
+              <Link to="/help/faq" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">FAQs</Link>
             </nav>
           </div>
 
@@ -101,7 +101,7 @@ const Footer: React.FC<FooterProps> = ({ variant = 'full' }) => {
             <nav className="space-y-2.5 flex flex-col">
               <a href="#" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Privacy Policy</a>
               <a href="#" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Terms of Service</a>
-              <a href="#" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Contact Support</a>
+              <Link to="/help/contact" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Contact Support</Link>
               <a href="#" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Accessibility</a>
               <a href="#" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Cookie Policy</a>
             </nav>

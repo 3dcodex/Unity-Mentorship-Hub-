@@ -1,13 +1,18 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getMentorshipMatches } from '../services/geminiService';
+import { db } from '../src/firebase';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { useAuth } from '../App';
 
 const MentorMatching: React.FC = () => {
   const [step, setStep] = useState<'selection' | 'loading' | 'results'>('selection');
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [matches, setMatches] = useState<any[]>([]);
+  const [realMentors, setRealMentors] = useState<any[]>([]);
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const interests = [
     'Academic Excellence', 'Career Transition', 'Mental Health', 
@@ -23,19 +28,31 @@ const MentorMatching: React.FC = () => {
 
   const handleMatch = async () => {
     setStep('loading');
-    // Simulate AI thinking and calling Gemini service
+    // Store selected focus areas in Firestore
+    if (user) {
+      await updateDoc(doc(db, 'users', user.uid), {
+        seekingTags: selectedInterests
+      });
+    }
+    // Fetch real mentors with isMentor = true
     try {
-      const result = await getMentorshipMatches({ interests: selectedInterests });
-      setMatches(result.suggestions || []);
-      // Minimum delay for dramatic effect
+      const { query, where } = await import('firebase/firestore');
+      const q = query(collection(db, 'users'), where('isMentor', '==', true));
+      const snapshot = await getDocs(q);
+      const mentors = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setRealMentors(mentors);
+      
+      // Try to get AI suggestions
+      try {
+        const result = await getMentorshipMatches({ interests: selectedInterests });
+        setMatches(result.suggestions || []);
+      } catch (e) {
+        console.log('AI matching unavailable, showing all mentors');
+      }
+      
       setTimeout(() => setStep('results'), 2000);
-    } catch (e) {
-      // Fallback
-      setMatches([
-        { mentorType: 'Alumni Professional', reason: 'Matches your career transition focus.' },
-        { mentorType: 'Senior Peer Mentor', reason: 'Matches your academic excellence goals.' },
-        { mentorType: 'Inclusion Lead', reason: 'Aligned with your social inclusion interests.' }
-      ]);
+    } catch (err) {
+      console.error('Error fetching mentors:', err);
       setTimeout(() => setStep('results'), 2000);
     }
   };
@@ -92,24 +109,34 @@ const MentorMatching: React.FC = () => {
 
       {step === 'results' && (
         <div className="space-y-4 sm:space-y-6 md:space-y-8 animate-in slide-in-from-bottom-8 duration-700">
-          <h2 className="text-base sm:text-lg sm:text-base sm:text-base sm:text-lg md:text-xl md:text-2xl font-black text-gray-900">Recommended Pathways</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {matches.map((match, i) => (
-              <div key={i} className="bg-white p-4 sm:p-6 md:p-8 rounded-xl sm:rounded-2xl md:rounded-[32px] border border-gray-100 shadow-lg flex flex-col space-y-4 hover:-translate-y-2 transition-transform">
-                <div className="size-8 sm:size-7 sm:size-9 md:size-10 md:size-12 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
-                  <span className="material-symbols-outlined">auto_awesome</span>
+          <h2 className="text-base sm:text-lg sm:text-base sm:text-base sm:text-lg md:text-xl md:text-2xl font-black text-gray-900">Available Mentors</h2>
+          {realMentors.length === 0 ? (
+            <div className="bg-white p-12 rounded-3xl border border-gray-100 shadow-xl text-center">
+              <span className="material-symbols-outlined text-6xl text-gray-300 mb-4">person_search</span>
+              <p className="text-gray-500 font-medium">No mentors available yet. Check back soon!</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {realMentors.map((mentor, i) => (
+                <div key={mentor.id} className="bg-white p-4 sm:p-6 md:p-8 rounded-xl sm:rounded-2xl md:rounded-[32px] border border-gray-100 shadow-lg flex flex-col space-y-4 hover:-translate-y-2 transition-transform">
+                  <div className="size-16 rounded-full overflow-hidden bg-gray-100 border-2 border-primary/20">
+                    <img src={mentor.photoURL || 'https://i.pravatar.cc/100'} alt={mentor.displayName} className="w-full h-full object-cover" />
+                  </div>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-black text-gray-900 leading-tight">{mentor.displayName || mentor.name || 'Mentor'}</h3>
+                    <p className="text-xs font-bold text-primary mt-1">{mentor.mentorExpertise || mentor.role || 'Expert Mentor'}</p>
+                  </div>
+                  <p className="text-sm text-gray-500 leading-relaxed font-medium flex-1">{mentor.mentorBio || 'Experienced mentor ready to help you succeed.'}</p>
+                  <button 
+                    onClick={() => navigate(`/mentorship/book?mentor=${mentor.id}`)}
+                    className="w-full py-3 bg-gray-50 text-primary font-bold rounded-xl text-sm hover:bg-primary hover:text-white transition-all"
+                  >
+                    Book This Mentor
+                  </button>
                 </div>
-                <h3 className="text-base sm:text-lg font-black text-gray-900 leading-tight">{match.mentorType}</h3>
-                <p className="text-sm text-gray-500 leading-relaxed font-medium flex-1">{match.reason}</p>
-                <button 
-                  onClick={() => navigate('/mentorship/book')}
-                  className="w-full py-3 bg-gray-50 text-primary font-bold rounded-xl text-sm hover:bg-primary hover:text-white transition-all"
-                >
-                  Explore Mentors
-                </button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
           <div className="flex justify-center pt-8">
             <button 
               onClick={() => setStep('selection')}

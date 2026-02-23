@@ -10,7 +10,9 @@ export interface UserProfile {
   seekingTags: string[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  name?: string;
   displayName?: string;
+  phone?: string;
   photoURL?: string;
 }
 
@@ -22,7 +24,12 @@ export const createUserProfile = async (
   email: string,
   role: Role,
   offerTags: string[],
-  seekingTags: string[]
+  seekingTags: string[],
+  name?: string,
+  phone?: string,
+  university?: string,
+  isMentor?: boolean,
+  professionalData?: { companyName: string; jobTitle: string; industry: string; yearsExperience: number }
 ): Promise<void> => {
   const userRef = doc(db, 'users', uid);
   const existingUser = await getDoc(userRef);
@@ -33,7 +40,7 @@ export const createUserProfile = async (
 
   const now = Timestamp.now();
 
-  const userProfile: UserProfile = {
+  const userProfile: any = {
     uid,
     email,
     role,
@@ -41,6 +48,18 @@ export const createUserProfile = async (
     seekingTags,
     createdAt: now,
     updatedAt: now,
+    ...(name && { name, displayName: name }),
+    ...(phone && { phone }),
+    ...(university && { university }),
+    ...(isMentor !== undefined && { isMentor }),
+    ...(professionalData && {
+      companyName: professionalData.companyName,
+      jobTitle: professionalData.jobTitle,
+      industry: professionalData.industry,
+      yearsExperience: professionalData.yearsExperience,
+      mentorExpertise: professionalData.industry,
+      mentorBio: `${professionalData.jobTitle} at ${professionalData.companyName} with ${professionalData.yearsExperience} years of experience.`
+    }),
   };
 
   await setDoc(userRef, userProfile);

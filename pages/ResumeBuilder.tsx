@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { doc, setDoc, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, Timestamp, getDoc } from 'firebase/firestore';
 import { db } from '../src/firebase';
 import { useAuth } from '../App';
 import jsPDF from 'jspdf';
@@ -127,6 +127,60 @@ const ResumeBuilder: React.FC = () => {
       volunteer: true,
     },
   });
+  
+  // Load saved resume from Firestore on mount
+  React.useEffect(() => {
+    const loadResume = async () => {
+      if (!user) return;
+      try {
+        const resumeDoc = await getDoc(doc(db, 'users', user.uid, 'resumes', 'autosave'));
+        if (resumeDoc.exists()) {
+          const data = resumeDoc.data();
+          setResumeData({
+            fullName: data.basicInfo?.fullName || '',
+            email: data.basicInfo?.email || '',
+            phone: data.basicInfo?.phone || '',
+            linkedin: data.basicInfo?.links?.LinkedIn || '',
+            github: data.basicInfo?.links?.GitHub || '',
+            website: data.basicInfo?.links?.Portfolio || '',
+            location: '',
+            summary: data.summary || '',
+            experiences: data.workExperience || [],
+            education: data.education || [],
+            skills: data.skills || [],
+            certifications: data.certifications || [],
+            projects: data.projects || [],
+            achievements: data.awards || [],
+            hobbies: data.hobbies || [],
+            references: data.references || [],
+            languages: data.languages || [],
+            volunteer: data.volunteer || [],
+            sectionVisibility: data.sectionVisibility || {
+              summary: true,
+              experiences: true,
+              education: true,
+              skills: true,
+              certifications: true,
+              projects: true,
+              achievements: true,
+              hobbies: true,
+              references: true,
+              languages: true,
+              volunteer: true,
+            },
+          });
+          if (data.templateSettings) {
+            setFontStyle(data.templateSettings.font || 'sans-serif');
+            setThemeColor(data.templateSettings.color || '#1d4ed8');
+            setSelectedTemplate(data.templateSettings.layout || 'classic');
+          }
+        }
+      } catch (err) {
+        console.error('Error loading resume:', err);
+      }
+    };
+    loadResume();
+  }, [user]);
   // Local save always
   React.useEffect(() => {
     localStorage.setItem('unity_resume_data', JSON.stringify(resumeData));
@@ -154,7 +208,7 @@ const ResumeBuilder: React.FC = () => {
           layout: selectedTemplate,
         };
         await setDoc(
-          doc(db, 'Users', user.uid, 'resumes', resumeId),
+          doc(db, 'users', user.uid, 'resumes', resumeId),
           {
             basicInfo,
             workExperience: resumeData.experiences,
@@ -296,7 +350,7 @@ const ResumeBuilder: React.FC = () => {
         layout: selectedTemplate,
       };
       await setDoc(
-        doc(db, 'Users', user.uid, 'resumes', resumeId),
+        doc(db, 'users', user.uid, 'resumes', resumeId),
         {
           basicInfo,
           workExperience: resumeData.experiences,
