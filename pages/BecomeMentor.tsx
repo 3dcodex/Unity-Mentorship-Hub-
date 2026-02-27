@@ -1,220 +1,249 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
-import { db, auth } from '../src/firebase';
+import { useAuth } from '../App';
+import { db } from '../src/firebase';
+import { doc, setDoc, Timestamp } from 'firebase/firestore';
 
 const BecomeMentor: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [darkMode] = useState(localStorage.getItem('unity_dark_mode') === 'true');
+  
   const [formData, setFormData] = useState({
-    expertise: [] as string[],
-    credentials: '',
-    experience: '',
+    expertise: '',
     bio: '',
+    yearsExperience: 0,
+    availability: '',
+    maxMentees: 3,
+    preferredTopics: '',
     linkedIn: '',
-    availability: ''
+    motivation: ''
   });
-  const [expertiseInput, setExpertiseInput] = useState('');
-  const [loading, setLoading] = useState(false);
+  
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
-
-  const handleAddExpertise = () => {
-    if (expertiseInput.trim() && formData.expertise.length < 5) {
-      setFormData({ ...formData, expertise: [...formData.expertise, expertiseInput.trim()] });
-      setExpertiseInput('');
-    }
-  };
-
-  const handleRemoveExpertise = (index: number) => {
-    setFormData({ ...formData, expertise: formData.expertise.filter((_, i) => i !== index) });
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth.currentUser) return;
-
-    setLoading(true);
+    if (!user) return;
+    
+    setIsSubmitting(true);
     try {
-      const applicationData = {
-        userId: auth.currentUser.uid,
-        name: auth.currentUser.displayName || 'Unknown',
-        email: auth.currentUser.email,
-        ...formData,
-        status: 'pending',
-        appliedAt: new Date(),
-        documents: []
-      };
-
-      // Store application
-      await addDoc(collection(db, 'mentorApplications'), applicationData);
-
-      // Update user document with application data and status
-      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-        mentorApplicationStatus: 'pending',
-        mentorApplicationData: {
-          expertise: formData.expertise,
-          credentials: formData.credentials,
-          experience: formData.experience,
-          bio: formData.bio,
-          linkedIn: formData.linkedIn,
-          availability: formData.availability,
-          appliedAt: new Date()
-        }
-      });
-
+      await setDoc(doc(db, 'users', user.uid), {
+        isMentor: true,
+        mentorExpertise: formData.expertise,
+        mentorBio: formData.bio,
+        mentorYearsExperience: formData.yearsExperience,
+        mentorAvailability: formData.availability,
+        mentorMaxMentees: formData.maxMentees,
+        mentorPreferredTopics: formData.preferredTopics,
+        mentorLinkedIn: formData.linkedIn,
+        mentorMotivation: formData.motivation,
+        mentorApplicationDate: Timestamp.now(),
+        mentorStatus: 'pending',
+        updatedAt: Timestamp.now()
+      }, { merge: true });
+      
       setSuccess(true);
-      setTimeout(() => navigate('/dashboard'), 3000);
-    } catch (error) {
-      console.error('Error submitting application:', error);
-      alert('Failed to submit application. Please try again.');
+      setTimeout(() => navigate('/profile-settings'), 2000);
+    } catch (err) {
+      console.error('Error submitting mentor application:', err);
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
-  if (success) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-teal-50 flex items-center justify-center p-6">
-        <div className="bg-white rounded-3xl p-12 text-center max-w-md shadow-2xl">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <span className="material-symbols-outlined text-green-600 text-5xl">check_circle</span>
-          </div>
-          <h2 className="text-3xl font-black text-gray-900 mb-4">Application Submitted!</h2>
-          <p className="text-gray-600 mb-6">
-            Your mentor application has been submitted successfully. Our admin team will review it and get back to you soon.
-          </p>
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="px-6 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700"
-          >
-            Back to Dashboard
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-teal-50 p-6">
-      <div className="max-w-3xl mx-auto">
-        <div className="bg-white rounded-3xl p-8 shadow-2xl">
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-teal-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <span className="material-symbols-outlined text-white text-4xl">school</span>
-            </div>
-            <h1 className="text-4xl font-black text-gray-900 mb-2">Become a Mentor</h1>
-            <p className="text-gray-600">Share your expertise and help students succeed</p>
+    <div className={`min-h-screen ${darkMode ? 'dark bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'}`}>
+      <div className="max-w-4xl mx-auto py-12 px-4 sm:px-6">
+        {/* Hero Section */}
+        <div className="text-center space-y-6 mb-12">
+          <div className="inline-block p-4 bg-gradient-to-br from-green-500 to-teal-600 rounded-3xl shadow-2xl">
+            <span className="material-symbols-outlined text-white text-6xl">school</span>
           </div>
+          <h1 className="text-5xl font-black bg-gradient-to-r from-green-600 via-teal-600 to-blue-600 bg-clip-text text-transparent">
+            Become a Mentor
+          </h1>
+          <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+            Share your knowledge and experience to help students succeed. Join our community of mentors making a real impact.
+          </p>
+        </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+        {success && (
+          <div className="mb-8 p-6 bg-green-50 dark:bg-green-900/20 border-2 border-green-500 rounded-2xl flex items-center gap-4">
+            <span className="material-symbols-outlined text-green-600 dark:text-green-400 text-4xl">check_circle</span>
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Areas of Expertise</label>
-              <div className="flex gap-2 mb-2">
-                <input
-                  type="text"
-                  value={expertiseInput}
-                  onChange={(e) => setExpertiseInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddExpertise())}
-                  placeholder="e.g., Software Engineering, Data Science"
-                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl outline-none focus:border-green-500"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddExpertise}
-                  className="px-6 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700"
-                >
-                  Add
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {formData.expertise.map((exp, idx) => (
-                  <span key={idx} className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-bold flex items-center gap-2">
-                    {exp}
-                    <button type="button" onClick={() => handleRemoveExpertise(idx)} className="hover:text-green-900">×</button>
-                  </span>
-                ))}
-              </div>
+              <h3 className="font-black text-green-900 dark:text-green-100 text-lg">Application Submitted!</h3>
+              <p className="text-green-700 dark:text-green-300">Redirecting you back to settings...</p>
             </div>
+          </div>
+        )}
 
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Credentials & Education</label>
-              <textarea
+        {/* Application Form */}
+        <form onSubmit={handleSubmit} className={`${darkMode ? 'dark bg-slate-900/50 border-slate-700/50' : 'bg-white/80 border-gray-200'} backdrop-blur-xl rounded-3xl p-8 border shadow-2xl space-y-8`}>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="md:col-span-2">
+              <label className="block font-black text-sm text-gray-700 dark:text-gray-300 mb-2">
+                Areas of Expertise *
+              </label>
+              <input
+                type="text"
                 required
-                value={formData.credentials}
-                onChange={(e) => setFormData({ ...formData, credentials: e.target.value })}
-                placeholder="Your degrees, certifications, and qualifications..."
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl outline-none focus:border-green-500"
-                rows={3}
+                value={formData.expertise}
+                onChange={(e) => setFormData({...formData, expertise: e.target.value})}
+                placeholder="e.g., Computer Science, Career Guidance, Data Science"
+                className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary outline-none"
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Professional Experience</label>
-              <textarea
-                required
-                value={formData.experience}
-                onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
-                placeholder="Your work experience and achievements..."
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl outline-none focus:border-green-500"
-                rows={4}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Bio</label>
+            <div className="md:col-span-2">
+              <label className="block font-black text-sm text-gray-700 dark:text-gray-300 mb-2">
+                Mentor Bio *
+              </label>
               <textarea
                 required
                 value={formData.bio}
-                onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                placeholder="Tell us about yourself and why you want to be a mentor..."
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl outline-none focus:border-green-500"
-                rows={4}
+                onChange={(e) => setFormData({...formData, bio: e.target.value})}
+                placeholder="Tell students about yourself and how you can help them..."
+                className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary outline-none min-h-[120px]"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">LinkedIn Profile (Optional)</label>
+              <label className="block font-black text-sm text-gray-700 dark:text-gray-300 mb-2">
+                Years of Experience *
+              </label>
+              <input
+                type="number"
+                required
+                min="0"
+                value={formData.yearsExperience}
+                onChange={(e) => setFormData({...formData, yearsExperience: Number(e.target.value)})}
+                className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block font-black text-sm text-gray-700 dark:text-gray-300 mb-2">
+                Max Mentees
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="20"
+                value={formData.maxMentees}
+                onChange={(e) => setFormData({...formData, maxMentees: Number(e.target.value)})}
+                className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary outline-none"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block font-black text-sm text-gray-700 dark:text-gray-300 mb-2">
+                Availability *
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.availability}
+                onChange={(e) => setFormData({...formData, availability: e.target.value})}
+                placeholder="e.g., Weekdays 6-9 PM EST, Weekends"
+                className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary outline-none"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block font-black text-sm text-gray-700 dark:text-gray-300 mb-2">
+                Preferred Topics
+              </label>
+              <input
+                type="text"
+                value={formData.preferredTopics}
+                onChange={(e) => setFormData({...formData, preferredTopics: e.target.value})}
+                placeholder="e.g., Resume Review, Interview Prep, Career Planning"
+                className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary outline-none"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block font-black text-sm text-gray-700 dark:text-gray-300 mb-2">
+                LinkedIn Profile
+              </label>
               <input
                 type="url"
                 value={formData.linkedIn}
-                onChange={(e) => setFormData({ ...formData, linkedIn: e.target.value })}
+                onChange={(e) => setFormData({...formData, linkedIn: e.target.value})}
                 placeholder="https://linkedin.com/in/yourprofile"
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl outline-none focus:border-green-500"
+                className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary outline-none"
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Availability</label>
-              <select
+            <div className="md:col-span-2">
+              <label className="block font-black text-sm text-gray-700 dark:text-gray-300 mb-2">
+                Why do you want to become a mentor? *
+              </label>
+              <textarea
                 required
-                value={formData.availability}
-                onChange={(e) => setFormData({ ...formData, availability: e.target.value })}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl outline-none focus:border-green-500"
-              >
-                <option value="">Select your availability</option>
-                <option value="1-2 hours/week">1-2 hours per week</option>
-                <option value="3-5 hours/week">3-5 hours per week</option>
-                <option value="5+ hours/week">5+ hours per week</option>
-                <option value="flexible">Flexible</option>
-              </select>
+                value={formData.motivation}
+                onChange={(e) => setFormData({...formData, motivation: e.target.value})}
+                placeholder="Share your motivation for mentoring students..."
+                className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary outline-none min-h-[100px]"
+              />
             </div>
+          </div>
 
-            <div className="flex gap-4">
-              <button
-                type="button"
-                onClick={() => navigate('/dashboard')}
-                className="flex-1 px-6 py-4 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={loading || formData.expertise.length === 0}
-                className="flex-1 px-6 py-4 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 disabled:opacity-50"
-              >
-                {loading ? 'Submitting...' : 'Submit Application'}
-              </button>
+          <div className="flex gap-4 pt-6 border-t border-gray-200 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => navigate('/profile-settings')}
+              className="flex-1 px-6 py-4 bg-gray-200 dark:bg-slate-700 text-gray-900 dark:text-white rounded-xl font-bold hover:scale-105 transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="flex-1 px-6 py-4 bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-xl font-bold shadow-xl hover:scale-105 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isSubmitting ? (
+                <>
+                  <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                  Submitting...
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined">send</span>
+                  Submit Application
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+
+        {/* Benefits Section */}
+        <div className="mt-12 grid md:grid-cols-3 gap-6">
+          <div className={`${darkMode ? 'bg-slate-900/50 border-slate-700/50' : 'bg-white/80 border-gray-200'} backdrop-blur-xl rounded-2xl p-6 border shadow-xl text-center`}>
+            <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 text-3xl">diversity_3</span>
             </div>
-          </form>
+            <h3 className="font-black text-lg mb-2 dark:text-white">Make an Impact</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Help students achieve their goals and build meaningful connections</p>
+          </div>
+
+          <div className={`${darkMode ? 'bg-slate-900/50 border-slate-700/50' : 'bg-white/80 border-gray-200'} backdrop-blur-xl rounded-2xl p-6 border shadow-xl text-center`}>
+            <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="material-symbols-outlined text-green-600 dark:text-green-400 text-3xl">workspace_premium</span>
+            </div>
+            <h3 className="font-black text-lg mb-2 dark:text-white">Earn Recognition</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Get verified mentor badge and build your professional brand</p>
+          </div>
+
+          <div className={`${darkMode ? 'bg-slate-900/50 border-slate-700/50' : 'bg-white/80 border-gray-200'} backdrop-blur-xl rounded-2xl p-6 border shadow-xl text-center`}>
+            <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="material-symbols-outlined text-purple-600 dark:text-purple-400 text-3xl">trending_up</span>
+            </div>
+            <h3 className="font-black text-lg mb-2 dark:text-white">Grow Your Network</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Connect with talented students and fellow mentors</p>
+          </div>
         </div>
       </div>
     </div>

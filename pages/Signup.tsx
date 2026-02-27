@@ -10,28 +10,16 @@ import { auth } from '../src/firebase';
 
 const roles: { id: Role, title: string, desc: string, img: string }[] = [
   { 
-    id: 'International Student', 
-    title: 'International Student', 
-    desc: 'Seeking cultural and academic support in a new environment.',
-    img: "/src/1741580433phpAkAF6s.jpeg"
-  },
-  { 
-    id: 'Domestic Student', 
-    title: 'Domestic Student', 
-    desc: 'Building local connections and community roots.',
-    img: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&q=80&w=400'
-  },
-  { 
-    id: 'Alumni', 
-    title: 'Alumni', 
-    desc: 'Sharing post-grad wisdom and career guidance.',
-    img: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=400'
+    id: 'Student', 
+    title: 'Student', 
+    desc: 'Currently enrolled in an educational institution.',
+    img: 'https://api.dicebear.com/7.x/avataaars/svg?seed=student&backgroundColor=b6e3f4'
   },
   { 
     id: 'Professional', 
-    title: 'Professional', 
-    desc: 'Offering specialized industry mentorship and networking.',
-    img: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400'
+    title: 'Working Professional', 
+    desc: 'Experienced professional offering mentorship and guidance.',
+    img: 'https://api.dicebear.com/7.x/avataaars/svg?seed=professional&backgroundColor=ffdfbf'
   }
 ];
 
@@ -45,17 +33,21 @@ const Signup: React.FC = () => {
   const [selectedRole, setSelectedRole] = useState<Role | ''>('');
   const [selectedOffer, setSelectedOffer] = useState<string[]>([]);
   const [selectedSeeking, setSelectedSeeking] = useState<string[]>([]);
+  const [customOffer, setCustomOffer] = useState('');
+  const [customSeeking, setCustomSeeking] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [userName, setUserName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [university, setUniversity] = useState('');
+  // Student-specific fields
+  const [school, setSchool] = useState('');
+  const [programName, setProgramName] = useState('');
+  const [currentYear, setCurrentYear] = useState('');
   // Professional-specific fields
   const [companyName, setCompanyName] = useState('');
   const [jobTitle, setJobTitle] = useState('');
-  const [industry, setIndustry] = useState('');
-  const [yearsExperience, setYearsExperience] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
@@ -67,21 +59,19 @@ const Signup: React.FC = () => {
 
   const handleFinish = async () => {
     setError(null);
-    if (!userName.trim()) {
-      setError('Username is required');
+    if (!firstName.trim() || !lastName.trim()) {
+      setError('First name and last name are required');
       return;
     }
-    if (!phoneNumber.trim()) {
-      setError('Phone number is required');
-      return;
-    }
-    if (!university.trim()) {
-      setError('University is required');
-      return;
+    if (selectedRole === 'Student') {
+      if (!school.trim()) {
+        setError('School is required for students');
+        return;
+      }
     }
     if (selectedRole === 'Professional') {
-      if (!companyName.trim() || !jobTitle.trim() || !industry.trim()) {
-        setError('All professional fields are required');
+      if (!companyName.trim() || !jobTitle.trim()) {
+        setError('Company name and job title are required for professionals');
         return;
       }
     }
@@ -98,8 +88,7 @@ const Signup: React.FC = () => {
       const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
       const user = userCredential.user;
       
-      // Professional role is always a mentor
-      const isMentor = selectedRole === 'Professional';
+      const userName = `${firstName.trim()} ${lastName.trim()}`;
       
       // Save user profile to Firestore
       await createUserProfile(
@@ -108,20 +97,26 @@ const Signup: React.FC = () => {
         selectedRole as Role,
         selectedOffer,
         selectedSeeking,
-        userName.trim(),
+        userName,
         phoneNumber.trim(),
-        university.trim(),
-        isMentor,
+        selectedRole === 'Student' ? school.trim() : '',
+        selectedRole === 'Professional',
         selectedRole === 'Professional' ? {
           companyName: companyName.trim(),
           jobTitle: jobTitle.trim(),
-          industry: industry.trim(),
-          yearsExperience
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+        } : selectedRole === 'Student' ? {
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          school: school.trim(),
+          programName: programName.trim(),
+          currentYear: currentYear.trim(),
         } : undefined
       );
       
       localStorage.setItem('unity_onboarding_complete', 'true');
-      localStorage.setItem('unity_user_name', userName.trim());
+      localStorage.setItem('unity_user_name', userName);
       localStorage.setItem('unity_user_role', selectedRole);
       navigate('/dashboard');
     } catch (err: any) {
@@ -155,7 +150,7 @@ const Signup: React.FC = () => {
                 <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 dark:text-white">Choose your role</h1>
                 <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 font-medium">Join our community in the capacity that fits your journey.</p>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
                 {roles.map((r) => (
                   <button
                     key={r.id}
@@ -209,6 +204,32 @@ const Signup: React.FC = () => {
                       </button>
                     ))}
                   </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={customOffer}
+                      onChange={(e) => setCustomOffer(e.target.value)}
+                      placeholder="Add custom skill..."
+                      className="flex-1 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2 text-xs font-medium focus:ring-2 focus:ring-primary/20 dark:focus:ring-blue-500/20 outline-none dark:text-white"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && customOffer.trim()) {
+                          setSelectedOffer(prev => [...prev, customOffer.trim()]);
+                          setCustomOffer('');
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={() => {
+                        if (customOffer.trim()) {
+                          setSelectedOffer(prev => [...prev, customOffer.trim()]);
+                          setCustomOffer('');
+                        }
+                      }}
+                      className="bg-primary dark:bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-primary/90 dark:hover:bg-blue-700 transition-all"
+                    >
+                      Add
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-4">
                   <h3 className="text-xs sm:text-sm font-black flex items-center gap-2 dark:text-white">
@@ -228,6 +249,32 @@ const Signup: React.FC = () => {
                       </button>
                     ))}
                   </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={customSeeking}
+                      onChange={(e) => setCustomSeeking(e.target.value)}
+                      placeholder="Add custom need..."
+                      className="flex-1 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-2 text-xs font-medium focus:ring-2 focus:ring-primary/20 dark:focus:ring-blue-500/20 outline-none dark:text-white"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && customSeeking.trim()) {
+                          setSelectedSeeking(prev => [...prev, customSeeking.trim()]);
+                          setCustomSeeking('');
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={() => {
+                        if (customSeeking.trim()) {
+                          setSelectedSeeking(prev => [...prev, customSeeking.trim()]);
+                          setCustomSeeking('');
+                        }
+                      }}
+                      className="bg-primary dark:bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-primary/90 dark:hover:bg-blue-700 transition-all"
+                    >
+                      Add
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -240,42 +287,52 @@ const Signup: React.FC = () => {
                 <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 font-medium">Complete your profile to begin.</p>
               </div>
               <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">First Name *</label>
+                    <input type="text" required value={firstName} onChange={(e) => setFirstName(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 dark:focus:ring-blue-500/20 outline-none dark:text-white" placeholder="John" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Last Name *</label>
+                    <input type="text" required value={lastName} onChange={(e) => setLastName(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 dark:focus:ring-blue-500/20 outline-none dark:text-white" placeholder="Doe" />
+                  </div>
+                </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Username</label>
-                  <input type="text" required value={userName} onChange={(e) => setUserName(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 dark:focus:ring-blue-500/20 outline-none dark:text-white" placeholder="Your name" />
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Email Address *</label>
+                  <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 dark:focus:ring-blue-500/20 outline-none dark:text-white" placeholder="john@example.com" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Phone Number</label>
-                  <input type="tel" required value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 dark:focus:ring-blue-500/20 outline-none dark:text-white" placeholder="+1 (555) 123-4567" />
+                  <input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 dark:focus:ring-blue-500/20 outline-none dark:text-white" placeholder="+1 (555) 123-4567" />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">University</label>
-                  <input type="text" required value={university} onChange={(e) => setUniversity(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 dark:focus:ring-blue-500/20 outline-none dark:text-white" placeholder="Your university" />
-                </div>
-                {selectedRole === 'Professional' && (
+                {selectedRole === 'Student' && (
                   <>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Company Name</label>
-                      <input type="text" required value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 dark:focus:ring-blue-500/20 outline-none dark:text-white" placeholder="Your company" />
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">School *</label>
+                      <input type="text" required value={school} onChange={(e) => setSchool(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 dark:focus:ring-blue-500/20 outline-none dark:text-white" placeholder="Your school" />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Job Title</label>
-                      <input type="text" required value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 dark:focus:ring-blue-500/20 outline-none dark:text-white" placeholder="Your position" />
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Program Name</label>
+                      <input type="text" value={programName} onChange={(e) => setProgramName(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 dark:focus:ring-blue-500/20 outline-none dark:text-white" placeholder="e.g. Computer Science" />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Industry</label>
-                      <input type="text" required value={industry} onChange={(e) => setIndustry(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 dark:focus:ring-blue-500/20 outline-none dark:text-white" placeholder="e.g. Technology, Finance" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Years of Experience</label>
-                      <input type="number" min="0" required value={yearsExperience} onChange={(e) => setYearsExperience(Number(e.target.value))} className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 dark:focus:ring-blue-500/20 outline-none dark:text-white" placeholder="0" />
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Current Year</label>
+                      <input type="text" value={currentYear} onChange={(e) => setCurrentYear(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 dark:focus:ring-blue-500/20 outline-none dark:text-white" placeholder="e.g. 2nd Year" />
                     </div>
                   </>
                 )}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Email Address</label>
-                  <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 dark:focus:ring-blue-500/20 outline-none dark:text-white" placeholder="alex@university.edu" />
-                </div>
+                {selectedRole === 'Professional' && (
+                  <>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Company Name *</label>
+                      <input type="text" required value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 dark:focus:ring-blue-500/20 outline-none dark:text-white" placeholder="Your company" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Job Title *</label>
+                      <input type="text" required value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 dark:focus:ring-blue-500/20 outline-none dark:text-white" placeholder="Your position" />
+                    </div>
+                  </>
+                )}
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Choose Password</label>
                   <div className="relative">

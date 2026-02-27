@@ -6,6 +6,9 @@ import { auth, db } from '../src/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '../App';
 import { useTheme } from '../contexts/ThemeContext';
+import Breadcrumb from './Breadcrumb';
+import QuickActions from './QuickActions';
+import EnhancedSearch from './EnhancedSearch';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -63,7 +66,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     loadNotificationCount();
     const interval = setInterval(loadNotificationCount, 10000); // Refresh every 10 seconds
     
-    return () => clearInterval(interval);
+    // Listen for notification read events
+    const handleNotificationRead = () => loadNotificationCount();
+    window.addEventListener('notificationRead', handleNotificationRead);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('notificationRead', handleNotificationRead);
+    };
   }, [user]);
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
@@ -113,20 +123,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </Link>
 
           <div className="relative max-w-sm w-full hidden lg:block">
-            <span className="material-symbols-outlined absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 text-sm sm:text-base md:text-lg">search</span>
-            <input 
-              type="text" 
-              placeholder="Search mentors, resources..." 
-              className="w-full bg-gray-50/50 dark:bg-gray-800/50 border-none rounded-xl sm:rounded-2xl py-1.5 sm:py-2 md:py-2.5 pl-7 sm:pl-8 md:pl-10 pr-2 sm:pr-3 md:pr-4 text-xs sm:text-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary/20 dark:focus:ring-blue-500/20 transition-all"
-            />
+            <EnhancedSearch />
           </div>
         </div>
 
         <nav className="flex items-center gap-4 sm:gap-6 md:gap-8 mr-6 sm:mr-8 md:mr-12 hidden md:flex">
-          <TopNavItem to="/dashboard" label="Dashboard" />
-          <TopNavItem to="/mentorship" label="Mentorship" />
-          <TopNavItem to="/resources" label="Resources" />
-          <TopNavItem to="/community" label="Community" />
+          <TopNavItem to="/dashboard" icon="grid_view" label="Dashboard" />
+          <TopNavItem to="/mentorship" icon="groups" label="Mentorship" />
+          <TopNavItem to="/resources" icon="menu_book" label="Resources" />
+          <TopNavItem to="/community" icon="forum" label="Community" />
         </nav>
 
         <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
@@ -200,7 +205,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="mb-8 sm:mb-10">
             <h3 className="text-[9px] sm:text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-3 sm:mb-4 px-2 sm:px-3">Student Hub</h3>
             <div className="space-y-1">
-              <SidebarItem to="/dashboard" icon="grid_view" label="Overview" />
+              <SidebarItem to="/dashboard" icon="grid_view" label="Dashboard Home" />
               <SidebarItem to="/quick-chat" icon="chat" label="Quick Chat" />
               <SidebarItem to="/mentorship/history" icon="calendar_today" label="My Sessions" />
               <SidebarItem to="/mentorship/book" icon="person_search" label="Book a Mentor" />
@@ -233,19 +238,33 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 lg:p-8 bg-gray-50 dark:bg-slate-900/50">
           <div className="max-w-7xl mx-auto">
+            <Breadcrumb />
             {children}
           </div>
+          <QuickActions />
         </main>
       </div>
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-gray-800 px-2 py-2 z-50">
+        <div className="flex justify-around items-center">
+          <BottomNavItem to="/dashboard" icon="grid_view" label="Home" />
+          <BottomNavItem to="/mentorship" icon="groups" label="Mentors" />
+          <BottomNavItem to="/quick-chat" icon="chat" label="Chat" />
+          <BottomNavItem to="/resources" icon="menu_book" label="Resources" />
+          <BottomNavItem to="/profile" icon="person" label="Profile" />
+        </div>
+      </nav>
     </div>
   );
 };
 
-const TopNavItem: React.FC<{ to: string, label: string }> = ({ to, label }) => (
+const TopNavItem: React.FC<{ to: string, icon: string, label: string }> = ({ to, icon, label }) => (
   <NavLink 
     to={to} 
-    className={({ isActive }) => `text-xs sm:text-sm font-bold transition-all border-b-2 py-2 ${isActive ? 'text-primary dark:text-blue-400 border-primary dark:border-blue-400' : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-800 dark:hover:text-gray-300'}`}
+    className={({ isActive }) => `flex items-center gap-2 text-xs sm:text-sm font-bold transition-all border-b-2 py-2 ${isActive ? 'text-primary dark:text-blue-400 border-primary dark:border-blue-400' : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-800 dark:hover:text-gray-300'}`}
   >
+    <span className="material-symbols-outlined text-base">{icon}</span>
     {label}
   </NavLink>
 );
@@ -267,6 +286,16 @@ const MobileNavItem: React.FC<{ to: string, label: string, onClick: () => void }
     className={({ isActive }) => `px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-lg transition-colors ${isActive ? 'bg-primary/10 text-primary dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
   >
     {label}
+  </NavLink>
+);
+
+const BottomNavItem: React.FC<{ to: string, icon: string, label: string }> = ({ to, icon, label }) => (
+  <NavLink
+    to={to}
+    className={({ isActive }) => `flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-colors ${isActive ? 'text-primary dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
+  >
+    <span className="material-symbols-outlined text-xl">{icon}</span>
+    <span className="text-[10px] font-bold">{label}</span>
   </NavLink>
 );
 

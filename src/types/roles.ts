@@ -2,26 +2,20 @@ export enum Role {
   SUPER_ADMIN = 'super_admin',
   ADMIN = 'admin',
   MODERATOR = 'moderator',
-  MENTOR = 'mentor',
-  ALUMNI = 'alumni',
   PROFESSIONAL = 'professional',
+  ALUMNI = 'alumni',
   INTERNATIONAL_STUDENT = 'international_student',
-  DOMESTIC_STUDENT = 'domestic_student',
-  STUDENT = 'student',
-  GUEST = 'guest'
+  DOMESTIC_STUDENT = 'domestic_student'
 }
 
 export const ROLE_HIERARCHY: Record<Role, number> = {
   [Role.SUPER_ADMIN]: 100,
   [Role.ADMIN]: 80,
   [Role.MODERATOR]: 60,
-  [Role.MENTOR]: 40,
-  [Role.ALUMNI]: 35,
   [Role.PROFESSIONAL]: 30,
-  [Role.INTERNATIONAL_STUDENT]: 25,
-  [Role.DOMESTIC_STUDENT]: 22,
-  [Role.STUDENT]: 20,
-  [Role.GUEST]: 10
+  [Role.ALUMNI]: 25,
+  [Role.INTERNATIONAL_STUDENT]: 20,
+  [Role.DOMESTIC_STUDENT]: 15
 };
 
 export interface Permission {
@@ -98,7 +92,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission> = {
     canAccessAdminPanel: true,
     maxRoleLevel: 40
   },
-  [Role.MENTOR]: {
+  [Role.PROFESSIONAL]: {
     canManageUsers: false,
     canManageRoles: false,
     canManageMentors: false,
@@ -117,24 +111,6 @@ export const ROLE_PERMISSIONS: Record<Role, Permission> = {
     maxRoleLevel: 0
   },
   [Role.ALUMNI]: {
-    canManageUsers: false,
-    canManageRoles: false,
-    canManageMentors: false,
-    canManageSessions: false,
-    canManagePayments: false,
-    canManagePayouts: false,
-    canManageReports: false,
-    canManageReviews: false,
-    canManageCategories: false,
-    canManageSettings: false,
-    canViewAnalytics: false,
-    canViewSecurityLogs: false,
-    canSuspendUsers: false,
-    canDeleteContent: false,
-    canAccessAdminPanel: false,
-    maxRoleLevel: 0
-  },
-  [Role.PROFESSIONAL]: {
     canManageUsers: false,
     canManageRoles: false,
     canManageMentors: false,
@@ -187,42 +163,6 @@ export const ROLE_PERMISSIONS: Record<Role, Permission> = {
     canDeleteContent: false,
     canAccessAdminPanel: false,
     maxRoleLevel: 0
-  },
-  [Role.STUDENT]: {
-    canManageUsers: false,
-    canManageRoles: false,
-    canManageMentors: false,
-    canManageSessions: false,
-    canManagePayments: false,
-    canManagePayouts: false,
-    canManageReports: false,
-    canManageReviews: false,
-    canManageCategories: false,
-    canManageSettings: false,
-    canViewAnalytics: false,
-    canViewSecurityLogs: false,
-    canSuspendUsers: false,
-    canDeleteContent: false,
-    canAccessAdminPanel: false,
-    maxRoleLevel: 0
-  },
-  [Role.GUEST]: {
-    canManageUsers: false,
-    canManageRoles: false,
-    canManageMentors: false,
-    canManageSessions: false,
-    canManagePayments: false,
-    canManagePayouts: false,
-    canManageReports: false,
-    canManageReviews: false,
-    canManageCategories: false,
-    canManageSettings: false,
-    canViewAnalytics: false,
-    canViewSecurityLogs: false,
-    canSuspendUsers: false,
-    canDeleteContent: false,
-    canAccessAdminPanel: false,
-    maxRoleLevel: 0
   }
 };
 
@@ -232,11 +172,15 @@ export const canChangeRole = (adminRole: Role, targetRole: Role, newRole: Role):
   const newLevel = ROLE_HIERARCHY[newRole];
   const adminPermissions = ROLE_PERMISSIONS[adminRole];
   
+  if (adminRole === Role.SUPER_ADMIN) {
+    return true;
+  }
+  
   return adminPermissions.canManageRoles && 
          adminLevel > targetLevel && 
          newLevel <= adminPermissions.maxRoleLevel;
 };
 
 export const getPermissions = (role: Role): Permission => {
-  return ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS[Role.GUEST];
+  return ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS[Role.DOMESTIC_STUDENT];
 };

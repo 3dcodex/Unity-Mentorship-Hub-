@@ -10,17 +10,82 @@ import { generateProfessionalHeadshot } from '../services/geminiService';
 import { useAuth } from '../App';
 
 const ProfileSettings: React.FC = () => {
-      // Financial aid status
-      const [financialAidStatus, setFinancialAidStatus] = useState('');
-    const { user } = useAuth();
-    const userRole: Role = (localStorage.getItem('unity_user_role') as Role) || 'Domestic Student';
-  // user and userRole declared once below
-  // Domestic Student & General Settings state
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const userRole: Role = (localStorage.getItem('unity_user_role') as Role) || 'Domestic Student';
+  const privileges = rolePrivileges[userRole] || [];
+  
+  // Dark mode
+  const [darkMode, setDarkMode] = useState(localStorage.getItem('unity_dark_mode') === 'true');
+  
+  // Basic profile state
+  const [userName, setUserName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState(user?.email || '');
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  const [phone, setPhone] = useState('');
+  
+  // Student fields
+  const [school, setSchool] = useState('');
+  const [programName, setProgramName] = useState('');
+  const [currentYear, setCurrentYear] = useState('');
+  
+  // Professional fields
+  const [companyName, setCompanyName] = useState('');
+  const [jobTitle, setJobTitle] = useState('');
+  
+  // Loading states
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [isChangingEmail, setIsChangingEmail] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Modal states
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  
+  // Password/Email change states
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [newEmail, setNewEmail] = useState(email);
+  const [passwordToDelete, setPasswordToDelete] = useState('');
+  
+  // Alert states
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  
+  // Mentor fields
+  const [isMentor, setIsMentor] = useState(false);
+  const [mentorExpertise, setMentorExpertise] = useState('');
+  const [mentorBio, setMentorBio] = useState('');
+  const [mentorApplicationStatus, setMentorApplicationStatus] = useState<'none' | 'pending' | 'approved' | 'rejected'>('none');
+  
+  // Additional profile fields
+  const [bio, setBio] = useState('');
+  const [location, setLocation] = useState('');
+  const [website, setWebsite] = useState('');
+  const [linkedin, setLinkedin] = useState('');
+  const [github, setGithub] = useState('');
+  const [twitter, setTwitter] = useState('');
+  const [skills, setSkills] = useState('');
+  const [interests, setInterests] = useState('');
+  const [achievements, setAchievements] = useState('');
+  const [workExperience, setWorkExperience] = useState('');
+  const [education, setEducation] = useState('');
+  const [certifications, setCertifications] = useState('');
+  const [availability, setAvailability] = useState('');
+  
+  // General Settings state
   const [campusInvolvement, setCampusInvolvement] = useState('');
   const [languagesSpoken, setLanguagesSpoken] = useState('');
   const [notifyCampusEvents, setNotifyCampusEvents] = useState(false);
   const [notifyMentorshipRequests, setNotifyMentorshipRequests] = useState(false);
   const [notifyCommunityUpdates, setNotifyCommunityUpdates] = useState(false);
+  const [financialAidStatus, setFinancialAidStatus] = useState('');
 
   // International Student profile fields
   const [homeCountry, setHomeCountry] = useState('');
@@ -32,20 +97,20 @@ const ProfileSettings: React.FC = () => {
   // Alumni profile fields
   const [graduationYear, setGraduationYear] = useState('');
   const [currentEmployer, setCurrentEmployer] = useState('');
-  const [jobTitle, setJobTitle] = useState('');
   const [industry, setIndustry] = useState('');
   const [yearsExperience, setYearsExperience] = useState(0);
   const [availableForMentoring, setAvailableForMentoring] = useState(false);
   const [canPostJobs, setCanPostJobs] = useState(false);
   
   // Professional profile fields
-  const [companyName, setCompanyName] = useState('');
   const [companyWebsite, setCompanyWebsite] = useState('');
   const [companyIndustry, setCompanyIndustry] = useState('');
   const [companySize, setCompanySize] = useState('');
   const [professionalBio, setProfessionalBio] = useState('');
   const [offerInternships, setOfferInternships] = useState(false);
   const [hostWebinars, setHostWebinars] = useState(false);
+  
+  // Domestic Student fields
   const [university, setUniversity] = useState('');
   const [major, setMajor] = useState('');
   const [yearOfStudy, setYearOfStudy] = useState(1);
@@ -59,6 +124,12 @@ const ProfileSettings: React.FC = () => {
   const [eventHost, setEventHost] = useState(false);
   const [eventApproval, setEventApproval] = useState('Yes');
   const [eventModeration, setEventModeration] = useState(false);
+  const [resumeAutoSave, setResumeAutoSave] = useState(localStorage.getItem('unity_resume_auto_save') === 'true');
+
+  const handleResumeAutoSaveChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setResumeAutoSave(e.target.checked);
+    localStorage.setItem('unity_resume_auto_save', e.target.checked ? 'true' : 'false');
+  };
 
   // Load user profile data based on role
   useEffect(() => {
@@ -190,7 +261,7 @@ const ProfileSettings: React.FC = () => {
         setTimeout(() => setSuccess(null), 3000);
       } catch (err: any) {
         console.error('Save role profile error:', err);
-        setError(err?.message || 'Failed to save profile');
+        setError('Failed to save profile');
       } finally {
         setIsSaving(false);
       }
@@ -226,43 +297,12 @@ const ProfileSettings: React.FC = () => {
         setTimeout(() => setSuccess(null), 3000);
       } catch (err: any) {
         console.error('Save domestic student profile error:', err);
-        setError(err?.message || 'Failed to save profile');
+        setError('Failed to save profile');
       } finally {
         setIsSaving(false);
       }
     };
-  // Role and privilege logic
-  const privileges = rolePrivileges[userRole] || [];
-      // Resume auto-save toggle
-      const [resumeAutoSave, setResumeAutoSave] = useState(localStorage.getItem('unity_resume_auto_save') === 'true');
 
-      const handleResumeAutoSaveChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setResumeAutoSave(e.target.checked);
-        localStorage.setItem('unity_resume_auto_save', e.target.checked ? 'true' : 'false');
-      };
-    // Connectivity check
-    console.log("Navigator online?", navigator.onLine);
-  const navigate = useNavigate();
-  // user declared above
-  const [darkMode, setDarkMode] = useState(localStorage.getItem('unity_dark_mode') === 'true');
-  const [userName, setUserName] = useState('');
-  const [email, setEmail] = useState(user?.email || '');
-  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [isChangingEmail, setIsChangingEmail] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [showEmailModal, setShowEmailModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [newEmail, setNewEmail] = useState(email);
-  const [passwordToDelete, setPasswordToDelete] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   // Load user profile from Firestore
   useEffect(() => {
@@ -279,9 +319,16 @@ const ProfileSettings: React.FC = () => {
         const data = userDoc.data();
         const name = data.name || data.displayName || localStorage.getItem('unity_user_name') || 'User';
         setUserName(name);
+        setFirstName(data.firstName || '');
+        setLastName(data.lastName || '');
         setProfilePhoto(data.photoURL || null);
         setPhone(data.phone || '');
         setEmail(data.email || user.email || '');
+        setSchool(data.school || '');
+        setProgramName(data.programName || '');
+        setCurrentYear(data.currentYear || '');
+        setCompanyName(data.companyName || '');
+        setJobTitle(data.jobTitle || '');
       } else {
         setUserName(localStorage.getItem('unity_user_name') || 'User');
       }
@@ -299,30 +346,23 @@ const ProfileSettings: React.FC = () => {
       setIsSaving(true);
       setError(null);
       
-      console.log('Starting photo upload...', file.name);
-      
       // Create unique filename
       const timestamp = Date.now();
-      const filename = `${user.uid}_${timestamp}_${file.name}`;
+      const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const filename = `${user.uid}_${timestamp}_${sanitizedFileName}`;
       const fileRef = ref(storage, `profile-photos/${filename}`);
-      
-      console.log('Uploading to:', `profile-photos/${filename}`);
       
       // Upload file
       const uploadResult = await uploadBytes(fileRef, file);
-      console.log('Upload complete:', uploadResult);
       
       // Get download URL
       const photoURL = await getDownloadURL(fileRef);
-      console.log('Got download URL:', photoURL);
       
       // Update Firestore
       await setDoc(doc(db, 'users', user.uid), {
         photoURL,
         updatedAt: Timestamp.now(),
       }, { merge: true });
-      
-      console.log('Firestore updated');
       
       // Update local state
       setProfilePhoto(photoURL);
@@ -331,7 +371,7 @@ const ProfileSettings: React.FC = () => {
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       console.error('Photo upload error:', err);
-      setError(err?.message || 'Failed to upload photo. Please try again.');
+      setError('Failed to upload photo. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -389,7 +429,7 @@ const ProfileSettings: React.FC = () => {
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       console.error('Change password error:', err);
-      setError(err?.message || 'Failed to change password');
+      setError('Failed to change password');
     } finally {
       setIsChangingPassword(false);
     }
@@ -426,7 +466,7 @@ const ProfileSettings: React.FC = () => {
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       console.error('Change email error:', err);
-      setError(err?.message || 'Failed to change email');
+      setError('Failed to change email');
     } finally {
       setIsChangingEmail(false);
     }
@@ -480,15 +520,28 @@ const ProfileSettings: React.FC = () => {
     setIsSaving(true);
     setError(null);
     try {
-      await setDoc(doc(db, 'users', user.uid), {
+      const updateData: any = {
         name: userName,
         displayName: userName,
+        firstName,
+        lastName,
         phone,
         isMentor,
         mentorExpertise,
         mentorBio,
         updatedAt: Timestamp.now(),
-      }, { merge: true });
+      };
+      
+      if (userRole === 'Domestic Student' || userRole === 'International Student') {
+        updateData.school = school;
+        updateData.programName = programName;
+        updateData.currentYear = currentYear;
+      } else if (userRole === 'Professional') {
+        updateData.companyName = companyName;
+        updateData.jobTitle = jobTitle;
+      }
+      
+      await setDoc(doc(db, 'users', user.uid), updateData, { merge: true });
       
       localStorage.setItem('unity_user_name', userName);
       setSuccess('Profile saved successfully!');
@@ -501,26 +554,7 @@ const ProfileSettings: React.FC = () => {
     }
   };
 
-  // Mentor toggle and fields
-  const [isMentor, setIsMentor] = useState(false);
-  const [mentorExpertise, setMentorExpertise] = useState('');
-  const [mentorBio, setMentorBio] = useState('');
-  
-  // Additional profile fields for comprehensive display
-  const [bio, setBio] = useState('');
-  const [phone, setPhone] = useState('');
-  const [location, setLocation] = useState('');
-  const [website, setWebsite] = useState('');
-  const [linkedin, setLinkedin] = useState('');
-  const [github, setGithub] = useState('');
-  const [twitter, setTwitter] = useState('');
-  const [skills, setSkills] = useState('');
-  const [interests, setInterests] = useState('');
-  const [achievements, setAchievements] = useState('');
-  const [workExperience, setWorkExperience] = useState('');
-  const [education, setEducation] = useState('');
-  const [certifications, setCertifications] = useState('');
-  const [availability, setAvailability] = useState('');
+
 
   // Load mentor status from Firestore
   useEffect(() => {
@@ -545,6 +579,14 @@ const ProfileSettings: React.FC = () => {
           setEducation(data.education || '');
           setCertifications(data.certifications || '');
           setAvailability(data.availability || '');
+        }
+      });
+      
+      // Check mentor application status
+      getDoc(doc(db, 'mentorApplications', user.uid)).then(appSnap => {
+        if (appSnap.exists()) {
+          const appData = appSnap.data();
+          setMentorApplicationStatus(appData.status || 'none');
         }
       });
     }
@@ -608,16 +650,43 @@ const ProfileSettings: React.FC = () => {
     }
   };
 
-  if (darkMode) {
-    document.documentElement.classList.add('dark');
-  } else {
-    document.documentElement.classList.remove('dark');
-  }
+  const handleApplyMentor = async () => {
+    if (!user) return;
+    setIsSaving(true);
+    setError(null);
+    try {
+      await setDoc(doc(db, 'mentorApplications', user.uid), {
+        userId: user.uid,
+        userName: userName,
+        email: user.email,
+        status: 'pending',
+        appliedAt: Timestamp.now(),
+        userRole,
+      });
+      setSuccess('Mentor application submitted! Admin will review your request.');
+      setTimeout(() => setSuccess(null), 5000);
+    } catch (err: any) {
+      console.error('Apply mentor error:', err);
+      setError('Failed to submit application');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+
 
   return (
-
-    <div className={`min-h-screen ${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
-      <div className="max-w-4xl mx-auto py-6 sm:py-8 md:py-12 px-4 sm:px-6 animate-in fade-in duration-700 space-y-6 sm:space-y-8 md:space-y-12">
+    <div className={`min-h-screen ${darkMode ? 'dark bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'}`}>
+      <div className="max-w-6xl mx-auto py-8 px-4 sm:px-6 space-y-8">
+        {/* Page Header */}
+        <div className="text-center space-y-4 py-8">
+          <h1 className="text-4xl md:text-5xl font-black bg-gradient-to-r from-primary via-blue-600 to-purple-600 bg-clip-text text-transparent">
+            Profile Settings
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+            Manage your account, preferences, and role-specific settings all in one place
+          </p>
+        </div>
         {/* Alerts */}
         {success && (
           <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-xl">
@@ -632,348 +701,751 @@ const ProfileSettings: React.FC = () => {
           </div>
         )}
 
-        {/* General User Settings - Modern Card Design */}
-                {/* Add some general settings from Domestic Student profile */}
-                <section className={`${darkMode ? 'dark bg-gray-900 border-gray-700' : 'bg-white border-gray-100'} rounded-3xl p-8 border shadow-lg mb-8`}> 
-                  <h2 className="text-2xl font-black text-primary mb-6 flex items-center gap-3">
-                    <span className="material-symbols-outlined text-primary text-3xl">tune</span>
-                    General Preferences
-                  </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-                    {/* Campus involvement level */}
-                    <div className="flex flex-col gap-2">
-                      <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Campus Involvement Level</label>
-                      <select className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium" value={campusInvolvement} onChange={e => setCampusInvolvement(e.target.value)}>
-                        <option value="">Select...</option>
-                        <option value="Low">Low</option>
-                        <option value="Medium">Medium</option>
-                        <option value="High">High</option>
-                      </select>
-                    </div>
-                    {/* Languages spoken */}
-                    <div className="flex flex-col gap-2">
-                      <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Languages Spoken</label>
-                      <input type="text" placeholder="e.g. English, Spanish" value={languagesSpoken} onChange={e => setLanguagesSpoken(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium" />
-                    </div>
-                    {/* Notifications */}
-                    <div className="flex flex-col gap-2">
-                      <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Notification Preferences</label>
-                      <div className="flex flex-col gap-2">
-                        <label className="flex items-center gap-2">
-                          <input type="checkbox" checked={notifyCampusEvents} onChange={e => setNotifyCampusEvents(e.target.checked)} /> Campus event invites
-                        </label>
-                        <label className="flex items-center gap-2">
-                          <input type="checkbox" checked={notifyMentorshipRequests} onChange={e => setNotifyMentorshipRequests(e.target.checked)} /> Mentorship requests
-                        </label>
-                        <label className="flex items-center gap-2">
-                          <input type="checkbox" checked={notifyCommunityUpdates} onChange={e => setNotifyCommunityUpdates(e.target.checked)} /> Community group updates
-                        </label>
+        {/* General Preferences */}
+        <section className={`${darkMode ? 'dark bg-gradient-to-br from-slate-900/90 via-slate-800/90 to-slate-900/90 border-slate-700/30' : 'bg-gradient-to-br from-white via-blue-50/30 to-white border-blue-100'} backdrop-blur-2xl rounded-3xl p-8 border-2 shadow-2xl hover:shadow-blue-500/10 transition-all duration-300 relative overflow-hidden group`}> 
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-purple-500/5 to-pink-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center gap-4 mb-8">
+                      <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl shadow-lg">
+                        <span className="material-symbols-outlined text-white text-3xl">tune</span>
+                      </div>
+                      <div>
+                        <h2 className="text-3xl font-black bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">General Preferences</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Customize your experience</p>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex justify-end mt-4">
-                    <button className="px-6 py-2 bg-primary hover:bg-primary-dark transition text-white rounded-xl font-bold shadow-sm" onClick={handleSaveDomesticStudentProfile} disabled={isSaving}>Save Preferences</button>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                      <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-blue-400 dark:hover:border-blue-500 transition-all">
+                        <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
+                          <span className="material-symbols-outlined text-sm text-blue-500">groups</span>
+                          Campus Involvement Level
+                        </label>
+                        <select className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-semibold focus:ring-2 focus:ring-blue-500 transition-all" value={campusInvolvement} onChange={e => setCampusInvolvement(e.target.value)}>
+                          <option value="">Select...</option>
+                          <option value="Low">🌱 Low</option>
+                          <option value="Medium">🌿 Medium</option>
+                          <option value="High">🌳 High</option>
+                        </select>
+                      </div>
+                      <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-purple-400 dark:hover:border-purple-500 transition-all">
+                        <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
+                          <span className="material-symbols-outlined text-sm text-purple-500">language</span>
+                          Languages Spoken
+                        </label>
+                        <input type="text" placeholder="e.g. English, Spanish, Mandarin" value={languagesSpoken} onChange={e => setLanguagesSpoken(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-semibold focus:ring-2 focus:ring-purple-500 transition-all" />
+                      </div>
+                      <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-pink-400 dark:hover:border-pink-500 transition-all md:col-span-2">
+                        <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-4 flex items-center gap-2">
+                          <span className="material-symbols-outlined text-sm text-pink-500">notifications_active</span>
+                          Notification Preferences
+                        </label>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <label className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-xl cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group">
+                            <input type="checkbox" checked={notifyCampusEvents} onChange={e => setNotifyCampusEvents(e.target.checked)} className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500" />
+                            <span className="text-sm font-semibold group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">🎉 Campus Events</span>
+                          </label>
+                          <label className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-xl cursor-pointer hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all group">
+                            <input type="checkbox" checked={notifyMentorshipRequests} onChange={e => setNotifyMentorshipRequests(e.target.checked)} className="w-5 h-5 text-purple-600 rounded focus:ring-2 focus:ring-purple-500" />
+                            <span className="text-sm font-semibold group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">🤝 Mentorship</span>
+                          </label>
+                          <label className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-xl cursor-pointer hover:bg-pink-50 dark:hover:bg-pink-900/20 transition-all group">
+                            <input type="checkbox" checked={notifyCommunityUpdates} onChange={e => setNotifyCommunityUpdates(e.target.checked)} className="w-5 h-5 text-pink-600 rounded focus:ring-2 focus:ring-pink-500" />
+                            <span className="text-sm font-semibold group-hover:text-pink-600 dark:group-hover:text-pink-400 transition-colors">💬 Community</span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex justify-end mt-6">
+                      <button className="px-8 py-3 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white rounded-xl font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 flex items-center gap-2" onClick={handleSaveDomesticStudentProfile} disabled={isSaving}>
+                        {isSaving ? (
+                          <>
+                            <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined">save</span>
+                            Save Preferences
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </section>
-        <section className={`${darkMode ? 'dark bg-gray-900 border-gray-700' : 'bg-white border-gray-100'} rounded-3xl p-8 border shadow-lg mb-8`}> 
-          <h2 className="text-2xl font-black text-primary mb-6 flex items-center gap-3">
-            <span className="material-symbols-outlined text-primary text-3xl">person</span>
-            Account Overview
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-            {/* Username */}
-            <div className="flex flex-col gap-2">
-              <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Username</label>
-              <input type="text" value={userName} onChange={e => setUserName(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary" />
+        {/* Account Overview */}
+        <section className={`${darkMode ? 'dark bg-slate-900/50 border-slate-700/50' : 'bg-white/80 border-gray-200'} backdrop-blur-xl rounded-3xl p-8 border shadow-2xl relative overflow-hidden`}>
+          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl"></div>
+          <div className="relative z-10">
+            <h2 className="text-3xl font-black bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent mb-8 flex items-center gap-3">
+              <span className="material-symbols-outlined text-primary text-4xl">account_circle</span>
+              Account Overview
+            </h2>
+
+            {/* Profile Photo Section - Centered & Prominent */}
+            <div className="flex flex-col items-center mb-10">
+              <div className="relative group">
+                <div className="absolute inset-0 bg-gradient-to-r from-primary to-blue-600 rounded-full blur-xl opacity-50 group-hover:opacity-75 transition-opacity"></div>
+                {profilePhoto ? (
+                  <img src={profilePhoto} alt="Profile" className="relative w-32 h-32 rounded-full shadow-2xl border-4 border-white dark:border-gray-700 object-cover" />
+                ) : (
+                  <div className="relative w-32 h-32 rounded-full shadow-2xl border-4 border-white dark:border-gray-700 bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-white text-5xl font-black">
+                    {userName[0] || 'U'}
+                  </div>
+                )}
+              </div>
+              <div className="mt-6 flex gap-3">
+                <label className="cursor-pointer">
+                  <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+                  <div className="px-6 py-3 bg-primary hover:bg-primary/90 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2">
+                    <span className="material-symbols-outlined text-sm">upload</span>
+                    Upload Photo
+                  </div>
+                </label>
+                <button 
+                  onClick={handleGenImage} 
+                  disabled={isGenerating}
+                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2 disabled:opacity-50"
+                >
+                  <span className="material-symbols-outlined text-sm">auto_awesome</span>
+                  {isGenerating ? 'Generating...' : 'AI Photo'}
+                </button>
+              </div>
             </div>
-            {/* Phone Number */}
-            <div className="flex flex-col gap-2">
-              <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Phone Number</label>
-              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary" />
+
+            {/* Account Info Grid */}
+            <div className="grid md:grid-cols-2 gap-6 mb-8">
+              {/* First Name Card */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
+                    <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">person</span>
+                  </div>
+                  <label className="font-black text-sm text-gray-700 dark:text-gray-300 uppercase tracking-wider">First Name</label>
+                </div>
+                <input 
+                  type="text" 
+                  value={firstName} 
+                  onChange={e => setFirstName(e.target.value)} 
+                  className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-xl px-4 py-3 text-lg font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none" 
+                />
+              </div>
+
+              {/* Last Name Card */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
+                    <span className="material-symbols-outlined text-purple-600 dark:text-purple-400">badge</span>
+                  </div>
+                  <label className="font-black text-sm text-gray-700 dark:text-gray-300 uppercase tracking-wider">Last Name</label>
+                </div>
+                <input 
+                  type="text" 
+                  value={lastName} 
+                  onChange={e => setLastName(e.target.value)} 
+                  className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-xl px-4 py-3 text-lg font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none" 
+                />
+              </div>
+
+              {/* Phone Card */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
+                    <span className="material-symbols-outlined text-green-600 dark:text-green-400">phone</span>
+                  </div>
+                  <label className="font-black text-sm text-gray-700 dark:text-gray-300 uppercase tracking-wider">Phone Number</label>
+                </div>
+                <input 
+                  type="tel" 
+                  value={phone} 
+                  onChange={e => setPhone(e.target.value)} 
+                  className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-xl px-4 py-3 text-lg font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none" 
+                />
+              </div>
+
+              {/* Email Card */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
+                    <span className="material-symbols-outlined text-purple-600 dark:text-purple-400">email</span>
+                  </div>
+                  <label className="font-black text-sm text-gray-700 dark:text-gray-300 uppercase tracking-wider">Email Address</label>
+                </div>
+                <input 
+                  type="email" 
+                  value={email} 
+                  readOnly 
+                  className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-xl px-4 py-3 text-lg font-bold text-gray-500 dark:text-gray-400 mb-3" 
+                />
+                <button 
+                  onClick={() => setShowEmailModal(true)}
+                  className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-sm">edit</span>
+                  Change Email
+                </button>
+              </div>
+
+              {/* Password Card */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-xl flex items-center justify-center">
+                    <span className="material-symbols-outlined text-orange-600 dark:text-orange-400">lock</span>
+                  </div>
+                  <label className="font-black text-sm text-gray-700 dark:text-gray-300 uppercase tracking-wider">Password</label>
+                </div>
+                <div className="text-gray-400 dark:text-gray-500 text-sm mb-3 font-medium">••••••••••••</div>
+                <button 
+                  onClick={() => setShowPasswordModal(true)}
+                  className="w-full px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-sm">edit</span>
+                  Change Password
+                </button>
+              </div>
+              
+              {/* Student-specific fields */}
+              {(userRole === 'Domestic Student' || userRole === 'International Student') && (
+                <>
+                  <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
+                        <span className="material-symbols-outlined text-indigo-600 dark:text-indigo-400">school</span>
+                      </div>
+                      <label className="font-black text-sm text-gray-700 dark:text-gray-300 uppercase tracking-wider">School</label>
+                    </div>
+                    <input 
+                      type="text" 
+                      value={school} 
+                      onChange={e => setSchool(e.target.value)} 
+                      className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-xl px-4 py-3 text-lg font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none" 
+                    />
+                  </div>
+                  <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 bg-teal-100 dark:bg-teal-900/30 rounded-xl flex items-center justify-center">
+                        <span className="material-symbols-outlined text-teal-600 dark:text-teal-400">menu_book</span>
+                      </div>
+                      <label className="font-black text-sm text-gray-700 dark:text-gray-300 uppercase tracking-wider">Program Name</label>
+                    </div>
+                    <input 
+                      type="text" 
+                      value={programName} 
+                      onChange={e => setProgramName(e.target.value)} 
+                      className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-xl px-4 py-3 text-lg font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none" 
+                    />
+                  </div>
+                  <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 bg-cyan-100 dark:bg-cyan-900/30 rounded-xl flex items-center justify-center">
+                        <span className="material-symbols-outlined text-cyan-600 dark:text-cyan-400">calendar_today</span>
+                      </div>
+                      <label className="font-black text-sm text-gray-700 dark:text-gray-300 uppercase tracking-wider">Current Year</label>
+                    </div>
+                    <input 
+                      type="text" 
+                      value={currentYear} 
+                      onChange={e => setCurrentYear(e.target.value)} 
+                      className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-xl px-4 py-3 text-lg font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none" 
+                    />
+                  </div>
+                </>
+              )}
+              
+              {/* Professional-specific fields */}
+              {userRole === 'Professional' && (
+                <>
+                  <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
+                        <span className="material-symbols-outlined text-indigo-600 dark:text-indigo-400">business</span>
+                      </div>
+                      <label className="font-black text-sm text-gray-700 dark:text-gray-300 uppercase tracking-wider">Company Name</label>
+                    </div>
+                    <input 
+                      type="text" 
+                      value={companyName} 
+                      onChange={e => setCompanyName(e.target.value)} 
+                      className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-xl px-4 py-3 text-lg font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none" 
+                    />
+                  </div>
+                  <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 bg-teal-100 dark:bg-teal-900/30 rounded-xl flex items-center justify-center">
+                        <span className="material-symbols-outlined text-teal-600 dark:text-teal-400">work</span>
+                      </div>
+                      <label className="font-black text-sm text-gray-700 dark:text-gray-300 uppercase tracking-wider">Job Title</label>
+                    </div>
+                    <input 
+                      type="text" 
+                      value={jobTitle} 
+                      onChange={e => setJobTitle(e.target.value)} 
+                      className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-xl px-4 py-3 text-lg font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none" 
+                    />
+                  </div>
+                </>
+              )}
             </div>
-          </div>
-          <div className="flex justify-end">
-            <button className="px-6 py-2 bg-primary hover:bg-primary-dark transition text-white rounded-xl font-bold shadow-sm" onClick={handleSaveProfile} disabled={isSaving}>Save Profile</button>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
-            {/* Email */}
-            <div className="flex flex-col gap-2">
-              <input type="email" value={email} readOnly className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium" />
-              <button className="mt-2 px-4 py-2 bg-primary hover:bg-primary-dark transition text-white rounded-xl font-bold shadow-sm" onClick={() => setShowEmailModal(true)}>Change Email</button>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 pt-6 border-t border-gray-200 dark:border-gray-700">
+              <button 
+                onClick={handleSaveProfile} 
+                disabled={isSaving}
+                className="flex-1 px-8 py-4 bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-700 text-white rounded-xl font-black shadow-xl hover:scale-105 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isSaving ? (
+                  <>
+                    <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined">save</span>
+                    Save Changes
+                  </>
+                )}
+              </button>
+              <button 
+                onClick={handleLogout}
+                className="px-8 py-4 bg-gray-600 hover:bg-gray-700 text-white rounded-xl font-black shadow-lg hover:scale-105 transition-all flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined">logout</span>
+                Logout
+              </button>
+              <button 
+                onClick={() => setShowDeleteModal(true)}
+                className="px-8 py-4 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black shadow-lg hover:scale-105 transition-all flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined">delete_forever</span>
+                Delete Account
+              </button>
             </div>
-            {/* Password */}
-            <div className="flex flex-col gap-2">
-              <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Change Password</label>
-              <button className="mt-2 px-4 py-2 bg-primary hover:bg-primary-dark transition text-white rounded-xl font-bold shadow-sm" onClick={() => setShowPasswordModal(true)}>Change Password</button>
-            </div>
-            {/* Profile Photo */}
-            <div className="flex flex-col gap-2 items-center">
-              <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Profile Photo</label>
-              {profilePhoto && <img src={profilePhoto} alt="Profile" className="w-20 h-20 rounded-full mb-2 shadow-lg border-4 border-primary" />}
-              <input type="file" accept="image/*" onChange={handlePhotoUpload} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium" />
-              <button className="mt-2 px-4 py-2 bg-primary hover:bg-primary-dark transition text-white rounded-xl font-bold shadow-sm" onClick={handleGenImage} disabled={isGenerating}>Generate AI Photo</button>
-            </div>
-          </div>
-          {/* Logout & Delete Account */}
-          <div className="flex gap-4 justify-end mt-6">
-            <button className="px-6 py-2 bg-gray-600 hover:bg-gray-700 transition text-white rounded-xl font-bold shadow-sm" onClick={handleLogout}>Logout</button>
-            <button className="px-6 py-2 bg-red-600 hover:bg-red-700 transition text-white rounded-xl font-bold shadow-sm" onClick={() => setShowDeleteModal(true)}>Delete Account</button>
           </div>
         </section>
 
-        {/* Resume Auto-Save Option */}
-        <div className={`${darkMode ? 'dark bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl sm:rounded-3xl p-6 sm:p-8 border shadow-sm`}> 
-          <h2 className="text-xl font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary">sync</span>
-            Resume Auto-Save
-          </h2>
-          <div className="flex items-center gap-3">
-            <label className="font-bold text-xs">Enable auto-save for Resume Builder</label>
-            <input
-              type="checkbox"
-              checked={resumeAutoSave}
-              onChange={handleResumeAutoSaveChange}
-            />
+        {/* Resume Auto-Save */}
+        <div className={`${darkMode ? 'dark bg-gradient-to-br from-emerald-900/20 via-teal-900/20 to-cyan-900/20 border-emerald-700/30' : 'bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 border-emerald-200'} backdrop-blur-2xl rounded-3xl p-6 border-2 shadow-2xl hover:shadow-emerald-500/10 transition-all duration-300 relative overflow-hidden group`}> 
+          <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 to-teal-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+          <div className="relative z-10">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl shadow-lg">
+                  <span className="material-symbols-outlined text-white text-2xl">sync</span>
+                </div>
+                <div>
+                  <h2 className="text-xl font-black bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">Resume Auto-Save</h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Automatically save your resume changes</p>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={resumeAutoSave}
+                  onChange={handleResumeAutoSaveChange}
+                  className="sr-only peer"
+                />
+                <div className="w-14 h-7 bg-gray-300 dark:bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 dark:peer-focus:ring-emerald-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-emerald-500 peer-checked:to-teal-600"></div>
+              </label>
+            </div>
+            <div className="mt-4 p-4 bg-white/50 dark:bg-slate-800/50 rounded-xl border border-emerald-200/50 dark:border-emerald-700/50">
+              <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                {resumeAutoSave ? (
+                  <span className="flex items-center gap-2"><span className="text-emerald-600 dark:text-emerald-400">✓</span> Auto-save is <strong>enabled</strong>. Your resume changes will be saved automatically.</span>
+                ) : (
+                  <span className="flex items-center gap-2"><span className="text-gray-400">○</span> Auto-save is <strong>disabled</strong>. Remember to click Save to persist your changes.</span>
+                )}
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-gray-500 mt-2">When enabled, your resume will be saved automatically as you edit in Resume Builder. When disabled, you must click Save to persist changes.</p>
         </div>
 
-        {/* Mentor Profile Section */}
-        <section className={`${darkMode ? 'dark bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl sm:rounded-3xl p-6 sm:p-8 border shadow-sm`}>
-          <h2 className="text-xl font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary">school</span>
-            Become a Mentor
-          </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            Share your expertise and help students succeed. Apply to become an official mentor on the platform.
-          </p>
-          <button
-            onClick={() => navigate('/become-mentor')}
-            className="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2"
-          >
-            <span className="material-symbols-outlined">school</span>
-            Apply to Become a Mentor
-          </button>
+        {/* Become a Mentor - Only show if not already a mentor and no pending application */}
+        {!isMentor && mentorApplicationStatus !== 'pending' && (
+        <section className={`${darkMode ? 'dark bg-gradient-to-br from-green-900/30 via-emerald-900/30 to-teal-900/30 border-green-700/30' : 'bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 border-green-200'} backdrop-blur-2xl rounded-3xl p-8 border-2 shadow-2xl hover:shadow-green-500/20 transition-all duration-300 relative overflow-hidden group`}>
+          <div className="absolute inset-0 bg-gradient-to-r from-green-500/10 via-emerald-500/10 to-teal-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/10 rounded-full blur-3xl"></div>
+          <div className="relative z-10">
+            <div className="flex items-start gap-4 mb-6">
+              <div className="p-4 bg-gradient-to-br from-green-500 to-teal-600 rounded-2xl shadow-lg">
+                <span className="material-symbols-outlined text-white text-4xl">school</span>
+              </div>
+              <div className="flex-1">
+                <h2 className="text-2xl font-black bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 bg-clip-text text-transparent mb-2">Become a Mentor</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                  Share your expertise and help students succeed. Apply to become an official mentor and make a lasting impact on the next generation.
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="text-center p-4 bg-white/50 dark:bg-slate-800/50 rounded-xl">
+                <div className="text-2xl font-black text-green-600 dark:text-green-400">1000+</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Students Helped</div>
+              </div>
+              <div className="text-center p-4 bg-white/50 dark:bg-slate-800/50 rounded-xl">
+                <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">500+</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Active Mentors</div>
+              </div>
+              <div className="text-center p-4 bg-white/50 dark:bg-slate-800/50 rounded-xl">
+                <div className="text-2xl font-black text-teal-600 dark:text-teal-400">4.9★</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Avg Rating</div>
+              </div>
+            </div>
+            <button
+              onClick={handleApplyMentor}
+              disabled={isSaving}
+              className="w-full px-8 py-4 bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 hover:from-green-700 hover:via-emerald-700 hover:to-teal-700 text-white rounded-xl font-black shadow-xl hover:shadow-2xl hover:scale-105 transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50"
+            >
+              {isSaving ? (
+                <>
+                  <span className="material-symbols-outlined animate-spin text-2xl">progress_activity</span>
+                  <span>Submitting...</span>
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-2xl">school</span>
+                  <span>Apply to Become a Mentor</span>
+                  <span className="material-symbols-outlined">arrow_forward</span>
+                </>
+              )}
+            </button>
+          </div>
         </section>
+        )}
+        
+        {/* Application Pending Message */}
+        {!isMentor && mentorApplicationStatus === 'pending' && (
+        <section className={`${darkMode ? 'dark bg-gradient-to-br from-yellow-900/30 via-amber-900/30 to-orange-900/30 border-yellow-700/30' : 'bg-gradient-to-br from-yellow-50 via-amber-50 to-orange-50 border-yellow-200'} backdrop-blur-2xl rounded-3xl p-8 border-2 shadow-2xl relative overflow-hidden`}>
+          <div className="relative z-10">
+            <div className="flex items-start gap-4">
+              <div className="p-4 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-2xl shadow-lg">
+                <span className="material-symbols-outlined text-white text-4xl">pending</span>
+              </div>
+              <div className="flex-1">
+                <h2 className="text-2xl font-black bg-gradient-to-r from-yellow-600 via-amber-600 to-orange-600 bg-clip-text text-transparent mb-2">Application Under Review</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                  Your mentor application is currently being reviewed by our admin team. You'll receive a notification once a decision has been made. Thank you for your patience!
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+        )}
+        
+        {/* Already a Mentor Message */}
+        {isMentor && (
+        <section className={`${darkMode ? 'dark bg-gradient-to-br from-blue-900/30 via-indigo-900/30 to-purple-900/30 border-blue-700/30' : 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border-blue-200'} backdrop-blur-2xl rounded-3xl p-8 border-2 shadow-2xl relative overflow-hidden`}>
+          <div className="relative z-10">
+            <div className="flex items-start gap-4">
+              <div className="p-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl shadow-lg">
+                <span className="material-symbols-outlined text-white text-4xl">verified</span>
+              </div>
+              <div className="flex-1">
+                <h2 className="text-2xl font-black bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">You're a Verified Mentor! 🎉</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-4">
+                  You have full mentor privileges and can now guide students on their journey. Keep up the great work!
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => window.location.href = '/mentorship'}
+                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2"
+                  >
+                    <span className="material-symbols-outlined">diversity_3</span>
+                    View Mentorship Dashboard
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        )}
 
-        {/* Complete Profile Section */}
-        <section className={`${darkMode ? 'dark bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl sm:rounded-3xl p-6 sm:p-8 border shadow-sm`}>
-          <h2 className="text-xl font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary">school</span>
-            Complete Profile
-          </h2>
+        {/* Complete Profile */}
+        <section className={`${darkMode ? 'dark bg-gradient-to-br from-indigo-900/20 via-purple-900/20 to-pink-900/20 border-indigo-700/30' : 'bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 border-indigo-200'} backdrop-blur-2xl rounded-3xl p-8 border-2 shadow-2xl hover:shadow-indigo-500/10 transition-all duration-300 relative overflow-hidden group`}>
+          <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 via-purple-500/5 to-pink-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+          <div className="relative z-10">
+            <div className="flex items-center gap-4 mb-8">
+              <div className="p-3 bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-600 rounded-2xl shadow-lg">
+                <span className="material-symbols-outlined text-white text-3xl">person</span>
+              </div>
+              <div>
+                <h2 className="text-3xl font-black bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">Complete Profile</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Build your professional presence</p>
+              </div>
+            </div>
           <div className="space-y-6">
             {/* Bio */}
-            <div className="flex flex-col gap-2">
-              <label className="font-bold text-sm text-gray-700 dark:text-gray-200">About Me</label>
+            <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-indigo-400 dark:hover:border-indigo-500 transition-all">
+              <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
+                <span className="material-symbols-outlined text-sm text-indigo-500">description</span>
+                About Me
+              </label>
               <textarea
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 placeholder="Tell others about yourself..."
-                className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary min-h-[100px]"
+                className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-indigo-500 transition-all min-h-[100px]"
               />
             </div>
 
             {/* Contact Information */}
             <div className="grid md:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-2">
-                <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Phone</label>
+              <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-purple-400 dark:hover:border-purple-500 transition-all">
+                <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm text-purple-500">phone</span>
+                  Phone
+                </label>
                 <input
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="+1 (555) 123-4567"
-                  className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary"
+                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-purple-500 transition-all"
                 />
               </div>
-              <div className="flex flex-col gap-2">
-                <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Location</label>
+              <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-pink-400 dark:hover:border-pink-500 transition-all">
+                <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm text-pink-500">location_on</span>
+                  Location
+                </label>
                 <input
                   type="text"
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
                   placeholder="City, Country"
-                  className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary"
+                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-pink-500 transition-all"
                 />
               </div>
             </div>
 
             {/* Social Links */}
             <div className="grid md:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-2">
-                <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Website</label>
+              <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-blue-400 dark:hover:border-blue-500 transition-all">
+                <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm text-blue-500">language</span>
+                  Website
+                </label>
                 <input
                   type="url"
                   value={website}
                   onChange={(e) => setWebsite(e.target.value)}
                   placeholder="https://yourwebsite.com"
-                  className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary"
+                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-blue-500 transition-all"
                 />
               </div>
-              <div className="flex flex-col gap-2">
-                <label className="font-bold text-sm text-gray-700 dark:text-gray-200">LinkedIn</label>
+              <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-blue-400 dark:hover:border-blue-500 transition-all">
+                <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm text-blue-600">work</span>
+                  LinkedIn
+                </label>
                 <input
                   type="url"
                   value={linkedin}
                   onChange={(e) => setLinkedin(e.target.value)}
                   placeholder="https://linkedin.com/in/username"
-                  className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary"
+                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-blue-600 transition-all"
                 />
               </div>
-              <div className="flex flex-col gap-2">
-                <label className="font-bold text-sm text-gray-700 dark:text-gray-200">GitHub</label>
+              <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-gray-400 dark:hover:border-gray-500 transition-all">
+                <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm text-gray-700 dark:text-gray-400">code</span>
+                  GitHub
+                </label>
                 <input
                   type="url"
                   value={github}
                   onChange={(e) => setGithub(e.target.value)}
                   placeholder="https://github.com/username"
-                  className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary"
+                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-gray-500 transition-all"
                 />
               </div>
-              <div className="flex flex-col gap-2">
-                <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Twitter</label>
+              <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-sky-400 dark:hover:border-sky-500 transition-all">
+                <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm text-sky-500">tag</span>
+                  Twitter
+                </label>
                 <input
                   type="url"
                   value={twitter}
                   onChange={(e) => setTwitter(e.target.value)}
                   placeholder="https://twitter.com/username"
-                  className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary"
+                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-sky-500 transition-all"
                 />
               </div>
             </div>
 
             {/* Skills & Interests */}
             <div className="grid md:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-2">
-                <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Skills</label>
+              <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-emerald-400 dark:hover:border-emerald-500 transition-all">
+                <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm text-emerald-500">psychology</span>
+                  Skills
+                </label>
                 <input
                   type="text"
                   value={skills}
                   onChange={(e) => setSkills(e.target.value)}
                   placeholder="e.g. Python, React, Data Analysis"
-                  className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary"
+                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-emerald-500 transition-all"
                 />
               </div>
-              <div className="flex flex-col gap-2">
-                <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Interests</label>
+              <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-amber-400 dark:hover:border-amber-500 transition-all">
+                <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm text-amber-500">favorite</span>
+                  Interests
+                </label>
                 <input
                   type="text"
                   value={interests}
                   onChange={(e) => setInterests(e.target.value)}
                   placeholder="e.g. AI, Entrepreneurship, Music"
-                  className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary"
+                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-amber-500 transition-all"
                 />
               </div>
             </div>
 
             {/* Professional Info */}
-            <div className="flex flex-col gap-2">
-              <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Work Experience</label>
+            <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-indigo-400 dark:hover:border-indigo-500 transition-all">
+              <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
+                <span className="material-symbols-outlined text-sm text-indigo-500">work_history</span>
+                Work Experience
+              </label>
               <textarea
                 value={workExperience}
                 onChange={(e) => setWorkExperience(e.target.value)}
                 placeholder="List your work experience..."
-                className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary min-h-[80px]"
+                className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-indigo-500 transition-all min-h-[80px]"
               />
             </div>
 
-            <div className="flex flex-col gap-2">
-              <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Education</label>
+            <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-purple-400 dark:hover:border-purple-500 transition-all">
+              <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
+                <span className="material-symbols-outlined text-sm text-purple-500">school</span>
+                Education
+              </label>
               <textarea
                 value={education}
                 onChange={(e) => setEducation(e.target.value)}
                 placeholder="List your education background..."
-                className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary min-h-[80px]"
+                className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-purple-500 transition-all min-h-[80px]"
               />
             </div>
 
             <div className="grid md:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-2">
-                <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Certifications</label>
+              <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-blue-400 dark:hover:border-blue-500 transition-all">
+                <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm text-blue-500">verified</span>
+                  Certifications
+                </label>
                 <input
                   type="text"
                   value={certifications}
                   onChange={(e) => setCertifications(e.target.value)}
                   placeholder="e.g. AWS Certified, PMP"
-                  className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary"
+                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-blue-500 transition-all"
                 />
               </div>
-              <div className="flex flex-col gap-2">
-                <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Achievements</label>
+              <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-yellow-400 dark:hover:border-yellow-500 transition-all">
+                <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm text-yellow-600">emoji_events</span>
+                  Achievements
+                </label>
                 <input
                   type="text"
                   value={achievements}
                   onChange={(e) => setAchievements(e.target.value)}
                   placeholder="e.g. Dean's List, Hackathon Winner"
-                  className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary"
+                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-yellow-500 transition-all"
                 />
               </div>
             </div>
 
-            <div className="flex flex-col gap-2">
-              <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Availability</label>
+            <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-green-400 dark:hover:border-green-500 transition-all">
+              <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
+                <span className="material-symbols-outlined text-sm text-green-500">schedule</span>
+                Availability
+              </label>
               <input
                 type="text"
                 value={availability}
                 onChange={(e) => setAvailability(e.target.value)}
                 placeholder="e.g. Weekdays 6-9 PM EST"
-                className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary"
+                className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-green-500 transition-all"
               />
             </div>
 
             {/* Mentor Toggle */}
-            <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
-              <div className="flex items-center gap-3 mb-4">
-                <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Available as Mentor</label>
-                <input
-                  type="checkbox"
-                  checked={isMentor}
-                  onChange={(e) => handleMentorToggle(e.target.checked)}
-                  className="w-5 h-5"
-                />
-              </div>
-              {isMentor && (
-                <>
-                  <div className="flex flex-col gap-2 mb-4">
-                    <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Mentorship Expertise</label>
+            <div className="pt-6 border-t-2 border-gray-200/50 dark:border-gray-700/50">
+              <div className="bg-gradient-to-r from-teal-50 to-cyan-50 dark:from-teal-900/20 dark:to-cyan-900/20 rounded-2xl p-6 border-2 border-teal-200 dark:border-teal-700/50">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-xl">
+                      <span className="material-symbols-outlined text-white text-2xl">diversity_3</span>
+                    </div>
+                    <div>
+                      <label className="font-bold text-lg text-gray-900 dark:text-white">Available as Mentor</label>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Help others grow and learn</p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
                     <input
-                      type="text"
-                      value={mentorExpertise}
-                      onChange={(e) => setMentorExpertise(e.target.value)}
-                      placeholder="e.g., Computer Science, Career Guidance"
-                      className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary"
+                      type="checkbox"
+                      checked={isMentor}
+                      onChange={(e) => handleMentorToggle(e.target.checked)}
+                      className="sr-only peer"
                     />
+                    <div className="w-14 h-7 bg-gray-300 dark:bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 dark:peer-focus:ring-teal-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-teal-500 peer-checked:to-cyan-600"></div>
+                  </label>
+                </div>
+                {isMentor && (
+                  <div className="space-y-4 mt-6 pt-6 border-t border-teal-200 dark:border-teal-700/50">
+                    <div className="bg-white/70 dark:bg-slate-800/70 rounded-xl p-4">
+                      <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-sm text-teal-500">lightbulb</span>
+                        Mentorship Expertise
+                      </label>
+                      <input
+                        type="text"
+                        value={mentorExpertise}
+                        onChange={(e) => setMentorExpertise(e.target.value)}
+                        placeholder="e.g., Computer Science, Career Guidance"
+                        className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-lg px-4 py-3 text-base font-medium focus:ring-2 focus:ring-teal-500 transition-all"
+                      />
+                    </div>
+                    <div className="bg-white/70 dark:bg-slate-800/70 rounded-xl p-4">
+                      <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-sm text-cyan-500">chat</span>
+                        Mentor Bio
+                      </label>
+                      <textarea
+                        value={mentorBio}
+                        onChange={(e) => setMentorBio(e.target.value)}
+                        placeholder="Tell students how you can help them..."
+                        className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-lg px-4 py-3 text-base font-medium focus:ring-2 focus:ring-cyan-500 transition-all min-h-[100px]"
+                      />
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Mentor Bio</label>
-                    <textarea
-                      value={mentorBio}
-                      onChange={(e) => setMentorBio(e.target.value)}
-                      placeholder="Tell students how you can help them..."
-                      className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary min-h-[100px]"
-                    />
-                  </div>
-                </>
-              )}
+                )}
+              </div>
             </div>
 
             <button
               onClick={handleMentorProfileSave}
               disabled={isSaving}
-              className="w-full px-6 py-3 bg-primary hover:bg-primary-dark transition text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2"
+              className="w-full px-8 py-4 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white rounded-xl font-black shadow-xl hover:shadow-2xl hover:scale-105 transition-all duration-300 flex items-center justify-center gap-3"
             >
               {isSaving ? (
                 <>
-                  <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                  Saving...
+                  <span className="material-symbols-outlined animate-spin text-2xl">progress_activity</span>
+                  <span>Saving...</span>
                 </>
               ) : (
                 <>
-                  <span className="material-symbols-outlined">save</span>
-                  Save Complete Profile
+                  <span className="material-symbols-outlined text-2xl">save</span>
+                  <span>Save Complete Profile</span>
                 </>
               )}
             </button>
+          </div>
           </div>
         </section>
 
@@ -1515,552 +1987,8 @@ const ProfileSettings: React.FC = () => {
             </div>
           </div>
         </section>
-        {/* Role-based Profile Section */}
-        {(() => {
-          const role = localStorage.getItem('unity_user_role') || 'Student';
-          switch (role) {
-            case 'Student': {
-              const isInternational = localStorage.getItem('unity_user_international') === 'true';
-              if (isInternational) {
-                return (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Core Identity Section for International Student */}
-                                        {/* Adjustment & Support Preferences Section */}
-                                                            {/* Privacy & Safety Controls Section */}
-                                                                                {/* Mentorship Preferences Section */}
-                                                                                                    {/* Community Controls Section */}
-                                                                                                                        {/* Notification Settings Section */}
-                                                                                                                        <div className={`${darkMode ? 'dark bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl sm:rounded-3xl p-6 sm:p-8 border shadow-sm mt-8 md:col-span-3`}>
-                                                                                                                          <h2 className="text-xl font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                                                                                                                            <span className="material-symbols-outlined text-primary">notifications</span>
-                                                                                                                            Notification Settings
-                                                                                                                          </h2>
-                                                                                                                          <div className="space-y-6">
-                                                                                                                            <div className="flex items-center gap-3">
-                                                                                                                              <label className="font-bold text-xs">Visa updates</label>
-                                                                                                                              <input type="checkbox" checked={localStorage.getItem('unity_notify_visa_updates') === 'true'} readOnly />
-                                                                                                                            </div>
-                                                                                                                            <div className="flex items-center gap-3">
-                                                                                                                              <label className="font-bold text-xs">Scholarship alerts</label>
-                                                                                                                              <input type="checkbox" checked={localStorage.getItem('unity_notify_scholarship_alerts') === 'true'} readOnly />
-                                                                                                                            </div>
-                                                                                                                            <div className="flex items-center gap-3">
-                                                                                                                              <label className="font-bold text-xs">Emergency alerts</label>
-                                                                                                                              <input type="checkbox" checked={localStorage.getItem('unity_notify_emergency_alerts') === 'true'} readOnly />
-                                                                                                                            </div>
-                                                                                                                            <div className="flex items-center gap-3">
-                                                                                                                              <label className="font-bold text-xs">Event invitations</label>
-                                                                                                                              <input type="checkbox" checked={localStorage.getItem('unity_notify_event_invitations') === 'true'} readOnly />
-                                                                                                                            </div>
-                                                                                                                          </div>
-                                                                                                                        </div>
-                                                                                                    <div className={`${darkMode ? 'dark bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl sm:rounded-3xl p-6 sm:p-8 border shadow-sm mt-8 md:col-span-3`}>
-                                                                                                      <h2 className="text-xl font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                                                                                                        <span className="material-symbols-outlined text-primary">groups</span>
-                                                                                                        Community Controls
-                                                                                                      </h2>
-                                                                                                      <div className="space-y-6">
-                                                                                                        <div>
-                                                                                                          <label className="font-bold text-xs mb-2 block">Join cultural groups</label>
-                                                                                                          <div className="bg-gray-100 dark:bg-gray-700 rounded-xl p-4 text-xs text-gray-500">(Membership management coming soon)</div>
-                                                                                                        </div>
-                                                                                                        <div className="flex items-center gap-3">
-                                                                                                          <label className="font-bold text-xs">Language exchange participation</label>
-                                                                                                          <input type="checkbox" checked={localStorage.getItem('unity_community_language_exchange') === 'true'} readOnly />
-                                                                                                        </div>
-                                                                                                        <div className="flex items-center gap-3">
-                                                                                                          <label className="font-bold text-xs">Allow peer contact</label>
-                                                                                                          <input type="checkbox" checked={localStorage.getItem('unity_community_peer_contact') === 'true'} readOnly />
-                                                                                                        </div>
-                                                                                                      </div>
-                                                                                                    </div>
-                                                                                <div className={`${darkMode ? 'dark bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl sm:rounded-3xl p-6 sm:p-8 border shadow-sm mt-8 md:col-span-3`}>
-                                                                                  <h2 className="text-xl font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                                                                                    <span className="material-symbols-outlined text-primary">diversity_3</span>
-                                                                                    Mentorship Preferences
-                                                                                  </h2>
-                                                                                  <div className="space-y-6">
-                                                                                    <div>
-                                                                                      <label className="font-bold text-xs mb-2 block">Preferred session format:</label>
-                                                                                      <div className="flex gap-4">
-                                                                                        <label className="flex items-center gap-2">
-                                                                                          <input type="checkbox" checked={localStorage.getItem('unity_mentorship_format_video') === 'true'} readOnly /> Video
-                                                                                        </label>
-                                                                                        <label className="flex items-center gap-2">
-                                                                                          <input type="checkbox" checked={localStorage.getItem('unity_mentorship_format_audio') === 'true'} readOnly /> Audio
-                                                                                        </label>
-                                                                                        <label className="flex items-center gap-2">
-                                                                                          <input type="checkbox" checked={localStorage.getItem('unity_mentorship_format_chat') === 'true'} readOnly /> Chat
-                                                                                        </label>
-                                                                                      </div>
-                                                                                    </div>
-                                                                                    <div>
-                                                                                      <label className="font-bold text-xs mb-2 block">Availability calendar</label>
-                                                                                      <div className="bg-gray-100 dark:bg-gray-700 rounded-xl p-4 text-xs text-gray-500">(Calendar integration coming soon)</div>
-                                                                                    </div>
-                                                                                    <div className="flex items-center gap-3">
-                                                                                      <label className="font-bold text-xs">Priority matching</label>
-                                                                                      <input type="checkbox" checked={localStorage.getItem('unity_mentorship_priority_matching') === 'true'} readOnly />
-                                                                                    </div>
-                                                                                  </div>
-                                                                                </div>
-                                                            <div className={`${darkMode ? 'dark bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl sm:rounded-3xl p-6 sm:p-8 border shadow-sm mt-8 md:col-span-3`}>
-                                                              <h2 className="text-xl font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                                                                <span className="material-symbols-outlined text-primary">shield_person</span>
-                                                                Privacy & Safety Controls
-                                                              </h2>
-                                                              <div className="space-y-6">
-                                                                                            case 'Alumni':
-                                                                                              return (
-                                                                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                                                                                  {/* Professional Identity Section for Alumni */}
-                                                                                                  <div className={`${darkMode ? 'dark bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl sm:rounded-3xl p-6 sm:p-8 border shadow-sm md:col-span-3`}>
-                                                                                                    <h2 className="text-xl font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                                                                                                      <span className="material-symbols-outlined text-primary">work</span>
-                                                                                                      Professional Identity
-                                                                                                    </h2>
-                                                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                                                                                      <div>
-                                                                                                        <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Current Employer</label>
-                                                                                                        <input value={localStorage.getItem('unity_alumni_employer') || ''} type="text" className="w-full mt-2 bg-gray-50 dark:bg-gray-700 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" readOnly />
-                                                                                                      </div>
-                                                                                                      <div>
-                                                                                                        <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Job Title</label>
-                                                                                                        <input value={localStorage.getItem('unity_alumni_job_title') || ''} type="text" className="w-full mt-2 bg-gray-50 dark:bg-gray-700 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" readOnly />
-                                                                                                      </div>
-                                                                                                      <div>
-                                                                                                        <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Industry</label>
-                                                                                                        <input value={localStorage.getItem('unity_alumni_industry') || ''} type="text" className="w-full mt-2 bg-gray-50 dark:bg-gray-700 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" readOnly />
-                                                                                                      </div>
-                                                                                                      <div>
-                                                                                                        <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Years of Experience</label>
-                                                                                                        <input value={localStorage.getItem('unity_alumni_experience_years') || ''} type="number" min="0" className="w-full mt-2 bg-gray-50 dark:bg-gray-700 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" readOnly />
-                                                                                                      </div>
-                                                                                                    </div>
-                                                                                                  </div>
-                                                                                                  {/* Alumni Verification Section */}
-                                                                                                  <div className={`${darkMode ? 'dark bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl sm:rounded-3xl p-6 sm:p-8 border shadow-sm md:col-span-3`}>
-                                                                                                    <h2 className="text-xl font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                                                                                                      <span className="material-symbols-outlined text-primary">verified</span>
-                                                                                                      Alumni Verification
-                                                                                                    </h2>
-                                                                                                    <div className="space-y-6">
-                                                                                                      <div>
-                                                                                                        <label className="font-bold text-xs mb-2 block">Upload graduation proof</label>
-                                                                                                        <input type="file" accept="image/*,application/pdf" className="w-full bg-gray-50 dark:bg-gray-700 border-none rounded-xl px-4 py-3 text-sm font-medium" disabled />
-                                                                                                        <div className="text-xs text-gray-500 mt-2">(Upload functionality coming soon)</div>
-                                                                                                      </div>
-                                                                                                      <div className="flex items-center gap-3">
-                                                                                                        <label className="font-bold text-xs">Alumni badge status</label>
-                                                                                                        <span className={`px-3 py-1 rounded-xl font-bold text-xs ${localStorage.getItem('unity_alumni_badge_status') === 'verified' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{localStorage.getItem('unity_alumni_badge_status') === 'verified' ? 'Verified' : 'Pending'}</span>
-                                                                                                      </div>
-                                                                                                      <div className="flex items-center gap-3">
-                                                                                                        <label className="font-bold text-xs">Verified mentor badge</label>
-                                                                                                        <span className={`px-3 py-1 rounded-xl font-bold text-xs ${localStorage.getItem('unity_alumni_mentor_badge') === 'true' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>{localStorage.getItem('unity_alumni_mentor_badge') === 'true' ? 'Active' : 'Not Active'}</span>
-                                                                                                      </div>
-                                                                                                    </div>
-                                                                                                  </div>
-                                                                                                  {/* Mentorship Capacity Section for Alumni */}
-                                                                                                  <div className={`${darkMode ? 'dark bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl sm:rounded-3xl p-6 sm:p-8 border shadow-sm md:col-span-3`}>
-                                                                                                    <h2 className="text-xl font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                                                                                                      <span className="material-symbols-outlined text-primary">diversity_3</span>
-                                                                                                      Mentorship Capacity
-                                                                                                    </h2>
-                                                                                                    <div className="space-y-6">
-                                                                                                      <div className="flex items-center gap-3">
-                                                                                                        <label className="font-bold text-xs">Available as mentor</label>
-                                                                                                        <input type="checkbox" checked={localStorage.getItem('unity_alumni_available_mentor') === 'true'} readOnly />
-                                                                                                      </div>
-                                                                                                      <div>
-                                                                                                        <label className="font-bold text-xs mb-2 block">Max mentees allowed</label>
-                                                                                                        <input value={localStorage.getItem('unity_alumni_max_mentees') || ''} type="number" min="1" className="w-full bg-gray-50 dark:bg-gray-700 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" readOnly />
-                                                                                                      </div>
-                                                                                                      <div>
-                                                                                                        <label className="font-bold text-xs mb-2 block">Areas of expertise</label>
-                                                                                                        <select className="w-full bg-gray-50 dark:bg-gray-700 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" value={localStorage.getItem('unity_alumni_expertise') || ''} disabled>
-                                                                                                          <option value="">Select...</option>
-                                                                                                          <option value="Career Guidance">Career Guidance</option>
-                                                                                                          <option value="Industry Networking">Industry Networking</option>
-                                                                                                          <option value="Resume Review">Resume Review</option>
-                                                                                                          <option value="Interview Prep">Interview Prep</option>
-                                                                                                          <option value="Other">Other</option>
-                                                                                                        </select>
-                                                                                                      </div>
-                                                                                                    </div>
-                                                                                                  </div>
-                                                                                                  {/* Career Opportunities Section for Alumni */}
-                                                                                                  <div className={`${darkMode ? 'dark bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl sm:rounded-3xl p-6 sm:p-8 border shadow-sm md:col-span-3`}>
-                                                                                                    <h2 className="text-xl font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                                                                                                      <span className="material-symbols-outlined text-primary">business_center</span>
-                                                                                                      Career Opportunities
-                                                                                                    </h2>
-                                                                                                    <div className="space-y-6">
-                                                                                                      <div className="flex items-center gap-3">
-                                                                                                        <label className="font-bold text-xs">Post job referrals</label>
-                                                                                                        <input type="checkbox" checked={localStorage.getItem('unity_alumni_job_referral_enabled') === 'true'} readOnly />
-                                                                                                        <span className="text-xs text-gray-500">(Enable to allow posting job referrals)</span>
-                                                                                                      </div>
-                                                                                                      <div className="flex items-center gap-3">
-                                                                                                        <label className="font-bold text-xs">Internship recommendation privileges</label>
-                                                                                                        <span className={`px-3 py-1 rounded-xl font-bold text-xs ${localStorage.getItem('unity_alumni_internship_privileges') === 'true' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>{localStorage.getItem('unity_alumni_internship_privileges') === 'true' ? 'Active' : 'Not Active'}</span>
-                                                                                                      </div>
-                                                                                                      <div className="flex items-center gap-3">
-                                                                                                        <label className="font-bold text-xs">Allow direct student outreach</label>
-                                                                                                        <input type="checkbox" checked={localStorage.getItem('unity_alumni_student_outreach') === 'true'} readOnly />
-                                                                                                        <span className="text-xs text-gray-500">(Toggle to allow students to contact you directly)</span>
-                                                                                                      </div>
-                                                                                                    </div>
-                                                                                                  </div>
-                                                                                                  {/* Privacy Controls Section for Alumni */}
-                                                                                                  <div className={`${darkMode ? 'dark bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl sm:rounded-3xl p-6 sm:p-8 border shadow-sm md:col-span-3`}>
-                                                                                                    <h2 className="text-xl font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                                                                                                      <span className="material-symbols-outlined text-primary">shield_person</span>
-                                                                                                      Privacy Controls
-                                                                                                    </h2>
-                                                                                                    <div className="space-y-6">
-                                                                                                      <div className="flex items-center gap-3">
-                                                                                                        <label className="font-bold text-xs">Show company publicly</label>
-                                                                                                        <input type="checkbox" checked={localStorage.getItem('unity_alumni_show_company') === 'true'} readOnly />
-                                                                                                      </div>
-                                                                                                      <div className="flex items-center gap-3">
-                                                                                                        <label className="font-bold text-xs">Allow open messages</label>
-                                                                                                        <input type="checkbox" checked={localStorage.getItem('unity_alumni_open_messages') === 'true'} readOnly />
-                                                                                                      </div>
-                                                                                                      <div className="flex items-center gap-3">
-                                                                                                        <label className="font-bold text-xs">Invite-only mentoring</label>
-                                                                                                        <input type="checkbox" checked={localStorage.getItem('unity_alumni_invite_only_mentoring') === 'true'} readOnly />
-                                                                                                      </div>
-                                                                                                    </div>
-                                                                                                  </div>
-                                                                                                  {/* Analytics Section for Alumni */}
-                                                                                                  <div className={`${darkMode ? 'dark bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl sm:rounded-3xl p-6 sm:p-8 border shadow-sm md:col-span-3`}>
-                                                                                                    <h2 className="text-xl font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                                                                                                      <span className="material-symbols-outlined text-primary">analytics</span>
-                                                                                                      Analytics
-                                                                                                    </h2>
-                                                                                                    <div className="space-y-6">
-                                                                                                      <div className="flex items-center gap-3">
-                                                                                                        <label className="font-bold text-xs">Profile views</label>
-                                                                                                        <span className="px-3 py-1 rounded-xl font-bold text-xs bg-gray-100 text-gray-700">{localStorage.getItem('unity_alumni_profile_views') || '0'}</span>
-                                                                                                      </div>
-                                                                                                      <div className="flex items-center gap-3">
-                                                                                                        <label className="font-bold text-xs">Mentee success stats</label>
-                                                                                                        <span className="px-3 py-1 rounded-xl font-bold text-xs bg-green-100 text-green-700">{localStorage.getItem('unity_alumni_mentee_success_stats') || 'N/A'}</span>
-                                                                                                      </div>
-                                                                                                      <div className="flex items-center gap-3">
-                                                                                                        <label className="font-bold text-xs">Referral impact stats</label>
-                                                                                                        <span className="px-3 py-1 rounded-xl font-bold text-xs bg-blue-100 text-blue-700">{localStorage.getItem('unity_alumni_referral_impact_stats') || 'N/A'}</span>
-                                                                                                      </div>
-                                                                                                    </div>
-                                                                                                  </div>
-                                                                                                  {/* Professional Profile Settings (Highest Tier) - Mini LinkedIn Dashboard */}
-                                                                                                  <div className={`${darkMode ? 'dark bg-gray-900 border-gray-700' : 'bg-white border-gray-100'} rounded-3xl p-8 border shadow-lg md:col-span-3 mt-8`}>
-                                                                                                    <h2 className="text-2xl font-black text-primary mb-6 flex items-center gap-3">
-                                                                                                      <span className="material-symbols-outlined text-primary">corporate_fare</span>
-                                                                                                      Company Identity
-                                                                                                    </h2>
-                                                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mb-8">
-                                                                                                      <div>
-                                                                                                        <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Company Name</label>
-                                                                                                        <input value={localStorage.getItem('unity_company_name') || ''} type="text" className="w-full mt-2 bg-gray-50 dark:bg-gray-800 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" readOnly />
-                                                                                                      </div>
-                                                                                                      <div>
-                                                                                                        <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Company Website</label>
-                                                                                                        <input value={localStorage.getItem('unity_company_website') || ''} type="url" className="w-full mt-2 bg-gray-50 dark:bg-gray-800 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" readOnly />
-                                                                                                      </div>
-                                                                                                      <div>
-                                                                                                        <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Industry</label>
-                                                                                                        <input value={localStorage.getItem('unity_company_industry') || ''} type="text" className="w-full mt-2 bg-gray-50 dark:bg-gray-800 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" readOnly />
-                                                                                                      </div>
-                                                                                                      <div>
-                                                                                                        <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Company Size</label>
-                                                                                                        <input value={localStorage.getItem('unity_company_size') || ''} type="text" className="w-full mt-2 bg-gray-50 dark:bg-gray-800 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" readOnly />
-                                                                                                      </div>
-                                                                                                      <div>
-                                                                                                        <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Location</label>
-                                                                                                        <input value={localStorage.getItem('unity_company_location') || ''} type="text" className="w-full mt-2 bg-gray-50 dark:bg-gray-800 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" readOnly />
-                                                                                                      </div>
-                                                                                                    </div>
-                                                                                                    <div>
-                                                                                                      <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Company Description</label>
-                                                                                                      <textarea value={localStorage.getItem('unity_company_description') || ''} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium min-h-[120px]" readOnly />
-                                                                                                    </div>
-                                                                                                  </div>
-                                                                                                  {/* Personal Role Section for Alumni */}
-                                                                                                  <div className={`${darkMode ? 'dark bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl p-6 sm:p-8 border shadow-sm md:col-span-3 mt-8`}>
-                                                                                                    <h2 className="text-xl font-black text-primary mb-4 flex items-center gap-2">
-                                                                                                      <span className="material-symbols-outlined text-primary">badge</span>
-                                                                                                      Personal Role
-                                                                                                    </h2>
-                                                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
-                                                                                                      <div>
-                                                                                                        <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Job Title</label>
-                                                                                                        <input value={localStorage.getItem('unity_personal_job_title') || ''} type="text" className="w-full mt-2 bg-gray-50 dark:bg-gray-800 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" readOnly />
-                                                                                                      </div>
-                                                                                                      <div>
-                                                                                                        <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Department</label>
-                                                                                                        <input value={localStorage.getItem('unity_personal_department') || ''} type="text" className="w-full mt-2 bg-gray-50 dark:bg-gray-800 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" readOnly />
-                                                                                                      </div>
-                                                                                                      <div>
-                                                                                                        <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Years in Industry</label>
-                                                                                                        <input value={localStorage.getItem('unity_personal_years_industry') || ''} type="number" min="0" className="w-full mt-2 bg-gray-50 dark:bg-gray-800 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" readOnly />
-                                                                                                      </div>
-                                                                                                    </div>
-                                                                                                    <div>
-                                                                                                      <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Expertise Tags</label>
-                                                                                                      <input value={localStorage.getItem('unity_personal_expertise_tags') || ''} type="text" className="w-full bg-gray-50 dark:bg-gray-800 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" readOnly placeholder="e.g. Leadership, Data Science, Marketing" />
-                                                                                                    </div>
-                                                                                                  </div>
-                                                                                                {/* Verification & Badges Section for Alumni */}
-                                                                                                <div className={`${darkMode ? 'dark bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl p-6 sm:p-8 border shadow-sm md:col-span-3 mt-8`}>
-                                                                                                  <h2 className="text-xl font-black text-primary mb-4 flex items-center gap-2">
-                                                                                                    <span className="material-symbols-outlined text-primary">military_tech</span>
-                                                                                                    Verification & Badges
-                                                                                                  </h2>
-                                                                                                  <div className="space-y-6">
-                                                                                                    <div className="flex items-center gap-3">
-                                                                                                      <label className="font-bold text-xs">Alumni badge status</label>
-                                                                                                      <span className={`px-3 py-1 rounded-xl font-bold text-xs ${localStorage.getItem('unity_alumni_badge_status') === 'verified' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{localStorage.getItem('unity_alumni_badge_status') === 'verified' ? 'Verified' : 'Pending'}</span>
-                                                                                                    </div>
-                                                                                                    <div className="flex items-center gap-3">
-                                                                                                      <label className="font-bold text-xs">Verified mentor badge</label>
-                                                                                                      <span className={`px-3 py-1 rounded-xl font-bold text-xs ${localStorage.getItem('unity_alumni_mentor_badge') === 'true' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>{localStorage.getItem('unity_alumni_mentor_badge') === 'true' ? 'Active' : 'Not Active'}</span>
-                                                                                                    </div>
-                                                                                                    <div className="flex items-center gap-3">
-                                                                                                      <label className="font-bold text-xs">Special recognition badges</label>
-                                                                                                      <span className="px-3 py-1 rounded-xl font-bold text-xs bg-yellow-100 text-yellow-700">{localStorage.getItem('unity_alumni_special_badges') || 'None'}</span>
-                                                                                                    </div>
-                                                                                                    <div className="flex items-center gap-3">
-                                                                                                      <label className="font-bold text-xs">Badge application status</label>
-                                                                                                      <span className={`px-3 py-1 rounded-xl font-bold text-xs ${localStorage.getItem('unity_alumni_badge_application_status') === 'approved' ? 'bg-green-100 text-green-700' : localStorage.getItem('unity_alumni_badge_application_status') === 'pending' ? 'bg-gray-100 text-gray-500' : 'bg-red-100 text-red-700'}`}>{localStorage.getItem('unity_alumni_badge_application_status') === 'approved' ? 'Approved' : localStorage.getItem('unity_alumni_badge_application_status') === 'pending' ? 'Pending' : 'Rejected'}</span>
-                                                                                                    </div>
-                                                                                                  </div>
-                                                                                                {/* Monetization Controls Section for Alumni */}
-                                                                                                <div className={`${darkMode ? 'dark bg-gray-900 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl p-6 sm:p-8 border shadow-sm md:col-span-3 mt-8`}>
-                                                                                                  <h2 className="text-xl font-black text-primary mb-4 flex items-center gap-2">
-                                                                                                    <span className="material-symbols-outlined text-primary">payments</span>
-                                                                                                    Monetization Controls (Future)
-                                                                                                  </h2>
-                                                                                                  <div className="space-y-6">
-                                                                                                    <div className="flex items-center gap-3">
-                                                                                                      <label className="font-bold text-xs">Enable paid mentorship</label>
-                                                                                                      <input type="checkbox" checked={localStorage.getItem('unity_alumni_paid_mentorship') === 'true'} readOnly />
-                                                                                                    </div>
-                                                                                                    <div>
-                                                                                                      <label className="font-bold text-xs mb-2 block">Set hourly rate ($)</label>
-                                                                                                      <input value={localStorage.getItem('unity_alumni_hourly_rate') || ''} type="number" min="0" className="w-full bg-gray-50 dark:bg-gray-800 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" readOnly />
-                                                                                                    </div>
-                                                                                                    <div>
-                                                                                                      <label className="font-bold text-xs mb-2 block">Revenue dashboard</label>
-                                                                                                      <div className="bg-gray-100 dark:bg-gray-700 rounded-xl p-4 text-xs text-gray-500">(Stripe/Payment integration coming soon)</div>
-                                                                                                    </div>
-                                                                                                  </div>
-                                                                                                </div>
-                                                                                                {/* Analytics Dashboard Section for Alumni */}
-                                                                                                <div className={`${darkMode ? 'dark bg-gray-900 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl p-6 sm:p-8 border shadow-sm md:col-span-3 mt-8`}>
-                                                                                                  <h2 className="text-xl font-black text-primary mb-4 flex items-center gap-2">
-                                                                                                    <span className="material-symbols-outlined text-primary">query_stats</span>
-                                                                                                    Analytics Dashboard
-                                                                                                  </h2>
-                                                                                                  <div className="space-y-6">
-                                                                                                    <div className="flex items-center gap-3">
-                                                                                                      <label className="font-bold text-xs">Profile views</label>
-                                                                                                      <span className="px-3 py-1 rounded-xl font-bold text-xs bg-gray-100 text-gray-700">{localStorage.getItem('unity_alumni_profile_views') || '0'}</span>
-                                                                                                    </div>
-                                                                                                    <div className="flex items-center gap-3">
-                                                                                                      <label className="font-bold text-xs">Internship applicants</label>
-                                                                                                      <span className="px-3 py-1 rounded-xl font-bold text-xs bg-blue-100 text-blue-700">{localStorage.getItem('unity_alumni_internship_applicants') || '0'}</span>
-                                                                                                    </div>
-                                                                                                    <div className="flex items-center gap-3">
-                                                                                                      <label className="font-bold text-xs">AMA attendance stats</label>
-                                                                                                      <span className="px-3 py-1 rounded-xl font-bold text-xs bg-yellow-100 text-yellow-700">{localStorage.getItem('unity_alumni_ama_attendance') || '0'}</span>
-                                                                                                    </div>
-                                                                                                    <div className="flex items-center gap-3">
-                                                                                                      <label className="font-bold text-xs">Talent pipeline insights</label>
-                                                                                                      <span className="px-3 py-1 rounded-xl font-bold text-xs bg-green-100 text-green-700">{localStorage.getItem('unity_alumni_talent_pipeline') || 'N/A'}</span>
-                                                                                                    </div>
-                                                                                                  </div>
-                                                                                                </div>
-                                                                                                {/* Hosting Controls Section for Alumni */}
-                                                                                                <div className={`${darkMode ? 'dark bg-gray-900 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl p-6 sm:p-8 border shadow-sm md:col-span-3 mt-8`}>
-                                                                                                  <h2 className="text-xl font-black text-primary mb-4 flex items-center gap-2">
-                                                                                                    <span className="material-symbols-outlined text-primary">mic</span>
-                                                                                                    Hosting Controls
-                                                                                                  </h2>
-                                                                                                  <div className="space-y-6">
-                                                                                                    <div className="flex items-center gap-3">
-                                                                                                      <label className="font-bold text-xs">Host AMA (enable)</label>
-                                                                                                      <input type="checkbox" checked={localStorage.getItem('unity_alumni_host_ama') === 'true'} readOnly />
-                                                                                                    </div>
-                                                                                                    <div className="flex items-center gap-3">
-                                                                                                      <label className="font-bold text-xs">Host webinars</label>
-                                                                                                      <input type="checkbox" checked={localStorage.getItem('unity_alumni_host_webinars') === 'true'} readOnly />
-                                                                                                    </div>
-                                                                                                    <div>
-                                                                                                      <label className="font-bold text-xs mb-2 block">Create company page</label>
-                                                                                                      <div className="bg-gray-100 dark:bg-gray-700 rounded-xl p-4 text-xs text-gray-500">(Company page creation coming soon)</div>
-                                                                                                    </div>
-                                                                                                    <div className="flex items-center gap-3">
-                                                                                                      <label className="font-bold text-xs">Post internships</label>
-                                                                                                      <input type="checkbox" checked={localStorage.getItem('unity_alumni_post_internships') === 'true'} readOnly />
-                                                                                                    </div>
-                                                                                                  </div>
-                                                                                                </div>
-                                                                                                {/* Communication Controls Section for Alumni */}
-                                                                                                <div className={`${darkMode ? 'dark bg-gray-900 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl p-6 sm:p-8 border shadow-sm md:col-span-3 mt-8`}>
-                                                                                                  <h2 className="text-xl font-black text-primary mb-4 flex items-center gap-2">
-                                                                                                    <span className="material-symbols-outlined text-primary">lock</span>
-                                                                                                    Communication Controls
-                                                                                                  </h2>
-                                                                                                  <div className="space-y-6">
-                                                                                                    <div className="flex items-center gap-3">
-                                                                                                      <label className="font-bold text-xs">Open DMs</label>
-                                                                                                      <input type="checkbox" checked={localStorage.getItem('unity_alumni_open_dms') === 'true'} readOnly />
-                                                                                                    </div>
-                                                                                                    <div className="flex items-center gap-3">
-                                                                                                      <label className="font-bold text-xs">Students only</label>
-                                                                                                      <input type="checkbox" checked={localStorage.getItem('unity_alumni_dms_students_only') === 'true'} readOnly />
-                                                                                                    </div>
-                                                                                                    <div className="flex items-center gap-3">
-                                                                                                      <label className="font-bold text-xs">Alumni only</label>
-                                                                                                      <input type="checkbox" checked={localStorage.getItem('unity_alumni_dms_alumni_only') === 'true'} readOnly />
-                                                                                                    </div>
-                                                                                                    <div className="flex items-center gap-3">
-                                                                                                      <label className="font-bold text-xs">Invite-only mode</label>
-                                                                                                      <input type="checkbox" checked={localStorage.getItem('unity_alumni_dms_invite_only') === 'true'} readOnly />
-                                                                                                    </div>
-                                                                                                  </div>
-                                                                                                </div>
-                                                                                                </div>
-                                                                                                </div>
-                                                                                              );
-                                                                <div className="flex items-center gap-3">
-                                                                  <label className="font-bold text-xs">Show my country publicly</label>
-                                                                  <input type="checkbox" checked={localStorage.getItem('unity_privacy_show_country') === 'true'} readOnly />
-                                                                </div>
-                                                                <div className="flex items-center gap-3">
-                                                                  <label className="font-bold text-xs">Show my visa status</label>
-                                                                  <input type="checkbox" checked={localStorage.getItem('unity_privacy_show_visa') === 'true'} readOnly />
-                                                                </div>
-                                                                <div className="flex items-center gap-3">
-                                                                  <label className="font-bold text-xs">Anonymous question mode</label>
-                                                                  <input type="checkbox" checked={localStorage.getItem('unity_privacy_anonymous_mode') !== 'false'} readOnly />
-                                                                  <span className="text-xs text-gray-500">(default ON)</span>
-                                                                </div>
-                                                                <div className="flex items-center gap-3">
-                                                                  <label className="font-bold text-xs">Safe-space mentors only filter</label>
-                                                                  <input type="checkbox" checked={localStorage.getItem('unity_privacy_safe_space_mentors') === 'true'} readOnly />
-                                                                </div>
-                                                              </div>
-                                                            </div>
-                                        <div className={`${darkMode ? 'dark bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl sm:rounded-3xl p-6 sm:p-8 border shadow-sm mt-8 md:col-span-3`}>
-                                          <h2 className="text-xl font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                                            <span className="material-symbols-outlined text-primary">support_agent</span>
-                                            Adjustment & Support Preferences
-                                          </h2>
-                                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                            <div>
-                                              <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Need help with:</label>
-                                              <div className="space-y-2">
-                                                <label className="flex items-center gap-2">
-                                                  <input type="checkbox" checked={localStorage.getItem('unity_help_visa') === 'true'} readOnly /> Visa
-                                                </label>
-                                                <label className="flex items-center gap-2">
-                                                  <input type="checkbox" checked={localStorage.getItem('unity_help_housing') === 'true'} readOnly /> Housing
-                                                </label>
-                                                <label className="flex items-center gap-2">
-                                                  <input type="checkbox" checked={localStorage.getItem('unity_help_scholarships') === 'true'} readOnly /> Scholarships
-                                                </label>
-                                                <label className="flex items-center gap-2">
-                                                  <input type="checkbox" checked={localStorage.getItem('unity_help_cultural') === 'true'} readOnly /> Cultural integration
-                                                </label>
-                                                <label className="flex items-center gap-2">
-                                                  <input type="checkbox" checked={localStorage.getItem('unity_help_mental_health') === 'true'} readOnly /> Mental health support
-                                                </label>
-                                              </div>
-                                            </div>
-                                            <div>
-                                              <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 block">Preferred mentor background:</label>
-                                              <div className="space-y-2">
-                                                <label className="flex items-center gap-2">
-                                                  <input type="checkbox" checked={localStorage.getItem('unity_mentor_same_country') === 'true'} readOnly /> Same country
-                                                </label>
-                                                <label className="flex items-center gap-2">
-                                                  <input type="checkbox" checked={localStorage.getItem('unity_mentor_same_university') === 'true'} readOnly /> Same university
-                                                </label>
-                                                <label className="flex items-center gap-2">
-                                                  <input type="checkbox" checked={localStorage.getItem('unity_mentor_same_major') === 'true'} readOnly /> Same major
-                                                </label>
-                                                <label className="flex items-center gap-2">
-                                                  <input type="checkbox" checked={localStorage.getItem('unity_mentor_same_language') === 'true'} readOnly /> Same language
-                                                </label>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </div>
-                    <div className={`${darkMode ? 'dark bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl sm:rounded-3xl p-6 sm:p-8 border shadow-sm text-center space-y-6 md:col-span-3`}>
-                      <h2 className="text-xl font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary">public</span>
-                        Core Identity
-                      </h2>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <div>
-                          <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Full Name</label>
-                          <input value={userName} onChange={e => setUserName(e.target.value)} type="text" className="w-full mt-2 bg-gray-50 dark:bg-gray-700 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20" />
-                        </div>
-                        <div>
-                          <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Country of Origin</label>
-                          <input value={localStorage.getItem('unity_user_country') || ''} type="text" className="w-full mt-2 bg-gray-50 dark:bg-gray-700 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" readOnly />
-                        </div>
-                        <div>
-                          <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Current Country of Study</label>
-                          <input value={localStorage.getItem('unity_user_study_country') || ''} type="text" className="w-full mt-2 bg-gray-50 dark:bg-gray-700 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" readOnly />
-                        </div>
-                        <div>
-                          <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">University</label>
-                          <input value={localStorage.getItem('unity_user_university') || ''} type="text" className="w-full mt-2 bg-gray-50 dark:bg-gray-700 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" readOnly />
-                        </div>
-                        <div>
-                          <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Degree Program</label>
-                          <input value={localStorage.getItem('unity_user_degree_program') || ''} type="text" className="w-full mt-2 bg-gray-50 dark:bg-gray-700 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" readOnly />
-                        </div>
-                        <div>
-                          <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Year of Study</label>
-                          <input value={localStorage.getItem('unity_user_year_of_study') || ''} type="text" className="w-full mt-2 bg-gray-50 dark:bg-gray-700 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" readOnly />
-                        </div>
-                        <div>
-                          <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Languages Spoken</label>
-                          <input value={localStorage.getItem('unity_user_languages_spoken') || ''} type="text" className="w-full mt-2 bg-gray-50 dark:bg-gray-700 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" readOnly />
-                        </div>
-                        <div>
-                          <label className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Preferred Language</label>
-                          <input value={localStorage.getItem('unity_user_preferred_language') || ''} type="text" className="w-full mt-2 bg-gray-50 dark:bg-gray-700 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium" readOnly />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-              // ...existing Student layout for non-international...
-              return (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {/* Student Profile Overview */}
-                  {/* ...existing left and right column code... */}
-                  {/* Student-specific settings can be added here */}
-                </div>
-              );
-            }
-            case 'Mentor':
-              return (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {/* Mentor Profile Overview */}
-                  {/* ...existing left and right column code... */}
-                  {/* Mentor-specific settings: mentorship toggle, achievements, communication settings */}
-                </div>
-              );
-          }
-        })()}
       </div>
+
 
       {/* Password Modal */}
       {showPasswordModal && (

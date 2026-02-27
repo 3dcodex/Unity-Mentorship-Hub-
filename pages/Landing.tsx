@@ -3,8 +3,42 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import PublicHeader from '../components/PublicHeader';
 import Footer from '../components/Footer';
+import { useState, useEffect } from 'react';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { db } from '../src/firebase';
 
 const Landing: React.FC = () => {
+  const [stats, setStats] = useState({
+    students: 0,
+    mentors: 0,
+    sessions: 0,
+  });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const usersRef = collection(db, 'users');
+        const studentsQuery = query(usersRef, where('role', '==', 'Student'));
+        const mentorsQuery = query(usersRef, where('role', '==', 'Mentor'));
+        
+        const [studentsSnap, mentorsSnap] = await Promise.all([
+          getDocs(studentsQuery),
+          getDocs(mentorsQuery),
+        ]);
+
+        setStats({
+          students: studentsSnap.size,
+          mentors: mentorsSnap.size,
+          sessions: studentsSnap.size + mentorsSnap.size,
+        });
+      } catch (error) {
+        console.error('Error fetching stats:', error);
+      }
+    };
+
+    fetchStats();
+  }, []);
+
   return (
     <div className="flex flex-col min-h-screen bg-white dark:bg-slate-900 font-sans text-gray-900 dark:text-gray-100">
       <PublicHeader />
@@ -20,7 +54,7 @@ const Landing: React.FC = () => {
               Where <br/> every student <br/> <span className="text-primary dark:text-blue-400">belongs.</span>
             </h1>
             <p className="text-base sm:text-lg md:text-xl text-gray-500 dark:text-gray-400 font-medium max-w-lg leading-relaxed">
-              Connect with peer mentors who understand your journey. Built by students, for students, prioritizing diversity and equity.
+              Connect with peer mentors who understand your journey. Built by students, for students, prioritizing diversity, equity, and inclusion.
             </p>
             <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 pt-4">
               <Link to="/mentorship/match" className="px-6 sm:px-10 py-3 sm:py-5 bg-primary dark:bg-blue-600 text-white font-black rounded-xl sm:rounded-2xl shadow-2xl shadow-primary/30 dark:shadow-blue-600/30 hover:shadow-primary/50 dark:hover:shadow-blue-600/50 hover:scale-[1.02] transition-all text-center text-sm sm:text-base">
@@ -89,6 +123,61 @@ const Landing: React.FC = () => {
         </div>
       </section>
 
+      {/* Stats Section */}
+      <section className="py-12 sm:py-16 md:py-24 px-4 sm:px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 dark:text-white mb-4">Making a Real Difference</h2>
+            <p className="text-gray-500 dark:text-gray-400 font-medium max-w-2xl mx-auto">Our community is growing every day, creating meaningful connections and opportunities</p>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="text-center p-6 bg-blue-50 dark:bg-blue-900/20 rounded-2xl border border-blue-100 dark:border-blue-800">
+              <div className="text-4xl font-black text-primary dark:text-blue-400 mb-2">{stats.students}+</div>
+              <div className="text-sm font-bold text-gray-600 dark:text-gray-400">Active Students</div>
+            </div>
+            <div className="text-center p-6 bg-green-50 dark:bg-green-900/20 rounded-2xl border border-green-100 dark:border-green-800">
+              <div className="text-4xl font-black text-green-600 dark:text-green-400 mb-2">{stats.mentors}+</div>
+              <div className="text-sm font-bold text-gray-600 dark:text-gray-400">Mentors</div>
+            </div>
+            <div className="text-center p-6 bg-purple-50 dark:bg-purple-900/20 rounded-2xl border border-purple-100 dark:border-purple-800">
+              <div className="text-4xl font-black text-purple-600 dark:text-purple-400 mb-2">{stats.sessions}+</div>
+              <div className="text-sm font-bold text-gray-600 dark:text-gray-400">Sessions Completed</div>
+            </div>
+            <div className="text-center p-6 bg-amber-50 dark:bg-amber-900/20 rounded-2xl border border-amber-100 dark:border-amber-800">
+              <div className="text-4xl font-black text-amber-600 dark:text-amber-400 mb-2">15+</div>
+              <div className="text-sm font-bold text-gray-600 dark:text-gray-400">Partner Employers</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* How It Works */}
+      <section className="py-12 sm:py-16 md:py-24 px-4 sm:px-6 bg-gray-50 dark:bg-slate-800/50">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 dark:text-white mb-4">How It Works</h2>
+            <p className="text-gray-500 dark:text-gray-400 font-medium max-w-2xl mx-auto">Get started in three simple steps</p>
+          </div>
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-primary dark:bg-blue-600 rounded-full flex items-center justify-center text-white text-2xl font-black mx-auto mb-6 shadow-lg">1</div>
+              <h3 className="text-xl font-black text-gray-900 dark:text-white mb-3">Create Your Profile</h3>
+              <p className="text-gray-500 dark:text-gray-400 font-medium">Tell us about your goals, interests, and what you're looking for in a mentor</p>
+            </div>
+            <div className="text-center">
+              <div className="w-16 h-16 bg-primary dark:bg-blue-600 rounded-full flex items-center justify-center text-white text-2xl font-black mx-auto mb-6 shadow-lg">2</div>
+              <h3 className="text-xl font-black text-gray-900 dark:text-white mb-3">Get Matched</h3>
+              <p className="text-gray-500 dark:text-gray-400 font-medium">Our AI-powered system connects you with mentors who align with your needs</p>
+            </div>
+            <div className="text-center">
+              <div className="w-16 h-16 bg-primary dark:bg-blue-600 rounded-full flex items-center justify-center text-white text-2xl font-black mx-auto mb-6 shadow-lg">3</div>
+              <h3 className="text-xl font-black text-gray-900 dark:text-white mb-3">Start Growing</h3>
+              <p className="text-gray-500 dark:text-gray-400 font-medium">Schedule sessions, access resources, and build meaningful connections</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Success Stories */}
       <section className="py-12 sm:py-16 md:py-24 px-4 sm:px-6 dark:bg-slate-900/50" id="who-we-serve">
         <div className="max-w-7xl mx-auto text-center mb-8 sm:mb-12 md:mb-20">
@@ -97,23 +186,18 @@ const Landing: React.FC = () => {
 
         <div className="max-w-7xl mx-auto grid md:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
           <TestimonialCard 
-            name="Sarah Jenkins"
-            role="Mentee, Class of '24"
-            quote="UnityMentor Hub helped me find a community where I felt seen and heard. My mentor provided the guidance I needed to navigate my first internship application."
-            image="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200"
+            name="Iteriteka Aimable"
+            role="Business Marketing Student, St. Lawrence College"
+            quote="Through this platform, I have connected with numerous working professionals who have expanded my perspective and strengthened my professional network. The mentorship and exposure have given me clarity and confidence as I grow in my career journey."
+            image="https://api.dicebear.com/7.x/avataaars/svg?seed=Iteriteka"
           />
           <TestimonialCard 
-            name="Marcus Chen"
-            role="Senior Mentor"
-            quote="Being a mentor here is incredibly rewarding. Seeing students gain confidence and hit their milestones is exactly why I joined this community."
-            image="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200"
+            name="Kabi Clinton Ngong"
+            role="Information Systems Technician"
+            quote="This platform has given me the opportunity to share my story, inspire students, and create meaningful impact within the community. It's more than networking — it's about building pathways for growth and leadership."
+            image="https://api.dicebear.com/7.x/avataaars/svg?seed=Kabi"
           />
-          <TestimonialCard 
-            name="Jordan Rivera"
-            role="Student Ambassador"
-            quote="The resources are world-class. I used the DEI library to host a workshop at my campus, and the feedback was phenomenal."
-            image="https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&q=80&w=200"
-          />
+          <ComingSoonCard />
         </div>
       </section>
 
@@ -169,11 +253,35 @@ const TestimonialCard: React.FC<{ name: string, role: string, quote: string, ima
         <p className="text-xs font-bold text-primary dark:text-blue-400 mt-2">{role}</p>
       </div>
     </div>
-    <p className="text-gray-600 dark:text-gray-300 font-medium italic leading-relaxed">\"" + quote + "\""</p>
+    <p className="text-gray-600 dark:text-gray-300 font-medium italic leading-relaxed">"{quote}"</p>
     <div className="flex gap-1 text-amber-400">
       {[...Array(5)].map((_, i) => (
         <span key={i} className="material-symbols-outlined fill-1 text-lg">star</span>
       ))}
+    </div>
+  </div>
+);
+
+const ComingSoonCard: React.FC = () => (
+  <div className="bg-white dark:bg-slate-800 p-10 rounded-[40px] shadow-2xl shadow-gray-200/40 dark:shadow-black/30 border border-gray-50 dark:border-gray-700 space-y-6 relative overflow-hidden">
+    <div className="absolute inset-0 backdrop-blur-sm bg-white/60 dark:bg-slate-800/60 z-10 flex flex-col items-center justify-center">
+      <p className="text-2xl font-black text-gray-900 dark:text-white mb-2">Coming Soon</p>
+      <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">(Next Success Story Loading…)</p>
+      <p className="text-xs text-primary dark:text-blue-400 font-bold mt-4">Be part of the next success story</p>
+    </div>
+    <div className="blur-sm">
+      <div className="flex items-center gap-4">
+        <div className="size-16 rounded-3xl bg-gray-200 dark:bg-gray-700" />
+        <div>
+          <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded mb-2" />
+          <div className="h-3 w-24 bg-gray-200 dark:bg-gray-700 rounded" />
+        </div>
+      </div>
+      <div className="space-y-2 mt-6">
+        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded" />
+        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded" />
+        <div className="h-3 w-3/4 bg-gray-200 dark:bg-gray-700 rounded" />
+      </div>
     </div>
   </div>
 );

@@ -4,8 +4,8 @@ import { db } from '../firebase';
 import { Role, getPermissions, Permission } from '../types/roles';
 
 export const usePermissions = (userId: string | undefined) => {
-  const [role, setRole] = useState<Role>(Role.GUEST);
-  const [permissions, setPermissions] = useState<Permission>(getPermissions(Role.GUEST));
+  const [role, setRole] = useState<Role>(Role.DOMESTIC_STUDENT);
+  const [permissions, setPermissions] = useState<Permission>(getPermissions(Role.DOMESTIC_STUDENT));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -17,7 +17,7 @@ export const usePermissions = (userId: string | undefined) => {
 
       try {
         const userDoc = await getDoc(doc(db, 'users', userId));
-        const userRole = (userDoc.data()?.role || 'guest') as Role;
+        const userRole = (userDoc.data()?.role || 'domestic_student') as Role;
         setRole(userRole);
         setPermissions(getPermissions(userRole));
       } catch (error) {

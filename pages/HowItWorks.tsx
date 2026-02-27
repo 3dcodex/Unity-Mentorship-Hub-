@@ -1,114 +1,114 @@
-
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const HowItWorks: React.FC = () => {
   const navigate = useNavigate();
+  const [darkMode] = React.useState(localStorage.getItem('unity_dark_mode') === 'true');
+
+  const steps = [
+    { num: '01', title: 'Create Your Profile', desc: 'Sign up and tell us about your background, goals, and what you need help with.', icon: 'person_add', color: 'from-blue-600 to-indigo-600' },
+    { num: '02', title: 'Get Matched', desc: 'Our AI-powered system matches you with mentors who understand your unique journey.', icon: 'auto_awesome', color: 'from-purple-600 to-pink-600' },
+    { num: '03', title: 'Connect & Learn', desc: 'Book sessions, chat instantly, and access resources tailored to your needs.', icon: 'chat', color: 'from-green-600 to-teal-600' },
+    { num: '04', title: 'Achieve Your Goals', desc: 'Track progress, build skills, and reach milestones with ongoing support.', icon: 'emoji_events', color: 'from-orange-600 to-red-600' }
+  ];
+
+  const features = [
+    { icon: 'verified_user', title: 'Vetted Mentors', desc: 'All mentors are carefully screened and trained' },
+    { icon: 'lock', title: 'Secure & Private', desc: 'Your data and conversations are fully protected' },
+    { icon: 'diversity_3', title: 'Inclusive Community', desc: 'Celebrating diversity in every interaction' },
+    { icon: 'schedule', title: 'Flexible Scheduling', desc: 'Book sessions that fit your busy life' },
+    { icon: 'workspace_premium', title: 'Quality Guaranteed', desc: 'Satisfaction guaranteed or your money back' },
+    { icon: 'support_agent', title: '24/7 Support', desc: 'Our team is always here to help you' }
+  ];
 
   return (
-    <div className="animate-in fade-in duration-500 space-y-20">
-      <header className="text-center max-w-3xl mx-auto space-y-4">
-        <div className="inline-flex px-3 py-1 rounded-full bg-blue-50 text-primary text-[10px] font-black uppercase tracking-widest">Step-by-Step Guide</div>
-        <h1 className="text-2xl sm:text-3xl md:text-5xl font-black text-gray-900 tracking-tight leading-tight">Your Path to Excellence <br/> Starts Here</h1>
-        <p className="text-base sm:text-lg text-gray-500 font-medium">Simple, inclusive, and effective. Here's how to make the most of UnityMentor Hub.</p>
-      </header>
-
-      {/* The Process */}
-      <section className="relative">
-        <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-gray-100 hidden md:block -translate-x-1/2"></div>
-        
-        <div className="space-y-24 relative z-10">
-          <ProcessStep 
-            number="01"
-            title="Complete Your Profile"
-            desc="Tell us about your background, your major, and what you're looking for. Our inclusion-first approach ensures we capture the details that matter."
-            icon="person_add"
-            align="right"
-          />
-          <ProcessStep 
-            number="02"
-            title="Get Matched"
-            desc="Our smart algorithm suggests mentors based on shared experiences and specific goals. Browse profiles and find the perfect connection."
-            icon="hub"
-            align="left"
-          />
-          <ProcessStep 
-            number="03"
-            title="Connect & Chat"
-            desc="Reach out via Quick Chat for rapid questions or book a dedicated session. Start building a relationship that supports your growth."
-            icon="chat"
-            align="right"
-          />
-          <ProcessStep 
-            number="04"
-            title="Learn and Grow"
-            desc="Engage in recurring sessions, attend community workshops, and access the Career Toolkit. Track your progress as you reach your milestones."
-            icon="trending_up"
-            align="left"
-          />
-        </div>
-      </section>
-
-      {/* Trust & Safety */}
-      <section className="bg-gray-900 rounded-2xl sm:rounded-3xl md:rounded-[60px] p-6 sm:p-4 sm:p-6 md:p-8 md:p-12 md:p-20 text-white space-y-6 sm:space-y-8 md:space-y-12">
-        <div className="text-center space-y-4">
-          <h2 className="text-xl sm:text-2xl md:text-3xl font-black">Commitment to Inclusive Support</h2>
-          <p className="text-gray-400 font-medium max-w-2xl mx-auto leading-relaxed">
-            We vet all our mentors and provide training to ensure every session is safe, productive, and respectful of your unique journey.
+    <div className={`min-h-screen ${darkMode ? 'bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'}`}>
+      {/* Hero Section */}
+      <section className="relative py-20 px-4 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-purple-600/10 blur-3xl"></div>
+        <div className="relative max-w-4xl mx-auto text-center space-y-6">
+          <div className="inline-block px-4 py-2 bg-primary/10 rounded-full">
+            <span className="text-primary font-black text-sm uppercase tracking-wider">How It Works</span>
+          </div>
+          <h1 className="text-5xl md:text-7xl font-black bg-gradient-to-r from-primary via-purple-600 to-pink-600 bg-clip-text text-transparent">
+            Your Journey to Success
+          </h1>
+          <p className={`text-xl ${darkMode ? 'text-gray-400' : 'text-gray-600'} max-w-2xl mx-auto`}>
+            Four simple steps to connect with mentors who understand your unique path and help you achieve your goals.
           </p>
         </div>
+      </section>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:p-4 sm:p-6 md:p-8 md:p-12 text-center">
-          <div className="space-y-4">
-            <div className="size-16 bg-white/10 rounded-2xl flex items-center justify-center mx-auto text-primary">
-              <span className="material-symbols-outlined text-xl sm:text-2xl md:text-3xl">verified_user</span>
+      {/* Steps Section */}
+      <section className="py-20 px-4">
+        <div className="max-w-6xl mx-auto space-y-24">
+          {steps.map((step, index) => (
+            <div key={step.num} className={`flex flex-col ${index % 2 === 0 ? 'md:flex-row' : 'md:flex-row-reverse'} items-center gap-12`}>
+              <div className="flex-1 space-y-6">
+                <div className="flex items-center gap-4">
+                  <div className={`w-20 h-20 bg-gradient-to-br ${step.color} rounded-2xl flex items-center justify-center shadow-2xl`}>
+                    <span className="material-symbols-outlined text-white text-4xl">{step.icon}</span>
+                  </div>
+                  <div className={`text-8xl font-black ${darkMode ? 'text-slate-800' : 'text-gray-100'}`}>{step.num}</div>
+                </div>
+                <h2 className={`text-4xl font-black ${darkMode ? 'text-white' : 'text-gray-900'}`}>{step.title}</h2>
+                <p className={`text-xl ${darkMode ? 'text-gray-400' : 'text-gray-600'} leading-relaxed`}>{step.desc}</p>
+              </div>
+              <div className="flex-1 flex justify-center">
+                <div className={`relative w-80 h-80 ${darkMode ? 'bg-slate-800/50' : 'bg-white'} backdrop-blur-xl rounded-3xl shadow-2xl border ${darkMode ? 'border-slate-700' : 'border-gray-200'} flex items-center justify-center`}>
+                  <div className={`absolute inset-0 bg-gradient-to-br ${step.color} opacity-5 rounded-3xl`}></div>
+                  <span className={`material-symbols-outlined text-9xl bg-gradient-to-br ${step.color} bg-clip-text text-transparent`}>{step.icon}</span>
+                </div>
+              </div>
             </div>
-            <h3 className="text-base sm:text-base sm:text-lg md:text-xl font-bold">Vetted Mentors</h3>
-            <p className="text-sm text-gray-400 leading-relaxed font-medium">All mentors undergo a screening process to ensure high-quality support.</p>
+          ))}
+        </div>
+      </section>
+
+      {/* Features Grid */}
+      <section className={`py-20 px-4 ${darkMode ? 'bg-slate-900/50' : 'bg-gray-50'}`}>
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className={`text-4xl font-black mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Why Choose Unity Mentorship Hub</h2>
+            <p className={`text-xl ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Everything you need for a successful mentorship experience</p>
           </div>
-          <div className="space-y-4">
-            <div className="size-16 bg-white/10 rounded-2xl flex items-center justify-center mx-auto text-primary">
-              <span className="material-symbols-outlined text-xl sm:text-2xl md:text-3xl">lock</span>
-            </div>
-            <h3 className="text-base sm:text-base sm:text-lg md:text-xl font-bold">Secure Privacy</h3>
-            <p className="text-sm text-gray-400 leading-relaxed font-medium">Your data and conversations are protected and held in strict confidence.</p>
-          </div>
-          <div className="space-y-4">
-            <div className="size-16 bg-white/10 rounded-2xl flex items-center justify-center mx-auto text-primary">
-              <span className="material-symbols-outlined text-xl sm:text-2xl md:text-3xl">favorite</span>
-            </div>
-            <h3 className="text-base sm:text-base sm:text-lg md:text-xl font-bold">DEI Focused</h3>
-            <p className="text-sm text-gray-400 leading-relaxed font-medium">We actively promote an environment where diversity is celebrated.</p>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {features.map((feature) => (
+              <div key={feature.title} className={`${darkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-gray-200'} backdrop-blur-xl rounded-2xl p-8 border shadow-xl hover:scale-105 transition-all`}>
+                <div className="w-16 h-16 bg-gradient-to-br from-primary to-purple-600 rounded-xl flex items-center justify-center mb-6 shadow-lg">
+                  <span className="material-symbols-outlined text-white text-3xl">{feature.icon}</span>
+                </div>
+                <h3 className={`text-xl font-black mb-3 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{feature.title}</h3>
+                <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{feature.desc}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      <div className="text-center pt-10 pb-20">
-        <button 
-          onClick={() => navigate('/mentorship')}
-          className="bg-primary text-white font-black px-12 py-5 rounded-2xl shadow-2xl shadow-primary/30 hover:scale-105 active:scale-95 transition-all"
-        >
-          Get Started Now
-        </button>
-      </div>
+      {/* CTA Section */}
+      <section className="py-20 px-4">
+        <div className={`max-w-4xl mx-auto ${darkMode ? 'bg-gradient-to-r from-slate-800 to-slate-900' : 'bg-gradient-to-r from-primary to-purple-600'} rounded-3xl p-12 text-center shadow-2xl`}>
+          <h2 className="text-4xl font-black text-white mb-6">Ready to Get Started?</h2>
+          <p className="text-xl text-white/90 mb-8">Join thousands of students already achieving their goals with Unity Mentorship Hub</p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <button
+              onClick={() => navigate('/signup')}
+              className={`px-8 py-4 ${darkMode ? 'bg-white text-slate-900' : 'bg-white text-primary'} rounded-xl font-bold shadow-xl hover:scale-105 transition-all`}
+            >
+              Sign Up Free
+            </button>
+            <button
+              onClick={() => navigate('/mentorship')}
+              className="px-8 py-4 bg-white/10 backdrop-blur-sm text-white border-2 border-white rounded-xl font-bold hover:bg-white/20 transition-all"
+            >
+              Browse Mentors
+            </button>
+          </div>
+        </div>
+      </section>
     </div>
   );
 };
-
-const ProcessStep: React.FC<{ number: string, title: string, desc: string, icon: string, align: 'left' | 'right' }> = ({ number, title, desc, icon, align }) => (
-  <div className={`flex flex-col md:flex-row items-center gap-6 sm:p-4 sm:p-6 md:p-8 md:p-12 ${align === 'left' ? 'md:flex-row-reverse' : ''}`}>
-    <div className="md:w-1/2 space-y-6 text-center md:text-left">
-      <div className="text-6xl font-black text-primary/10 select-none leading-none">{number}</div>
-      <h3 className="text-xl sm:text-2xl md:text-3xl font-black text-gray-900 leading-tight">{title}</h3>
-      <p className="text-base sm:text-lg text-gray-500 font-medium leading-relaxed max-w-lg">{desc}</p>
-    </div>
-    <div className="md:w-1/2 flex justify-center relative">
-       <div className="size-32 md:size-48 bg-white rounded-2xl sm:rounded-3xl md:rounded-[40px] shadow-2xl shadow-gray-200/50 flex items-center justify-center text-primary border border-gray-50 z-20">
-          <span className="material-symbols-outlined text-[60px] md:text-[80px]">{icon}</span>
-       </div>
-       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 size-48 md:size-64 bg-primary/5 rounded-full blur-3xl z-10"></div>
-    </div>
-  </div>
-);
 
 export default HowItWorks;

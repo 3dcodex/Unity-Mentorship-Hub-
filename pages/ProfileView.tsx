@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../src/firebase';
 import { doc, getDoc, setDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { useAuth } from '../App';
+import BookingModal from '../components/BookingModal';
 
 const ProfileView: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
@@ -12,6 +13,7 @@ const ProfileView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showComplaintModal, setShowComplaintModal] = useState(false);
   const [showBlockModal, setShowBlockModal] = useState(false);
+  const [showBookingModal, setShowBookingModal] = useState(false);
   const [complaintText, setComplaintText] = useState('');
   const [isBlocked, setIsBlocked] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useState<string>('');
@@ -88,7 +90,7 @@ const ProfileView: React.FC = () => {
   };
 
   const handleScheduleSession = () => {
-    navigate(`/mentorship/book?mentor=${userId}`);
+    setShowBookingModal(true);
   };
 
   const handleFileComplaint = async () => {
@@ -627,6 +629,22 @@ const ProfileView: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Booking Modal */}
+      {showBookingModal && profile && (
+        <BookingModal
+          mentor={{
+            id: profile.id,
+            displayName: profile.displayName || profile.name,
+            name: profile.name,
+            photoURL: profile.photoURL,
+            mentorExpertise: profile.mentorExpertise || profile.role,
+            role: profile.role,
+            email: profile.email,
+          }}
+          onClose={() => setShowBookingModal(false)}
+        />
       )}
 
       {/* Block Confirmation Modal */}

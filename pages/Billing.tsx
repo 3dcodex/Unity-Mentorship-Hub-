@@ -6,7 +6,7 @@ import { collection, getDocs, query, where, orderBy, limit, addDoc, Timestamp } 
 
 interface Transaction {
   id: string;
-  date: any;
+  date: Timestamp | Date | null;
   description: string;
   amount: number;
   status: 'paid' | 'pending' | 'failed';
@@ -118,7 +118,15 @@ const Billing: React.FC = () => {
     }
   };
 
-  const plans = [
+  const plans: Array<{
+    id: 'free' | 'basic' | 'premium';
+    name: string;
+    price: number;
+    period: string;
+    features: string[];
+    color: string;
+    popular: boolean;
+  }> = [
     {
       id: 'free',
       name: 'Free',
@@ -165,9 +173,9 @@ const Billing: React.FC = () => {
 
         {/* Session Payment (if coming from booking) */}
         {mentorId && (
-          <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-xl border border-gray-100 dark:border-gray-700 animate-in fade-in slide-in-from-bottom-4">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-xl border border-gray-100 dark:border-gray-700">
             <div className="flex items-center gap-3 mb-6">
-              <div className="size-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center">
+              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center">
                 <span className="material-symbols-outlined text-white text-2xl">event_available</span>
               </div>
               <div>
@@ -222,7 +230,7 @@ const Billing: React.FC = () => {
                 </div>
               )}
 
-              <div className={`size-16 bg-gradient-to-br ${plan.color} rounded-2xl flex items-center justify-center mb-6`}>
+              <div className={`w-16 h-16 bg-gradient-to-br ${plan.color} rounded-2xl flex items-center justify-center mb-6`}>
                 <span className="material-symbols-outlined text-white text-3xl">workspace_premium</span>
               </div>
 
@@ -242,7 +250,7 @@ const Billing: React.FC = () => {
               </ul>
 
               <button
-                onClick={() => handleSelectPlan(plan.id as any)}
+                onClick={() => handleSelectPlan(plan.id)}
                 className={`w-full py-3 rounded-xl font-black transition-all ${
                   selectedPlan === plan.id
                     ? `bg-gradient-to-r ${plan.color} text-white shadow-lg`
@@ -259,7 +267,7 @@ const Billing: React.FC = () => {
         <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-xl border border-gray-100 dark:border-gray-700">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <div className="size-12 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-2xl flex items-center justify-center">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-2xl flex items-center justify-center">
                 <span className="material-symbols-outlined text-white text-2xl">receipt_long</span>
               </div>
               <div>
@@ -271,7 +279,7 @@ const Billing: React.FC = () => {
 
           {loading ? (
             <div className="text-center py-12">
-              <div className="size-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
+              <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
               <p className="text-gray-500 dark:text-gray-400">Loading transactions...</p>
             </div>
           ) : transactions.length === 0 ? (
@@ -295,7 +303,13 @@ const Billing: React.FC = () => {
                   {transactions.map((txn) => (
                     <tr key={txn.id} className="border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
                       <td className="py-4 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
-                        {txn.date?.toDate?.().toLocaleDateString() || 'N/A'}
+                        {txn.date ? (
+                          txn.date instanceof Date 
+                            ? txn.date.toLocaleDateString()
+                            : typeof (txn.date as any).toDate === 'function'
+                            ? (txn.date as any).toDate().toLocaleDateString()
+                            : 'N/A'
+                        ) : 'N/A'}
                       </td>
                       <td className="py-4 px-4 text-sm font-bold text-gray-900 dark:text-white">{txn.description}</td>
                       <td className="py-4 px-4 text-sm font-black text-gray-900 dark:text-white">${txn.amount.toFixed(2)}</td>
@@ -329,7 +343,7 @@ const Billing: React.FC = () => {
         {/* Payment Methods */}
         <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-xl border border-gray-100 dark:border-gray-700">
           <div className="flex items-center gap-3 mb-6">
-            <div className="size-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center">
+            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center">
               <span className="material-symbols-outlined text-white text-2xl">credit_card</span>
             </div>
             <div>

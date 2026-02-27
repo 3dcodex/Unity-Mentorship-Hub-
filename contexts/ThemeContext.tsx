@@ -19,14 +19,17 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   });
 
   useEffect(() => {
-    // Apply theme to document
     const htmlElement = document.documentElement;
+    const bodyElement = document.body;
+    
     if (isDark) {
       htmlElement.classList.add('dark');
+      bodyElement.classList.add('dark');
     } else {
       htmlElement.classList.remove('dark');
+      bodyElement.classList.remove('dark');
     }
-    // Save preference
+    
     localStorage.setItem('unity_theme', isDark ? 'dark' : 'light');
   }, [isDark]);
 

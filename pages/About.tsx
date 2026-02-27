@@ -1,115 +1,204 @@
-
 import React from 'react';
+import { Link } from 'react-router-dom';
 import PublicHeader from '../components/PublicHeader';
 import Footer from '../components/Footer';
 
 const About: React.FC = () => {
   return (
-    <div className="flex flex-col min-h-screen bg-white font-sans text-gray-900">
+    <div className="flex flex-col min-h-screen bg-white dark:bg-slate-900 font-sans text-gray-900 dark:text-gray-100">
       <PublicHeader />
 
       <main className="flex-1">
-      {/* Hero Section */}
-      <section className="relative h-48 sm:h-80 md:h-[600px] overflow-hidden">
-        <div className="absolute inset-0 bg-black/40 z-10"></div>
-        <img 
-          src="https://images.unsplash.com/photo-1517048676732-d65bc937f952?auto=format&fit=crop&q=80&w=1600" 
-          className="absolute inset-0 w-full h-full object-cover"
-          alt="Team meeting"
-        />
-        <div className="relative z-20 h-full flex flex-col items-center justify-center text-center px-4 sm:px-6 max-w-4xl mx-auto space-y-4 sm:space-y-6 md:space-y-8 text-white animate-in slide-in-from-bottom-8 duration-700">
-          <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-black leading-tight tracking-tight">
-            Empowering Every <br/> Student's Journey
-          </h1>
-          <p className="text-base sm:text-lg md:text-xl font-medium opacity-90 max-w-2xl mx-auto leading-relaxed">
-            Born from a vision of diversity, equity, and belonging, UnityMentor Hub is more than a platform—it's a community dedicated to your growth.
-          </p>
-          <button className="bg-primary text-white px-8 sm:px-10 py-3 sm:py-4 rounded-xl sm:rounded-xl font-bold shadow-2xl hover:scale-105 transition-all text-sm sm:text-base">
-            Our Impact
-          </button>
-        </div>
-      </section>
-
-      {/* Journey Timeline */}
-      <section className="py-8 sm:py-16 md:py-32 px-4 sm:px-6">
-        <div className="max-w-4xl mx-auto">
-          <div className="mb-8 sm:mb-12 md:mb-20">
-            <p className="text-[8px] sm:text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-2 sm:mb-3">The Background</p>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-3 sm:mb-4">Our Journey</h2>
-            <p className="text-sm sm:text-base text-gray-500 font-medium">How a simple idea at St. Lawrence College became a movement for inclusion.</p>
-          </div>
-
-          <div className="space-y-6 sm:space-y-8 md:space-y-16 relative">
-            {/* Timeline Line */}
-            <div className="absolute left-[20px] top-4 bottom-4 w-0.5 bg-gray-100"></div>
-
-            <TimelineItem 
-              icon="location_on"
-              title="The Spark at St. Lawrence College"
-              date="Winter 2023"
-              text="Founded by Blessing, Ethan, and Julio. As students ourselves, we noticed a critical gap in professional support for underrepresented groups. We wanted to build something that felt like family."
-            />
-            <TimelineItem 
-              icon="architecture"
-              title="Building the Foundation"
-              date="Summer 2023"
-              text="We worked tirelessly to develop a mentorship ecosystem that prioritizes diversity, equity, and inclusion (DEI). We spoke to hundreds of students to understand their unique barriers."
-            />
-            <TimelineItem 
-              icon="rocket_launch"
-              title="UnityMentor Hub Today"
-              date="Present Day"
-              text="Today, we are connecting students with life-changing resources and a professional network that truly reflects the diversity of the modern workforce."
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* Mission Section */}
-      <section className="py-8 sm:py-6 sm:py-10 md:py-16 md:py-24 px-6 bg-blue-50">
-        <div className="max-w-6xl mx-auto bg-white rounded-2xl sm:rounded-3xl md:rounded-[60px] p-6 sm:p-4 sm:p-6 md:p-8 md:p-6 sm:p-8 md:p-12 lg:p-24 text-center shadow-xl shadow-blue-900/5 relative overflow-hidden">
-          <div className="relative z-10 space-y-6 sm:space-y-8 md:space-y-10">
-            <div className="text-primary flex justify-center">
-              <span className="material-symbols-outlined text-6xl font-black">handshake</span>
-            </div>
-            <h2 className="text-2xl sm:text-xl sm:text-2xl md:text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black">Our Community Mission</h2>
-            <p className="text-base sm:text-base sm:text-lg md:text-xl text-gray-600 font-medium max-w-3xl mx-auto leading-relaxed">
-              To foster an inclusive ecosystem where diversity is celebrated and mentorship is accessible to all. We believe in the power of <span className="text-primary font-bold italic underline">people helping people</span>—breaking down systemic barriers through authentic connection and shared knowledge.
+        {/* Hero Section */}
+        <section className="relative py-20 sm:py-32 md:py-40 px-4 sm:px-6 overflow-hidden">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1200px] h-[600px] bg-primary/5 blur-[120px] rounded-full -z-10"></div>
+          <div className="max-w-5xl mx-auto text-center space-y-6">
+            <div className="inline-flex px-4 py-2 rounded-full bg-primary/10 dark:bg-primary/20 text-primary dark:text-blue-400 text-xs font-black uppercase tracking-widest">Our Story</div>
+            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black leading-tight text-gray-900 dark:text-white">
+              About Unity<br/>Mentorship Hub
+            </h1>
+            <p className="text-xl sm:text-2xl text-gray-600 dark:text-gray-400 font-medium max-w-3xl mx-auto">
+              From Personal Journey to Purpose
             </p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 md:gap-4 sm:p-6 md:p-8 pt-12">
-              <Stat value="500+" label="Active Students" />
-              <Stat value="120+" label="Industry Mentors" />
-              <Stat value="15+" label="Partner Employers" />
+          </div>
+        </section>
+
+        {/* Story Section with Image */}
+        <section className="py-16 sm:py-24 px-4 sm:px-6 bg-gray-50 dark:bg-slate-800/50">
+          <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
+            <div className="space-y-6">
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-gray-900 dark:text-white">The Beginning</h2>
+              <div className="space-y-4 text-lg text-gray-600 dark:text-gray-400">
+                <p>At 19, co-founder <span className="font-bold text-primary">Kabi Clinton</span> relocated to Canada as an international student.</p>
+                <div className="pl-6 border-l-4 border-primary space-y-2 text-xl font-semibold text-gray-900 dark:text-white">
+                  <p>New country.</p>
+                  <p>New system.</p>
+                  <p>New realities.</p>
+                </div>
+                <p>The challenge wasn't just academics. It was learning how to adapt, budget, navigate unfamiliar systems, and grow independently.</p>
+                <p>He reached out to seniors, classmates, and professionals ahead of him. Over time, students began reaching out to him too.</p>
+                <p className="text-xl font-bold text-primary">Mentorship was happening — but it wasn't structured.</p>
+              </div>
+            </div>
+            <div className="relative">
+              <div className="absolute -inset-4 bg-primary/5 rounded-[60px] blur-3xl"></div>
+              <img 
+                src="https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&q=80&w=800" 
+                className="relative w-full h-[400px] sm:h-[500px] object-cover rounded-3xl shadow-2xl"
+                alt="International students collaborating"
+              />
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
+        {/* The Idea Section */}
+        <section className="py-16 sm:py-24 px-4 sm:px-6">
+          <div className="max-w-5xl mx-auto">
+            <div className="bg-gradient-to-br from-primary/5 to-blue-50 dark:from-primary/10 dark:to-slate-800 rounded-[40px] p-8 sm:p-12 md:p-16 space-y-8">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center text-white">
+                  <span className="material-symbols-outlined text-3xl">lightbulb</span>
+                </div>
+                <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-gray-900 dark:text-white">The Idea</h2>
+              </div>
+              <div className="space-y-6 text-lg text-gray-600 dark:text-gray-400">
+                <p>What started as a classroom idea evolved into <span className="font-bold text-primary">Unity Mentorship Hub</span>.</p>
+                <p>We recognized a gap: Talented students needed more than motivation — they needed <span className="font-bold text-gray-900 dark:text-white">clarity, strategy, and access</span>.</p>
+                <p>As an IT professional trained to think in systems, Kabi realized:</p>
+                <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 border-l-4 border-primary">
+                  <p className="text-2xl sm:text-3xl font-black text-primary">Growth without structure creates gaps.</p>
+                </div>
+                <p className="text-xl font-bold text-gray-900 dark:text-white">So we built structure.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Mission & Vision Grid */}
+        <section className="py-16 sm:py-24 px-4 sm:px-6 bg-gray-50 dark:bg-slate-800/50">
+          <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-8">
+            {/* Mission Card */}
+            <div className="bg-white dark:bg-slate-800 rounded-[40px] p-8 sm:p-12 shadow-xl border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-16 h-16 bg-green-500 rounded-2xl flex items-center justify-center text-white">
+                  <span className="material-symbols-outlined text-3xl">flag</span>
+                </div>
+                <h2 className="text-3xl sm:text-4xl font-black text-gray-900 dark:text-white">Our Mission</h2>
+              </div>
+              <p className="text-lg text-gray-600 dark:text-gray-400 mb-8">
+                To create a community-driven mentorship platform that empowers students to grow intentionally — academically, professionally, and personally.
+              </p>
+              <div className="space-y-4">
+                <p className="text-lg font-semibold text-gray-900 dark:text-white">We believe mentorship should be:</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex items-center gap-3 bg-green-50 dark:bg-green-900/20 p-4 rounded-xl">
+                    <span className="material-symbols-outlined text-green-600 dark:text-green-400">check_circle</span>
+                    <span className="font-bold text-gray-900 dark:text-white">Accessible</span>
+                  </div>
+                  <div className="flex items-center gap-3 bg-green-50 dark:bg-green-900/20 p-4 rounded-xl">
+                    <span className="material-symbols-outlined text-green-600 dark:text-green-400">check_circle</span>
+                    <span className="font-bold text-gray-900 dark:text-white">Structured</span>
+                  </div>
+                  <div className="flex items-center gap-3 bg-green-50 dark:bg-green-900/20 p-4 rounded-xl">
+                    <span className="material-symbols-outlined text-green-600 dark:text-green-400">check_circle</span>
+                    <span className="font-bold text-gray-900 dark:text-white">Strategic</span>
+                  </div>
+                  <div className="flex items-center gap-3 bg-green-50 dark:bg-green-900/20 p-4 rounded-xl">
+                    <span className="material-symbols-outlined text-green-600 dark:text-green-400">check_circle</span>
+                    <span className="font-bold text-gray-900 dark:text-white">Inclusive</span>
+                  </div>
+                </div>
+                <p className="text-xl font-black text-gray-900 dark:text-white pt-4">Not accidental.</p>
+              </div>
+            </div>
+
+            {/* Vision Card */}
+            <div className="bg-white dark:bg-slate-800 rounded-[40px] p-8 sm:p-12 shadow-xl border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-16 h-16 bg-purple-500 rounded-2xl flex items-center justify-center text-white">
+                  <span className="material-symbols-outlined text-3xl">visibility</span>
+                </div>
+                <h2 className="text-3xl sm:text-4xl font-black text-gray-900 dark:text-white">Our Vision</h2>
+              </div>
+              <p className="text-lg text-gray-600 dark:text-gray-400 mb-8">
+                A world where every student — regardless of background — has access to guidance, opportunity, and a network that accelerates their growth.
+              </p>
+              <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-2xl p-8 border border-purple-100 dark:border-purple-800">
+                <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-4">Why Unity?</h3>
+                <p className="text-xl font-bold text-primary mb-4">Because no one grows alone.</p>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Unity Mentorship Hub transforms informal support into an intentional system — where growth is guided, community-driven, and built to last.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Values Section */}
+        <section className="py-16 sm:py-24 px-4 sm:px-6">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-gray-900 dark:text-white mb-4">Our Core Values</h2>
+              <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+                The principles that guide everything we do
+              </p>
+            </div>
+            <div className="grid md:grid-cols-3 gap-8">
+              <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-lg border border-gray-100 dark:border-gray-700 text-center">
+                <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <span className="material-symbols-outlined text-4xl text-primary">diversity_3</span>
+                </div>
+                <h3 className="text-xl font-black text-gray-900 dark:text-white mb-3">Community First</h3>
+                <p className="text-gray-600 dark:text-gray-400">Building connections that empower and uplift every member</p>
+              </div>
+              <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-lg border border-gray-100 dark:border-gray-700 text-center">
+                <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <span className="material-symbols-outlined text-4xl text-green-600 dark:text-green-400">trending_up</span>
+                </div>
+                <h3 className="text-xl font-black text-gray-900 dark:text-white mb-3">Intentional Growth</h3>
+                <p className="text-gray-600 dark:text-gray-400">Structured pathways that turn potential into achievement</p>
+              </div>
+              <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-lg border border-gray-100 dark:border-gray-700 text-center">
+                <div className="w-20 h-20 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <span className="material-symbols-outlined text-4xl text-amber-600 dark:text-amber-400">handshake</span>
+                </div>
+                <h3 className="text-xl font-black text-gray-900 dark:text-white mb-3">Authentic Support</h3>
+                <p className="text-gray-600 dark:text-gray-400">Real guidance from people who've walked the path</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* CTA Section */}
+        <section className="py-16 sm:py-24 px-4 sm:px-6 bg-gradient-to-r from-primary to-blue-600 text-white">
+          <div className="max-w-4xl mx-auto text-center space-y-8">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black leading-tight">
+              Ready to be part of the journey?
+            </h2>
+            <p className="text-lg sm:text-xl opacity-90 font-medium max-w-2xl mx-auto">
+              Join Unity Mentorship Hub and start your intentional growth today.
+            </p>
+            <div className="flex flex-col sm:flex-row justify-center gap-4">
+              <Link 
+                to="/signup" 
+                className="px-10 py-5 bg-white dark:bg-slate-900 text-primary dark:text-blue-400 font-black rounded-2xl shadow-2xl hover:scale-105 transition-all"
+              >
+                Get Started
+              </Link>
+              <Link 
+                to="/ourimpact" 
+                className="px-10 py-5 border-2 border-white/40 text-white font-black rounded-2xl hover:bg-white/10 transition-all"
+              >
+                See Our Impact
+              </Link>
+            </div>
+          </div>
+        </section>
       </main>
+      
       <Footer variant="simple" />
     </div>
   );
 };
-
-const TimelineItem: React.FC<{ icon: string, title: string, date: string, text: string }> = ({ icon, title, date, text }) => (
-  <div className="flex gap-3 sm:gap-4 md:gap-4 sm:p-6 md:p-8 relative z-10">
-    <div className="size-7 sm:size-9 md:size-10 bg-primary rounded-full flex items-center justify-center text-white shadow-lg shadow-primary/30 flex-shrink-0">
-      <span className="material-symbols-outlined text-base sm:text-base sm:text-lg md:text-xl">{icon}</span>
-    </div>
-    <div className="space-y-2 pb-8">
-      <h3 className="text-base sm:text-base sm:text-lg md:text-xl font-black text-gray-900 leading-tight">{title}</h3>
-      <p className="text-sm font-bold text-primary">{date}</p>
-      <p className="text-gray-500 font-medium leading-relaxed max-w-xl">{text}</p>
-    </div>
-  </div>
-);
-
-const Stat: React.FC<{ value: string, label: string }> = ({ value, label }) => (
-  <div className="bg-blue-50/50 p-4 sm:p-6 md:p-8 rounded-xl sm:rounded-2xl md:rounded-[32px] border border-blue-100">
-    <div className="text-2xl sm:text-xl sm:text-2xl md:text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-primary mb-2">{value}</div>
-    <div className="text-xs font-bold text-gray-500 uppercase tracking-widest">{label}</div>
-  </div>
-);
 
 export default About;

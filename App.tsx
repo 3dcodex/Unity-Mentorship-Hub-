@@ -3,7 +3,9 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from './src/firebase';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { LanguageProvider } from './contexts/LanguageContext';
 import Layout from './components/Layout';
+import { useAutoLogout } from './hooks/useAutoLogout';
 import Landing from './pages/Landing';
 import About from './pages/About';
 import WhoWeServe from './pages/WhoWeServe';
@@ -36,9 +38,9 @@ import Signup from './pages/Signup';
 import Billing from './pages/Billing';
 import ProfileView from './pages/ProfileView';
 import Notifications from './pages/Notifications';
-import Messages from './pages/Messages';
 import AdminRoute from './components/AdminRoute';
 import AdminDebug from './pages/AdminDebug';
+import OurImpact from './pages/OurImpact';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -56,10 +58,11 @@ import SecurityManagement from './pages/admin/SecurityManagement';
 import CategoryManagement from './pages/admin/CategoryManagement';
 import AdminPromotion from './pages/admin/AdminPromotion';
 import SupportTickets from './pages/admin/SupportTickets';
-import BecomeMentor from './pages/BecomeMentor';
+import GroupManagement from './pages/admin/GroupManagement';
 import MyTickets from './pages/MyTickets';
 import AdminSetup from './pages/AdminSetup';
 import FixAdmin from './pages/FixAdmin';
+import AdminMentorRequests from './pages/AdminMentorRequests';
 
 // New Sub-pages
 import FinancialAid from './pages/FinancialAid';
@@ -68,10 +71,12 @@ import DEIResources from './pages/DEIResources';
 import CommunityFeed from './pages/CommunityFeed';
 import MemberDirectory from './pages/MemberDirectory';
 import DiscussionGroups from './pages/DiscussionGroups';
+import GroupDetail from './pages/GroupDetail';
 import JoinProfessionalTrack from './pages/JoinProfessionalTrack';
 import JoinCulturalTrack from './pages/JoinCulturalTrack';
 import PublicMentorship from './pages/PublicMentorship';
 import Search from './pages/Search';
+import BecomeMentor from './pages/BecomeMentor';
 
 // Pillar Pages
 import PeerMentorship from './pages/PeerMentorship';
@@ -90,6 +95,7 @@ const ProtectedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const onboardingComplete = localStorage.getItem('unity_onboarding_complete') === 'true';
   const location = useLocation();
   const { user, loading } = useAuth();
+  useAutoLogout();
 
   // Keep onboarding redirect behavior
   if (!onboardingComplete && !['/login', '/signup', '/', '/about', '/who-we-serve', '/mentorship-info', '/peer-mentorship', '/accessible-resources', '/safe-spaces'].includes(location.pathname)) {
@@ -118,11 +124,13 @@ const App: React.FC = () => {
 
   return (
     <ThemeProvider>
-      <AuthContext.Provider value={{ user, loading }}>
-        <Router>
+      <LanguageProvider>
+        <AuthContext.Provider value={{ user, loading }}>
+          <Router>
         <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/about" element={<About />} />
+        <Route path="/ourimpact" element={<OurImpact />} />
         <Route path="/who-we-serve" element={<WhoWeServe />} />
         <Route path="/mentorship-info" element={<PublicMentorship />} />
         <Route path="/peer-mentorship" element={<PeerMentorship />} />
@@ -164,6 +172,7 @@ const App: React.FC = () => {
         <Route path="/community/feed" element={<ProtectedLayout><CommunityFeed /></ProtectedLayout>} />
         <Route path="/community/directory" element={<ProtectedLayout><MemberDirectory /></ProtectedLayout>} />
         <Route path="/community/groups" element={<ProtectedLayout><DiscussionGroups /></ProtectedLayout>} />
+        <Route path="/community/groups/:groupId" element={<ProtectedLayout><GroupDetail /></ProtectedLayout>} />
         <Route path="/community/live" element={<ProtectedLayout><LiveEvent /></ProtectedLayout>} />
         <Route path="/analytics" element={<ProtectedLayout><Analytics /></ProtectedLayout>} />
         
@@ -178,7 +187,6 @@ const App: React.FC = () => {
         
         <Route path="/billing" element={<ProtectedLayout><Billing /></ProtectedLayout>} />
         <Route path="/notifications" element={<ProtectedLayout><Notifications /></ProtectedLayout>} />
-        <Route path="/messages" element={<ProtectedLayout><Messages /></ProtectedLayout>} />
         <Route path="/admin-debug" element={<ProtectedLayout><AdminDebug /></ProtectedLayout>} />
         
         {/* Admin Routes - Protected */}
@@ -195,13 +203,16 @@ const App: React.FC = () => {
         <Route path="/admin/notifications" element={<AdminRoute><NotificationsManagement /></AdminRoute>} />
         <Route path="/admin/security" element={<AdminRoute><SecurityManagement /></AdminRoute>} />
         <Route path="/admin/categories" element={<AdminRoute><CategoryManagement /></AdminRoute>} />
+        <Route path="/admin/groups" element={<AdminRoute><GroupManagement /></AdminRoute>} />
         <Route path="/admin/support" element={<AdminRoute><SupportTickets /></AdminRoute>} />
         <Route path="/admin/promotion" element={<AdminRoute><AdminPromotion /></AdminRoute>} />
+        <Route path="/admin/mentor-requests" element={<AdminRoute><AdminMentorRequests /></AdminRoute>} />
         
         <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
       </AuthContext.Provider>
+      </LanguageProvider>
     </ThemeProvider>
   );
 };

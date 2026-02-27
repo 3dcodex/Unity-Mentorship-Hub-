@@ -1,6 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
+import { useLanguage } from '../contexts/LanguageContext';
+import { db } from '../src/firebase';
+import { collection, addDoc, Timestamp } from 'firebase/firestore';
 
 interface FooterProps {
   variant?: 'full' | 'simple';
@@ -9,6 +12,34 @@ interface FooterProps {
 const Footer: React.FC<FooterProps> = ({ variant = 'full' }) => {
   const currentYear = new Date().getFullYear();
   const { isDark, toggleTheme } = useTheme();
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const handleSubscribe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return;
+    
+    setLoading(true);
+    setMessage('');
+    
+    try {
+      await addDoc(collection(db, 'newsletter_subscribers'), {
+        email,
+        subscribedAt: Timestamp.now(),
+        status: 'active'
+      });
+      
+      setMessage('Successfully subscribed!');
+      setEmail('');
+    } catch (error) {
+      console.error('Subscription error:', error);
+      setMessage('Failed to subscribe. Please try again.');
+    } finally {
+      setLoading(false);
+      setTimeout(() => setMessage(''), 3000);
+    }
+  };
 
   if (variant === 'simple') {
     return (
@@ -118,28 +149,85 @@ const Footer: React.FC<FooterProps> = ({ variant = 'full' }) => {
           </p>
           
           <div className="flex gap-6 text-gray-400 dark:text-gray-500 text-sm font-medium">
-            <button className="hover:text-primary transition-colors">🌐 English</button>
+            <LanguageSelector />
             <button onClick={toggleTheme} className="hover:text-primary transition-colors">
               {isDark ? '☀️ Light' : '🌙 Dark'}
             </button>
           </div>
         </div>
 
-        {/* Newsletter CTA Optional */}
+        {/* Newsletter CTA */}
         <div className="rounded-2xl bg-primary/5 dark:bg-primary/10 border border-primary/10 dark:border-primary/20 p-6 sm:p-8 text-center space-y-4">
           <h4 className="text-base sm:text-lg font-black text-gray-900 dark:text-white">Stay Updated</h4>
           <p className="text-sm text-gray-600 dark:text-gray-400">Subscribe to get the latest mentorship tips and career resources.</p>
-          <div className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+          <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
             <input 
               type="email" 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               placeholder="your@email.com" 
-              className="flex-1 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 dark:text-white rounded-lg text-sm font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+              required
+              disabled={loading}
+              className="flex-1 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 dark:text-white rounded-lg text-sm font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all disabled:opacity-50"
             />
-            <button className="px-6 py-2.5 bg-primary text-white font-bold rounded-lg hover:scale-105 transition-all text-sm">Subscribe</button>
-          </div>
+            <button 
+              type="submit"
+              disabled={loading}
+              className="px-6 py-2.5 bg-primary text-white font-bold rounded-lg hover:scale-105 transition-all text-sm disabled:opacity-50 disabled:hover:scale-100"
+            >
+              {loading ? 'Subscribing...' : 'Subscribe'}
+            </button>
+          </form>
+          {message && (
+            <p className={`text-sm font-medium ${message.includes('Success') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+              {message}
+            </p>
+          )}
         </div>
       </div>
     </footer>
+  );
+};
+
+const LanguageSelector: React.FC = () => {
+  const { language, setLanguage } = useLanguage();
+  const [isOpen, setIsOpen] = useState(false);
+
+  const languages = [
+    { code: 'en' as const, label: 'English', flag: '🇬🇧' },
+    { code: 'fr' as const, label: 'Français', flag: '🇫🇷' },
+    { code: 'es' as const, label: 'Español', flag: '🇪🇸' },
+  ];
+
+  const currentLang = languages.find(l => l.code === language) || languages[0];
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="hover:text-primary transition-colors flex items-center gap-1"
+      >
+        {currentLang.flag} {currentLang.label}
+      </button>
+      {isOpen && (
+        <div className="absolute bottom-full mb-2 right-0 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-2 min-w-[140px]">
+          {languages.map((lang) => (
+            <button
+              key={lang.code}
+              onClick={() => {
+                setLanguage(lang.code);
+                setIsOpen(false);
+              }}
+              className={`w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 ${
+                language === lang.code ? 'text-primary font-bold' : 'text-gray-700 dark:text-gray-300'
+              }`}
+            >
+              {lang.flag} {lang.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 };
 

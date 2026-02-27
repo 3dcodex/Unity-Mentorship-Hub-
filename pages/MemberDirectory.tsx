@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { db } from '../src/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { db, auth } from '../src/firebase';
+import { collection, getDocs, query, where, addDoc, Timestamp } from 'firebase/firestore';
 
 const MemberDirectory: React.FC = () => {
   const navigate = useNavigate();
@@ -62,7 +62,25 @@ const MemberDirectory: React.FC = () => {
               <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">{m.major || ''}</p>
               <div className="flex gap-2 pt-3">
                 <button 
-                  onClick={() => navigate(`/quick-chat?user=${m.id}`)}
+                  onClick={async () => {
+                    const currentUser = auth.currentUser;
+                    if (!currentUser) return;
+                    
+                    const q = query(collection(db, 'connections'), where('participants', 'array-contains', currentUser.uid));
+                    const snapshot = await getDocs(q);
+                    const exists = snapshot.docs.some(doc => doc.data().participants.includes(m.id));
+                    
+                    if (!exists) {
+                      await addDoc(collection(db, 'connections'), {
+                        participants: [currentUser.uid, m.id],
+                        createdAt: Timestamp.now(),
+                        lastMessage: '',
+                        lastMessageTime: Timestamp.now(),
+                      });
+                    }
+                    
+                    navigate('/quick-chat');
+                  }}
                   className="bg-primary text-white text-[10px] font-black px-4 py-2 rounded-xl shadow-lg shadow-primary/10 hover:scale-105 transition-all"
                 >
                   Message

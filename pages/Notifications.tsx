@@ -43,9 +43,29 @@ const Notifications: React.FC = () => {
       );
       const snapshot = await getDocs(q);
       const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Notification[];
+      console.log('Loaded notifications:', notifs);
       setNotifications(notifs);
     } catch (err) {
       console.error('Error loading notifications:', err);
+      // If orderBy fails due to missing index, try without orderBy
+      try {
+        const q = query(
+          collection(db, 'notifications'),
+          where('userId', '==', user.uid)
+        );
+        const snapshot = await getDocs(q);
+        const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Notification[];
+        // Sort manually by createdAt
+        notifs.sort((a, b) => {
+          const aTime = a.createdAt?.seconds || 0;
+          const bTime = b.createdAt?.seconds || 0;
+          return bTime - aTime;
+        });
+        console.log('Loaded notifications (fallback):', notifs);
+        setNotifications(notifs);
+      } catch (fallbackErr) {
+        console.error('Fallback error:', fallbackErr);
+      }
     } finally {
       setLoading(false);
     }
@@ -55,6 +75,8 @@ const Notifications: React.FC = () => {
     try {
       await updateDoc(doc(db, 'notifications', notifId), { read: true });
       setNotifications(prev => prev.map(n => n.id === notifId ? { ...n, read: true } : n));
+      // Trigger a storage event to update notification count in Layout
+      window.dispatchEvent(new Event('notificationRead'));
     } catch (err) {
       console.error('Error marking as read:', err);
     }
@@ -65,6 +87,8 @@ const Notifications: React.FC = () => {
       const unreadNotifs = notifications.filter(n => !n.read);
       await Promise.all(unreadNotifs.map(n => updateDoc(doc(db, 'notifications', n.id), { read: true })));
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      // Trigger a storage event to update notification count in Layout
+      window.dispatchEvent(new Event('notificationRead'));
     } catch (err) {
       console.error('Error marking all as read:', err);
     }

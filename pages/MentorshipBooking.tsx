@@ -41,11 +41,18 @@ const MentorshipBooking: React.FC = () => {
     if (!user) return;
     setLoading(true);
     try {
-      // Check if user has completed billing and has a plan
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       const userData = userDoc.data();
       const plan = userData?.subscriptionPlan || 'free';
+      const hasFreeAccess = userData?.hasFreeAccess || false;
       setUserPlan(plan);
+
+      // Grant access if user has free access granted by admin
+      if (hasFreeAccess) {
+        setHasAccess(true);
+        setLoading(false);
+        return;
+      }
 
       // Check if user has any paid transactions
       const txnQuery = query(
@@ -56,7 +63,6 @@ const MentorshipBooking: React.FC = () => {
       const txnSnapshot = await getDocs(txnQuery);
       const hasPaidTransactions = !txnSnapshot.empty;
 
-      // Grant access if user has basic/premium plan OR has paid transactions
       setHasAccess(plan !== 'free' || hasPaidTransactions);
     } catch (err) {
       console.error('Error checking access:', err);

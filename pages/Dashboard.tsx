@@ -192,6 +192,7 @@ const Dashboard: React.FC = () => {
               <div className="space-y-3">
                 <QuickActionButton icon="admin_panel_settings" label="Admin Dashboard" onClick={() => navigate('/admin')} />
                 <QuickActionButton icon="event" label="Book Session" onClick={() => navigate('/mentorship/book')} />
+                <QuickActionButton icon="group_add" label="Create Group" onClick={() => navigate('/community/groups')} />
                 <QuickActionButton icon="chat" label="Messages" onClick={() => navigate('/quick-chat')} />
                 <QuickActionButton icon="description" label="Resume Builder" onClick={() => navigate('/career/resume')} />
                 <QuickActionButton icon="mic" label="Mock Interview" onClick={() => navigate('/career/mock-interview')} />
