@@ -13,6 +13,20 @@ interface User {
   status: string;
   createdAt: any;
   lastActive: any;
+  accountStatus?: string; // for professionals
+}
+  // Approve pending professional
+  const handleApproveProfessional = async (userId: string) => {
+    await updateDoc(doc(db, 'users', userId), {
+      accountStatus: 'active',
+      status: 'active',
+      role: 'professional',
+      approvedAt: new Date(),
+    });
+    await logAction('approve_professional', userId, {});
+    await sendSystemNotification(userId, 'Professional Account Approved', 'Your professional account has been approved. You now have full access.', 'success');
+    loadUsers();
+  };
 }
 
 const UserManagement: React.FC = () => {
@@ -191,6 +205,7 @@ const UserManagement: React.FC = () => {
                 <th className="px-6 py-4 text-left text-sm font-black text-gray-900">User</th>
                 <th className="px-6 py-4 text-left text-sm font-black text-gray-900">Role</th>
                 <th className="px-6 py-4 text-left text-sm font-black text-gray-900">Mentor</th>
+                <th className="px-6 py-4 text-left text-sm font-black text-gray-900">Professional Approval</th>
                 <th className="px-6 py-4 text-left text-sm font-black text-gray-900">Free Access</th>
                 <th className="px-6 py-4 text-left text-sm font-black text-gray-900">Status</th>
                 <th className="px-6 py-4 text-left text-sm font-black text-gray-900">Joined</th>
@@ -258,6 +273,20 @@ const UserManagement: React.FC = () => {
                     </label>
                   </td>
                   <td className="px-6 py-4">
+                    {/* Approval for pending professionals */}
+                    {user.role === 'professional' && user.accountStatus === 'pending' ? (
+                      <button
+                        onClick={() => handleApproveProfessional(user.id)}
+                        className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700"
+                      >
+                        Approve
+                      </button>
+                    ) : user.role === 'professional' ? (
+                      <span className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-xs font-bold">Approved</span>
+                    ) : (
+                      <span className="px-3 py-1 bg-gray-100 text-gray-400 rounded-lg text-xs font-bold">N/A</span>
+                    )}
+                  </td
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                       user.status === 'active' ? 'bg-green-100 text-green-700' :
                       user.status === 'suspended' ? 'bg-red-100 text-red-700' :

@@ -22,9 +22,7 @@ service cloud.firestore {
       return role == 'super_admin' ? 100 :
              role == 'admin' ? 80 :
              role == 'moderator' ? 60 :
-             role == 'professional' ? 30 :
-             role == 'alumni' ? 25 :
-             role == 'international_student' ? 20 : 15;
+             role == 'Professional' ? 20 : 15;
     }
     
     function canManageUser(targetUserId, newRole) {
@@ -109,7 +107,18 @@ service cloud.firestore {
     }
     
     match /bookings/{bookingId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.studentId ||
+        request.auth.uid == resource.data.mentorId ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.studentId;
+      allow update: if isAuthenticated() && (
+        request.auth.uid == resource.data.studentId ||
+        request.auth.uid == resource.data.mentorId ||
+        isAdmin()
+      );
+      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.studentId || isAdmin());
     }
     
     match /sessions/{sessionId} {

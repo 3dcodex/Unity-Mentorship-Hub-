@@ -35,6 +35,7 @@ import CoverLetterTemplates from './pages/CoverLetterTemplates';
 import LiveEvent from './pages/LiveEvent';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import PendingApproval from './pages/PendingApproval';
 import Billing from './pages/Billing';
 import ProfileView from './pages/ProfileView';
 import Notifications from './pages/Notifications';
@@ -95,16 +96,41 @@ const ProtectedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const onboardingComplete = localStorage.getItem('unity_onboarding_complete') === 'true';
   const location = useLocation();
   const { user, loading } = useAuth();
+  const [accountStatus, setAccountStatus] = useState<string | null>(null);
+  const [checkingStatus, setCheckingStatus] = useState(true);
   useAutoLogout();
 
+  // Check account status for professionals
+  useEffect(() => {
+    const checkAccountStatus = async () => {
+      if (user) {
+        const { doc, getDoc } = await import('firebase/firestore');
+        const { db } = await import('./src/firebase');
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          setAccountStatus(userDoc.data().accountStatus || 'active');
+        }
+      }
+      setCheckingStatus(false);
+    };
+    if (!loading) {
+      checkAccountStatus();
+    }
+  }, [user, loading]);
+
   // Keep onboarding redirect behavior
-  if (!onboardingComplete && !['/login', '/signup', '/', '/about', '/who-we-serve', '/mentorship-info', '/peer-mentorship', '/accessible-resources', '/safe-spaces'].includes(location.pathname)) {
+  if (!onboardingComplete && !['/login', '/signup', '/', '/about', '/who-we-serve', '/mentorship-info', '/peer-mentorship', '/accessible-resources', '/safe-spaces', '/pending-approval'].includes(location.pathname)) {
     return <Navigate to="/signup" replace />;
   }
 
   // If not loading and no user, redirect to login
   if (!loading && !user) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Redirect pending professionals to pending approval page
+  if (!checkingStatus && accountStatus === 'pending' && location.pathname !== '/pending-approval') {
+    return <Navigate to="/pending-approval" replace />;
   }
 
   return <Layout>{children}</Layout>;
@@ -138,6 +164,7 @@ const App: React.FC = () => {
         <Route path="/safe-spaces" element={<SafeSpaces />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/pending-approval" element={<PendingApproval />} />
         <Route path="/admin-setup" element={<AdminSetup />} />
         <Route path="/fix-admin" element={<FixAdmin />} />
         

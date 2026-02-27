@@ -12,7 +12,7 @@ import { useAuth } from '../App';
 const ProfileSettings: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const userRole: Role = (localStorage.getItem('unity_user_role') as Role) || 'Domestic Student';
+  const userRole: Role = (localStorage.getItem('unity_user_role') as Role) || 'Student';
   const privileges = rolePrivileges[userRole] || [];
   
   // Dark mode
@@ -87,20 +87,7 @@ const ProfileSettings: React.FC = () => {
   const [notifyCommunityUpdates, setNotifyCommunityUpdates] = useState(false);
   const [financialAidStatus, setFinancialAidStatus] = useState('');
 
-  // International Student profile fields
-  const [homeCountry, setHomeCountry] = useState('');
-  const [visaStatus, setVisaStatus] = useState('');
-  const [arrivalDate, setArrivalDate] = useState('');
-  const [needsHousing, setNeedsHousing] = useState(false);
-  const [culturalAdjustmentHelp, setCulturalAdjustmentHelp] = useState(false);
-  
-  // Alumni profile fields
-  const [graduationYear, setGraduationYear] = useState('');
-  const [currentEmployer, setCurrentEmployer] = useState('');
-  const [industry, setIndustry] = useState('');
-  const [yearsExperience, setYearsExperience] = useState(0);
-  const [availableForMentoring, setAvailableForMentoring] = useState(false);
-  const [canPostJobs, setCanPostJobs] = useState(false);
+
   
   // Professional profile fields
   const [companyWebsite, setCompanyWebsite] = useState('');
@@ -145,8 +132,8 @@ const ProfileSettings: React.FC = () => {
           setNotifyMentorshipRequests(d.notifyMentorshipRequests || false);
           setNotifyCommunityUpdates(d.notifyCommunityUpdates || false);
           
-          // Domestic Student fields
-          if (userRole === 'Domestic Student') {
+          // Student fields
+          if (userRole === 'Student') {
             setUniversity(d.university || '');
             setMajor(d.major || '');
             setYearOfStudy(d.yearOfStudy || 1);
@@ -163,30 +150,7 @@ const ProfileSettings: React.FC = () => {
             setFinancialAidStatus(d.financialAidStatus || '');
           }
           
-          // International Student fields
-          if (userRole === 'International Student') {
-            setHomeCountry(d.homeCountry || '');
-            setVisaStatus(d.visaStatus || '');
-            setArrivalDate(d.arrivalDate || '');
-            setNeedsHousing(d.needsHousing || false);
-            setCulturalAdjustmentHelp(d.culturalAdjustmentHelp || false);
-            setUniversity(d.university || '');
-            setMajor(d.major || '');
-            setYearOfStudy(d.yearOfStudy || 1);
-          }
-          
-          // Alumni fields
-          if (userRole === 'Alumni') {
-            setGraduationYear(d.graduationYear || '');
-            setCurrentEmployer(d.currentEmployer || '');
-            setJobTitle(d.jobTitle || '');
-            setIndustry(d.industry || '');
-            setYearsExperience(d.yearsExperience || 0);
-            setAvailableForMentoring(d.availableForMentoring || false);
-            setCanPostJobs(d.canPostJobs || false);
-            setMaxMentees(d.maxMentees || 1);
-          }
-          
+
           // Professional fields
           if (userRole === 'Professional') {
             setCompanyName(d.companyName || '');
@@ -218,27 +182,22 @@ const ProfileSettings: React.FC = () => {
         
         let roleData = {};
         
-        if (userRole === 'International Student') {
+        if (userRole === 'Student') {
           roleData = {
-            homeCountry,
-            visaStatus,
-            arrivalDate,
-            needsHousing,
-            culturalAdjustmentHelp,
             university,
             major,
             yearOfStudy,
-          };
-        } else if (userRole === 'Alumni') {
-          roleData = {
-            graduationYear,
-            currentEmployer,
-            jobTitle,
-            industry,
-            yearsExperience,
-            availableForMentoring,
-            canPostJobs,
+            clubsSocieties,
+            offerPeerMentorship,
+            campusBuddy,
             maxMentees,
+            expertise,
+            willingMentorIntl,
+            culturalFamiliarity,
+            eventHost,
+            eventApproval,
+            eventModeration,
+            financialAidStatus,
           };
         } else if (userRole === 'Professional') {
           roleData = {
@@ -532,7 +491,7 @@ const ProfileSettings: React.FC = () => {
         updatedAt: Timestamp.now(),
       };
       
-      if (userRole === 'Domestic Student' || userRole === 'International Student') {
+      if (userRole === 'Student') {
         updateData.school = school;
         updateData.programName = programName;
         updateData.currentYear = currentYear;
@@ -687,6 +646,37 @@ const ProfileSettings: React.FC = () => {
             Manage your account, preferences, and role-specific settings all in one place
           </p>
         </div>
+        
+        {/* Role & Privilege Summary */}
+        <section>
+          <div className={`${darkMode ? 'dark bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl p-6 border shadow-sm mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4`}>
+            <div>
+              <h2 className="text-lg font-black text-gray-900 dark:text-white mb-1 flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary">verified_user</span>
+                {userRole} Privileges
+              </h2>
+              <ul className="text-xs text-gray-600 dark:text-gray-300 list-disc ml-6">
+                {privileges.map(p => (
+                  <li key={p}>{p.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}</li>
+                ))}
+              </ul>
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="material-symbols-outlined text-4xl">
+                {userRole === 'Student' && 'school'}
+                {userRole === 'Professional' && 'business_center'}
+                {(userRole === 'admin' || userRole === 'super_admin' || userRole === 'moderator') && 'admin_panel_settings'}
+              </span>
+              <span className="text-xs font-bold mt-1">
+                {userRole === 'Student' && '🎓 Student'}
+                {userRole === 'Professional' && '💼 Working Professional'}
+                {userRole === 'admin' && '⚡ Admin'}
+                {userRole === 'super_admin' && '👑 Super Admin'}
+                {userRole === 'moderator' && '🛡️ Moderator'}
+              </span>
+            </div>
+          </div>
+        </section>
         {/* Alerts */}
         {success && (
           <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-xl">
@@ -701,77 +691,7 @@ const ProfileSettings: React.FC = () => {
           </div>
         )}
 
-        {/* General Preferences */}
-        <section className={`${darkMode ? 'dark bg-gradient-to-br from-slate-900/90 via-slate-800/90 to-slate-900/90 border-slate-700/30' : 'bg-gradient-to-br from-white via-blue-50/30 to-white border-blue-100'} backdrop-blur-2xl rounded-3xl p-8 border-2 shadow-2xl hover:shadow-blue-500/10 transition-all duration-300 relative overflow-hidden group`}> 
-                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-purple-500/5 to-pink-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                  <div className="relative z-10">
-                    <div className="flex items-center gap-4 mb-8">
-                      <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl shadow-lg">
-                        <span className="material-symbols-outlined text-white text-3xl">tune</span>
-                      </div>
-                      <div>
-                        <h2 className="text-3xl font-black bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">General Preferences</h2>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Customize your experience</p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                      <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-blue-400 dark:hover:border-blue-500 transition-all">
-                        <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
-                          <span className="material-symbols-outlined text-sm text-blue-500">groups</span>
-                          Campus Involvement Level
-                        </label>
-                        <select className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-semibold focus:ring-2 focus:ring-blue-500 transition-all" value={campusInvolvement} onChange={e => setCampusInvolvement(e.target.value)}>
-                          <option value="">Select...</option>
-                          <option value="Low">🌱 Low</option>
-                          <option value="Medium">🌿 Medium</option>
-                          <option value="High">🌳 High</option>
-                        </select>
-                      </div>
-                      <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-purple-400 dark:hover:border-purple-500 transition-all">
-                        <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
-                          <span className="material-symbols-outlined text-sm text-purple-500">language</span>
-                          Languages Spoken
-                        </label>
-                        <input type="text" placeholder="e.g. English, Spanish, Mandarin" value={languagesSpoken} onChange={e => setLanguagesSpoken(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-semibold focus:ring-2 focus:ring-purple-500 transition-all" />
-                      </div>
-                      <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-pink-400 dark:hover:border-pink-500 transition-all md:col-span-2">
-                        <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-4 flex items-center gap-2">
-                          <span className="material-symbols-outlined text-sm text-pink-500">notifications_active</span>
-                          Notification Preferences
-                        </label>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <label className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-xl cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group">
-                            <input type="checkbox" checked={notifyCampusEvents} onChange={e => setNotifyCampusEvents(e.target.checked)} className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500" />
-                            <span className="text-sm font-semibold group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">🎉 Campus Events</span>
-                          </label>
-                          <label className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-xl cursor-pointer hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all group">
-                            <input type="checkbox" checked={notifyMentorshipRequests} onChange={e => setNotifyMentorshipRequests(e.target.checked)} className="w-5 h-5 text-purple-600 rounded focus:ring-2 focus:ring-purple-500" />
-                            <span className="text-sm font-semibold group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">🤝 Mentorship</span>
-                          </label>
-                          <label className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-xl cursor-pointer hover:bg-pink-50 dark:hover:bg-pink-900/20 transition-all group">
-                            <input type="checkbox" checked={notifyCommunityUpdates} onChange={e => setNotifyCommunityUpdates(e.target.checked)} className="w-5 h-5 text-pink-600 rounded focus:ring-2 focus:ring-pink-500" />
-                            <span className="text-sm font-semibold group-hover:text-pink-600 dark:group-hover:text-pink-400 transition-colors">💬 Community</span>
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex justify-end mt-6">
-                      <button className="px-8 py-3 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white rounded-xl font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 flex items-center gap-2" onClick={handleSaveDomesticStudentProfile} disabled={isSaving}>
-                        {isSaving ? (
-                          <>
-                            <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                            Saving...
-                          </>
-                        ) : (
-                          <>
-                            <span className="material-symbols-outlined">save</span>
-                            Save Preferences
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </section>
+
         {/* Account Overview */}
         <section className={`${darkMode ? 'dark bg-slate-900/50 border-slate-700/50' : 'bg-white/80 border-gray-200'} backdrop-blur-xl rounded-3xl p-8 border shadow-2xl relative overflow-hidden`}>
           <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl"></div>
@@ -904,7 +824,7 @@ const ProfileSettings: React.FC = () => {
               </div>
               
               {/* Student-specific fields */}
-              {(userRole === 'Domestic Student' || userRole === 'International Student') && (
+              {userRole === 'Student' && (
                 <>
                   <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all">
                     <div className="flex items-center gap-3 mb-4">
@@ -1449,21 +1369,13 @@ const ProfileSettings: React.FC = () => {
           </div>
         </section>
 
-        {/* Page Header - More meaningful and above account section */}
-        <header className="mb-8">
-          <h1 className="text-3xl md:text-4xl font-black text-primary mb-2 flex items-center gap-3">
-            <span className="material-symbols-outlined text-primary text-4xl">settings</span>
-            Account & Profile Management
-          </h1>
-          <p className="text-base text-gray-600 dark:text-gray-300 font-medium">Update your account details, security, and preferences. All your general settings are below, followed by role-specific privileges and options.</p>
-        </header>
-        {/* Role & Privilege Summary and role-specific sections */}
-                {/* Domestic Student Profile Settings */}
-                {userRole === 'Domestic Student' && (
+        {/* Role-specific sections */}
+                {/* Student Profile Settings */}
+                {userRole === 'Student' && (
                   <section className={`${darkMode ? 'dark bg-gray-900 border-gray-700' : 'bg-white border-gray-100'} rounded-3xl p-8 border shadow-lg mb-8`}> 
                     <h2 className="text-2xl font-black text-primary mb-6 flex items-center gap-3">
                       <span className="material-symbols-outlined text-primary text-3xl">school</span>
-                      Domestic Student Profile
+                      Student Profile
                     </h2>
                     
                     {/* Academic Information */}
@@ -1718,174 +1630,6 @@ const ProfileSettings: React.FC = () => {
                   </section>
                 )}
 
-                {/* International Student Profile Settings */}
-                {userRole === 'International Student' && (
-                  <section className={`${darkMode ? 'dark bg-gray-900 border-gray-700' : 'bg-white border-gray-100'} rounded-3xl p-8 border shadow-lg mb-8`}>
-                    <h2 className="text-2xl font-black text-primary mb-6 flex items-center gap-3">
-                      <span className="material-symbols-outlined text-primary text-3xl">public</span>
-                      International Student Profile
-                    </h2>
-                    
-                    <div className="mb-8">
-                      <h3 className="text-lg font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary">flight</span>
-                        Immigration & Status
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Home Country</label>
-                          <input type="text" placeholder="Your home country" value={homeCountry} onChange={e => setHomeCountry(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary" />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Visa Status</label>
-                          <select value={visaStatus} onChange={e => setVisaStatus(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary">
-                            <option value="">Select...</option>
-                            <option value="F-1">F-1 Student Visa</option>
-                            <option value="J-1">J-1 Exchange Visitor</option>
-                            <option value="M-1">M-1 Vocational Student</option>
-                            <option value="Other">Other</option>
-                          </select>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Arrival Date</label>
-                          <input type="date" value={arrivalDate} onChange={e => setArrivalDate(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary" />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mb-8">
-                      <h3 className="text-lg font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary">school</span>
-                        Academic Information
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">University</label>
-                          <input type="text" placeholder="Your university" value={university} onChange={e => setUniversity(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary" />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Major</label>
-                          <input type="text" placeholder="Your major" value={major} onChange={e => setMajor(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary" />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Year of Study</label>
-                          <select value={yearOfStudy} onChange={e => setYearOfStudy(Number(e.target.value))} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary">
-                            <option value={1}>1st Year</option>
-                            <option value={2}>2nd Year</option>
-                            <option value={3}>3rd Year</option>
-                            <option value={4}>4th Year</option>
-                            <option value={5}>5th Year+</option>
-                          </select>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Languages Spoken</label>
-                          <input type="text" placeholder="e.g. English, Spanish, Mandarin" value={languagesSpoken} onChange={e => setLanguagesSpoken(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary" />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mb-8">
-                      <h3 className="text-lg font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary">support</span>
-                        Support Needs
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                          <input type="checkbox" checked={needsHousing} onChange={e => setNeedsHousing(e.target.checked)} className="w-5 h-5 text-primary focus:ring-primary rounded" />
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Need Housing Assistance</label>
-                        </div>
-                        <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                          <input type="checkbox" checked={culturalAdjustmentHelp} onChange={e => setCulturalAdjustmentHelp(e.target.checked)} className="w-5 h-5 text-primary focus:ring-primary rounded" />
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Cultural Adjustment Support</label>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
-                      <button className="px-8 py-3 bg-primary hover:bg-primary/90 transition text-white rounded-xl font-bold shadow-lg flex items-center gap-2" onClick={handleSaveRoleProfile} disabled={isSaving}>
-                        {isSaving ? <><span className="material-symbols-outlined animate-spin">progress_activity</span>Saving...</> : <><span className="material-symbols-outlined">save</span>Save Profile</>}
-                      </button>
-                    </div>
-                  </section>
-                )}
-
-                {/* Alumni Profile Settings */}
-                {userRole === 'Alumni' && (
-                  <section className={`${darkMode ? 'dark bg-gray-900 border-gray-700' : 'bg-white border-gray-100'} rounded-3xl p-8 border shadow-lg mb-8`}>
-                    <h2 className="text-2xl font-black text-primary mb-6 flex items-center gap-3">
-                      <span className="material-symbols-outlined text-primary text-3xl">workspace_premium</span>
-                      Alumni Profile
-                    </h2>
-                    
-                    <div className="mb-8">
-                      <h3 className="text-lg font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary">school</span>
-                        Education Background
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Graduation Year</label>
-                          <input type="text" placeholder="e.g. 2020" value={graduationYear} onChange={e => setGraduationYear(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary" />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mb-8">
-                      <h3 className="text-lg font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary">work</span>
-                        Professional Information
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Current Employer</label>
-                          <input type="text" placeholder="Company name" value={currentEmployer} onChange={e => setCurrentEmployer(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary" />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Job Title</label>
-                          <input type="text" placeholder="Your position" value={jobTitle} onChange={e => setJobTitle(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary" />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Industry</label>
-                          <input type="text" placeholder="e.g. Technology, Finance" value={industry} onChange={e => setIndustry(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary" />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Years of Experience</label>
-                          <input type="number" min="0" value={yearsExperience} onChange={e => setYearsExperience(Number(e.target.value))} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary" />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mb-8">
-                      <h3 className="text-lg font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary">diversity_3</span>
-                        Mentorship & Opportunities
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                          <input type="checkbox" checked={availableForMentoring} onChange={e => setAvailableForMentoring(e.target.checked)} className="w-5 h-5 text-primary focus:ring-primary rounded" />
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Available for Mentoring</label>
-                        </div>
-                        <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                          <input type="checkbox" checked={canPostJobs} onChange={e => setCanPostJobs(e.target.checked)} className="w-5 h-5 text-primary focus:ring-primary rounded" />
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Can Post Job Referrals</label>
-                        </div>
-                        {availableForMentoring && (
-                          <div className="flex flex-col gap-2">
-                            <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Max Mentees</label>
-                            <input type="number" min="1" max="20" value={maxMentees} onChange={e => setMaxMentees(Number(e.target.value))} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary" />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
-                      <button className="px-8 py-3 bg-primary hover:bg-primary/90 transition text-white rounded-xl font-bold shadow-lg flex items-center gap-2" onClick={handleSaveRoleProfile} disabled={isSaving}>
-                        {isSaving ? <><span className="material-symbols-outlined animate-spin">progress_activity</span>Saving...</> : <><span className="material-symbols-outlined">save</span>Save Profile</>}
-                      </button>
-                    </div>
-                  </section>
-                )}
-
                 {/* Professional Profile Settings */}
                 {userRole === 'Professional' && (
                   <section className={`${darkMode ? 'dark bg-gray-900 border-gray-700' : 'bg-white border-gray-100'} rounded-3xl p-8 border shadow-lg mb-8`}>
@@ -1958,35 +1702,7 @@ const ProfileSettings: React.FC = () => {
                     </div>
                   </section>
                 )}
-        <section>
-          <div className={`${darkMode ? 'dark bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl p-6 border shadow-sm mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4`}>
-            <div>
-              <h2 className="text-lg font-black text-gray-900 dark:text-white mb-1 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">verified_user</span>
-                {userRole} Privileges
-              </h2>
-              <ul className="text-xs text-gray-600 dark:text-gray-300 list-disc ml-6">
-                {privileges.map(p => (
-                  <li key={p}>{p.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}</li>
-                ))}
-              </ul>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="material-symbols-outlined text-4xl">
-                {userRole === 'International Student' && 'public'}
-                {userRole === 'Domestic Student' && 'school'}
-                {userRole === 'Alumni' && 'workspace_premium'}
-                {userRole === 'Professional' && 'business_center'}
-              </span>
-              <span className="text-xs font-bold mt-1">
-                {userRole === 'International Student' && '🌎 Global Explorer'}
-                {userRole === 'Domestic Student' && '🏛 Campus Connector'}
-                {userRole === 'Alumni' && '🎖 Alumni Mentor'}
-                {userRole === 'Professional' && '💼 Industry Partner'}
-              </span>
-            </div>
-          </div>
-        </section>
+
       </div>
 
 

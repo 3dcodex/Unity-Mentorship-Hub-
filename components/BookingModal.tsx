@@ -69,10 +69,11 @@ const BookingModal: React.FC<BookingModalProps> = ({ mentor, onClose }) => {
         userId: mentor.id,
         type: 'booking',
         title: 'New Session Booked',
-        message: `${userName} booked a ${selectedType.name} session with you`,
+        message: `${userName} booked a ${selectedType.name} session with you on ${new Date(selectedSlot.date).toLocaleDateString()} at ${selectedSlot.time}`,
         read: false,
         createdAt: Timestamp.now(),
         actionUrl: `/mentorship/history`,
+        bookingId: bookingId,
         fromUser: user.uid,
         fromUserName: userName,
       });
@@ -81,10 +82,11 @@ const BookingModal: React.FC<BookingModalProps> = ({ mentor, onClose }) => {
         userId: user.uid,
         type: 'booking',
         title: 'Session Confirmed',
-        message: `Your ${selectedType.name} with ${mentorName} is confirmed`,
+        message: `Your ${selectedType.name} with ${mentorName} on ${new Date(selectedSlot.date).toLocaleDateString()} at ${selectedSlot.time} is confirmed`,
         read: false,
         createdAt: Timestamp.now(),
         actionUrl: `/mentorship/history`,
+        bookingId: bookingId,
         fromUser: mentor.id,
         fromUserName: mentorName,
       });
@@ -93,7 +95,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ mentor, onClose }) => {
       navigate('/mentorship/history');
     } catch (err) {
       console.error('Booking error:', err);
-      alert('Failed to book session');
+      alert(`Failed to book session: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }

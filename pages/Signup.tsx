@@ -118,7 +118,12 @@ const Signup: React.FC = () => {
       localStorage.setItem('unity_onboarding_complete', 'true');
       localStorage.setItem('unity_user_name', userName);
       localStorage.setItem('unity_user_role', selectedRole);
-      navigate('/dashboard');
+      
+      if (selectedRole === 'Professional') {
+        navigate('/pending-approval');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err: any) {
       console.error('Signup error:', err);
       setError(err?.message ?? 'Sign-up failed');

@@ -2,20 +2,16 @@ export enum Role {
   SUPER_ADMIN = 'super_admin',
   ADMIN = 'admin',
   MODERATOR = 'moderator',
-  PROFESSIONAL = 'professional',
-  ALUMNI = 'alumni',
-  INTERNATIONAL_STUDENT = 'international_student',
-  DOMESTIC_STUDENT = 'domestic_student'
+  PROFESSIONAL = 'Professional',
+  STUDENT = 'Student'
 }
 
 export const ROLE_HIERARCHY: Record<Role, number> = {
   [Role.SUPER_ADMIN]: 100,
   [Role.ADMIN]: 80,
   [Role.MODERATOR]: 60,
-  [Role.PROFESSIONAL]: 30,
-  [Role.ALUMNI]: 25,
-  [Role.INTERNATIONAL_STUDENT]: 20,
-  [Role.DOMESTIC_STUDENT]: 15
+  [Role.PROFESSIONAL]: 20,
+  [Role.STUDENT]: 15
 };
 
 export interface Permission {
@@ -110,43 +106,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission> = {
     canAccessAdminPanel: false,
     maxRoleLevel: 0
   },
-  [Role.ALUMNI]: {
-    canManageUsers: false,
-    canManageRoles: false,
-    canManageMentors: false,
-    canManageSessions: false,
-    canManagePayments: false,
-    canManagePayouts: false,
-    canManageReports: false,
-    canManageReviews: false,
-    canManageCategories: false,
-    canManageSettings: false,
-    canViewAnalytics: false,
-    canViewSecurityLogs: false,
-    canSuspendUsers: false,
-    canDeleteContent: false,
-    canAccessAdminPanel: false,
-    maxRoleLevel: 0
-  },
-  [Role.INTERNATIONAL_STUDENT]: {
-    canManageUsers: false,
-    canManageRoles: false,
-    canManageMentors: false,
-    canManageSessions: false,
-    canManagePayments: false,
-    canManagePayouts: false,
-    canManageReports: false,
-    canManageReviews: false,
-    canManageCategories: false,
-    canManageSettings: false,
-    canViewAnalytics: false,
-    canViewSecurityLogs: false,
-    canSuspendUsers: false,
-    canDeleteContent: false,
-    canAccessAdminPanel: false,
-    maxRoleLevel: 0
-  },
-  [Role.DOMESTIC_STUDENT]: {
+  [Role.STUDENT]: {
     canManageUsers: false,
     canManageRoles: false,
     canManageMentors: false,
@@ -182,5 +142,5 @@ export const canChangeRole = (adminRole: Role, targetRole: Role, newRole: Role):
 };
 
 export const getPermissions = (role: Role): Permission => {
-  return ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS[Role.DOMESTIC_STUDENT];
+  return ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS[Role.STUDENT];
 };

@@ -48,6 +48,7 @@ export const createUserProfile = async (
     seekingTags,
     createdAt: now,
     updatedAt: now,
+    accountStatus: role === 'Professional' ? 'pending' : 'active',
     ...(name && { name, displayName: name }),
     ...(phone && { phone }),
     ...(university && { university }),

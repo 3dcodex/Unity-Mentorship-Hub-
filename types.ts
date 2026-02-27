@@ -1,5 +1,5 @@
 
-export type Role = 'International Student' | 'Domestic Student' | 'Alumni' | 'Professional';
+export type Role = 'Student' | 'Professional' | 'admin' | 'super_admin' | 'moderator';
 
 export interface Mentor {
   id: string;
