@@ -7,6 +7,7 @@ import { LanguageProvider } from './contexts/LanguageContext';
 import Layout from './components/Layout';
 import { useAutoLogout } from './hooks/useAutoLogout';
 import { presenceService } from './services/presenceService';
+import CookieConsent from './components/CookieConsent';
 
 // Critical pages - loaded immediately
 import Landing from './pages/Landing';
@@ -280,6 +281,7 @@ const App: React.FC = () => {
         <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
             </Suspense>
+            <CookieConsent />
       </Router>
       </AuthContext.Provider>
       </LanguageProvider>
