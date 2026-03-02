@@ -11,9 +11,19 @@ export default defineConfig(({ mode }) => {
       },
       plugins: [react()],
       build: {
+        chunkSizeWarningLimit: 1000,
         rollupOptions: {
           output: {
-            manualChunks: undefined,
+            manualChunks: (id) => {
+              if (id.includes('node_modules')) {
+                if (id.includes('firebase')) return 'firebase';
+                if (id.includes('@google')) return 'google-vendor';
+                if (id.includes('chart.js') || id.includes('recharts')) return 'charts';
+                if (id.includes('react-router')) return 'react-vendor';
+                if (id.includes('react-dom')) return 'react-vendor';
+                if (id.includes('react')) return 'react-vendor';
+              }
+            },
           },
         },
       },

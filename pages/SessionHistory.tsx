@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { db } from '../src/firebase';
 import { collection, getDocs, query, where, doc, updateDoc, deleteDoc, addDoc, Timestamp } from 'firebase/firestore';
 import { useAuth } from '../App';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigate } from 'react-router-dom';
+import { presenceService } from '../services/presenceService';
 
 interface Session {
   id: string;
@@ -29,10 +30,21 @@ const SessionHistory: React.FC = () => {
   const [userPlan, setUserPlan] = useState<'free' | 'basic' | 'premium'>('free');
   const [sessionCount, setSessionCount] = useState({ used: 0, total: 0 });
   const [showReschedule, setShowReschedule] = useState<string | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleTime, setRescheduleTime] = useState('');
   const [showNotes, setShowNotes] = useState<string | null>(null);
   const [showRating, setShowRating] = useState<string | null>(null);
   const [noteText, setNoteText] = useState('');
   const [rating, setRating] = useState(0);
+  const [showCallModal, setShowCallModal] = useState(false);
+  const [callType, setCallType] = useState<'video' | 'voice'>('video');
+  const [callMentorId, setCallMentorId] = useState<string | null>(null);
+  const [isInCall, setIsInCall] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<{[userId: string]: boolean}>({});
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -58,16 +70,30 @@ const SessionHistory: React.FC = () => {
     if (!user) return;
     setLoading(true);
     try {
-      // Load from new bookings collection
-      const bookingsQuery = query(
+      // Load sessions where user is the student
+      const studentQuery = query(
         collection(db, 'bookings'),
         where('studentId', '==', user.uid)
       );
-      const bookingsSnapshot = await getDocs(bookingsQuery);
-      const bookingsData = bookingsSnapshot.docs.map(doc => ({
+      const studentSnapshot = await getDocs(studentQuery);
+      const studentSessions = studentSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-        // Map new structure to old structure for compatibility
+        menteeId: doc.data().studentId,
+        slot: doc.data().scheduledTime,
+        date: new Date(doc.data().scheduledDate).getDate(),
+        slotDate: doc.data().scheduledDate,
+      })) as Session[];
+      
+      // Load sessions where user is the mentor
+      const mentorQuery = query(
+        collection(db, 'bookings'),
+        where('mentorId', '==', user.uid)
+      );
+      const mentorSnapshot = await getDocs(mentorQuery);
+      const mentorSessions = mentorSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
         menteeId: doc.data().studentId,
         slot: doc.data().scheduledTime,
         date: new Date(doc.data().scheduledDate).getDate(),
@@ -75,16 +101,24 @@ const SessionHistory: React.FC = () => {
       })) as Session[];
       
       // Also load old bookings for backward compatibility
-      const oldBookingsQuery = query(collection(db, 'bookings'), where('menteeId', '==', user.uid));
-      const oldSnapshot = await getDocs(oldBookingsQuery);
-      const oldBookings = oldSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Session[];
+      const oldStudentQuery = query(collection(db, 'bookings'), where('menteeId', '==', user.uid));
+      const oldStudentSnapshot = await getDocs(oldStudentQuery);
+      const oldStudentSessions = oldStudentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Session[];
       
-      const allSessions = [...bookingsData, ...oldBookings];
-      setSessions(allSessions);
+      const oldMentorQuery = query(collection(db, 'bookings'), where('mentorId', '==', user.uid));
+      const oldMentorSnapshot = await getDocs(oldMentorQuery);
+      const oldMentorSessions = oldMentorSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Session[];
+      
+      const allSessions = [...studentSessions, ...mentorSessions, ...oldStudentSessions, ...oldMentorSessions];
+      // Remove duplicates based on id
+      const uniqueSessions = allSessions.filter((session, index, self) => 
+        index === self.findIndex(s => s.id === session.id)
+      );
+      setSessions(uniqueSessions);
       
       // Calculate session usage
       const now = new Date();
-      const thisMonth = userSessions.filter(s => {
+      const thisMonth = uniqueSessions.filter(s => {
         const sessionDate = new Date(s.slotDate || s.createdAt?.toDate?.() || now);
         return sessionDate.getMonth() === now.getMonth() && sessionDate.getFullYear() === now.getFullYear();
       });
@@ -92,15 +126,28 @@ const SessionHistory: React.FC = () => {
       const limits = { free: 1, basic: 5, premium: 999 };
       setSessionCount({ used: thisMonth.length, total: limits[userPlan] });
       
-      // Load mentor data
-      const mentorIds = [...new Set(userSessions.map(s => s.mentorId))];
-      if (mentorIds.length > 0) {
+      // Load mentor/student data and track their online status
+      const userIds = [...new Set([
+        ...uniqueSessions.map(s => s.mentorId),
+        ...uniqueSessions.map(s => s.menteeId || s.studentId)
+      ].filter(Boolean))];
+      
+      if (userIds.length > 0) {
         const usersSnapshot = await getDocs(collection(db, 'users'));
-        const mentorMap: {[id: string]: any} = {};
+        const userMap: {[id: string]: any} = {};
         usersSnapshot.docs.forEach(doc => {
-          if (mentorIds.includes(doc.id)) mentorMap[doc.id] = doc.data();
+          if (userIds.includes(doc.id)) userMap[doc.id] = doc.data();
         });
-        setMentors(mentorMap);
+        setMentors(userMap);
+        
+        // Listen to presence for all users
+        userIds.forEach(userId => {
+          if (userId !== user.uid) {
+            presenceService.listenToUserStatus(userId, (isOnline) => {
+              setOnlineUsers(prev => ({ ...prev, [userId]: isOnline }));
+            });
+          }
+        });
       }
     } catch (err) {
       console.error('Error loading sessions:', err);
@@ -134,6 +181,64 @@ const SessionHistory: React.FC = () => {
     }
   };
 
+  const handleDeleteSession = async (sessionId: string) => {
+    if (!confirm('Are you sure you want to delete this session? This action cannot be undone.')) return;
+    try {
+      await deleteDoc(doc(db, 'bookings', sessionId));
+      setSessions(prev => prev.filter(s => s.id !== sessionId));
+      alert('Session deleted successfully');
+    } catch (err) {
+      console.error('Error deleting session:', err);
+      alert('Failed to delete session');
+    }
+  };
+
+  const handleRescheduleSession = async (sessionId: string) => {
+    if (!rescheduleDate || !rescheduleTime) {
+      alert('Please select both date and time');
+      return;
+    }
+    
+    try {
+      const newDateTime = `${rescheduleDate}T${rescheduleTime}`;
+      await updateDoc(doc(db, 'bookings', sessionId), {
+        scheduledDate: rescheduleDate,
+        scheduledTime: rescheduleTime,
+        slotDate: rescheduleDate,
+        slot: rescheduleTime,
+        updatedAt: Timestamp.now()
+      });
+      
+      setSessions(prev => prev.map(s => 
+        s.id === sessionId 
+          ? { ...s, scheduledDate: rescheduleDate, scheduledTime: rescheduleTime, slotDate: rescheduleDate, slot: rescheduleTime }
+          : s
+      ));
+      
+      // Notify mentor
+      const session = sessions.find(s => s.id === sessionId);
+      if (session) {
+        await addDoc(collection(db, 'notifications'), {
+          userId: session.mentorId,
+          type: 'booking',
+          title: 'Session Rescheduled',
+          message: `A student has rescheduled their session to ${rescheduleDate} at ${rescheduleTime}`,
+          read: false,
+          createdAt: Timestamp.now(),
+          actionUrl: '/mentorship/history',
+        });
+      }
+      
+      setShowReschedule(null);
+      setRescheduleDate('');
+      setRescheduleTime('');
+      alert('Session rescheduled successfully');
+    } catch (err) {
+      console.error('Error rescheduling session:', err);
+      alert('Failed to reschedule session');
+    }
+  };
+
   const handleSaveNotes = async (sessionId: string) => {
     try {
       await updateDoc(doc(db, 'bookings', sessionId), { notes: noteText });
@@ -154,6 +259,104 @@ const SessionHistory: React.FC = () => {
     } catch (err) {
       console.error('Error saving rating:', err);
     }
+  };
+
+  const startCall = async (type: 'video' | 'voice', mentorId: string) => {
+    // Check if mentor is online
+    const isOnline = onlineUsers[mentorId];
+    if (!isOnline) {
+      const mentorName = mentors[mentorId]?.displayName || mentors[mentorId]?.name || 'Mentor';
+      alert(`${mentorName} is currently offline. They will receive a notification about your call attempt.`);
+      
+      // Send offline call notification
+      await addDoc(collection(db, 'notifications'), {
+        userId: mentorId,
+        type: 'missed_call',
+        title: `Missed ${type} call`,
+        message: `${user?.displayName || user?.email} tried to call you for a mentorship session while you were offline`,
+        read: false,
+        createdAt: Timestamp.now(),
+        callerId: user?.uid,
+        callType: type
+      });
+      return;
+    }
+    
+    try {
+      setCallType(type);
+      setCallMentorId(mentorId);
+      setIsInCall(true);
+      
+      // Get user media
+      const constraints = {
+        video: type === 'video',
+        audio: true
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      localStreamRef.current = stream;
+      
+      if (localVideoRef.current && type === 'video') {
+        localVideoRef.current.srcObject = stream;
+      }
+      
+      // Create peer connection
+      const configuration = {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+      };
+      
+      const peerConnection = new RTCPeerConnection(configuration);
+      peerConnectionRef.current = peerConnection;
+      
+      // Add local stream to peer connection
+      stream.getTracks().forEach(track => {
+        peerConnection.addTrack(track, stream);
+      });
+      
+      // Handle remote stream
+      peerConnection.ontrack = (event) => {
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = event.streams[0];
+        }
+      };
+      
+      // Send call notification to mentor
+      await addDoc(collection(db, 'notifications'), {
+        userId: mentorId,
+        type: 'call',
+        title: `Incoming ${type} call`,
+        message: `${user?.displayName || user?.email} is calling you for a mentorship session`,
+        read: false,
+        createdAt: Timestamp.now(),
+        callerId: user?.uid,
+        callType: type
+      });
+      
+      setShowCallModal(true);
+    } catch (err) {
+      console.error('Error starting call:', err);
+      alert('Failed to start call. Please check your camera/microphone permissions.');
+      endCall();
+    }
+  };
+
+  const endCall = () => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+      localStreamRef.current = null;
+    }
+    
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+    
+    setIsInCall(false);
+    setShowCallModal(false);
+    setCallMentorId(null);
   };
 
   const now = new Date();
@@ -268,7 +471,11 @@ const SessionHistory: React.FC = () => {
             </div>
           ) : (
             filteredSessions.map((session) => {
-              const mentor = mentors[session.mentorId] || {};
+              const isUserMentor = user?.uid === session.mentorId;
+              const otherUser = isUserMentor 
+                ? mentors[session.menteeId || session.studentId] || {}
+                : mentors[session.mentorId] || {};
+              const otherUserId = isUserMentor ? (session.menteeId || session.studentId) : session.mentorId;
               const sessionDate = new Date(session.slotDate || session.createdAt?.toDate?.() || now);
               const isUpcoming = sessionDate >= now && session.status !== 'cancelled';
 
@@ -280,18 +487,24 @@ const SessionHistory: React.FC = () => {
                   }`}
                 >
                   <div className="flex flex-col md:flex-row gap-6">
-                    {/* Mentor Info */}
+                    {/* User Info */}
                     <div className="flex items-center gap-4 flex-1">
-                      <div className="size-16 rounded-2xl overflow-hidden border-2 border-blue-500/20 cursor-pointer hover:scale-110 transition-all"
-                        onClick={() => navigate(`/profile-view/${session.mentorId}`)}>
-                        <img src={mentor.photoURL || 'https://i.pravatar.cc/100'} className="w-full h-full object-cover" alt="Mentor" />
+                      <div className="size-16 rounded-2xl overflow-hidden border-2 border-blue-500/20 cursor-pointer hover:scale-110 transition-all bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold"
+                        onClick={() => navigate(`/profile-view/${otherUserId}`)}>
+                        {otherUser.photoURL ? (
+                          <img src={otherUser.photoURL} className="w-full h-full object-cover" alt={isUserMentor ? 'Student' : 'Mentor'} />
+                        ) : (
+                          <span className="text-2xl">
+                            {(otherUser.displayName || otherUser.name || (isUserMentor ? 'Student' : 'Mentor'))[0]?.toUpperCase()}
+                          </span>
+                        )}
                       </div>
                       <div className="flex-1">
                         <h3 className={`text-lg font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                          {mentor.displayName || mentor.name || 'Mentor'}
+                          {otherUser.displayName || otherUser.name || (isUserMentor ? 'Student' : 'Mentor')}
                         </h3>
                         <p className={`text-sm font-bold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          {mentor.mentorExpertise || mentor.role || 'Expert Mentor'}
+                          {isUserMentor ? 'Your Student' : (otherUser.mentorExpertise || otherUser.role || 'Expert Mentor')}
                         </p>
                         <div className="flex items-center gap-4 mt-2">
                           <span className={`text-xs font-bold ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
@@ -314,14 +527,21 @@ const SessionHistory: React.FC = () => {
                       {isUpcoming ? (
                         <>
                           <button
-                            onClick={() => navigate(`/quick-chat?user=${session.mentorId}`)}
+                            onClick={() => startCall('video', otherUserId)}
                             className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2"
                           >
                             <span className="material-symbols-outlined text-sm">videocam</span>
-                            Join Session
+                            Video Call
                           </button>
                           <button
-                            onClick={() => navigate(`/quick-chat?user=${session.mentorId}`)}
+                            onClick={() => startCall('voice', otherUserId)}
+                            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2"
+                          >
+                            <span className="material-symbols-outlined text-sm">call</span>
+                            Voice Call
+                          </button>
+                          <button
+                            onClick={() => navigate(`/quick-chat?user=${otherUserId}`)}
                             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2"
                           >
                             <span className="material-symbols-outlined text-sm">chat</span>
@@ -341,6 +561,15 @@ const SessionHistory: React.FC = () => {
                           >
                             Cancel
                           </button>
+                          {/* Show delete button for mentors or session creators */}
+                          {isUserMentor && (
+                            <button
+                              onClick={() => handleDeleteSession(session.id)}
+                              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold hover:scale-105 transition-all"
+                            >
+                              Delete
+                            </button>
+                          )}
                         </>
                       ) : (
                         <>
@@ -376,6 +605,63 @@ const SessionHistory: React.FC = () => {
                       )}
                     </div>
                   </div>
+
+                  {/* Reschedule Modal */}
+                  {showReschedule === session.id && (
+                    <div className="mt-4 space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                            New Date
+                          </label>
+                          <input
+                            type="date"
+                            value={rescheduleDate}
+                            onChange={(e) => setRescheduleDate(e.target.value)}
+                            min={new Date().toISOString().split('T')[0]}
+                            className={`w-full p-3 rounded-xl font-medium outline-none ${
+                              isDark ? 'bg-slate-700 text-gray-300 border border-gray-600' : 'bg-gray-50 text-gray-700 border border-gray-200'
+                            }`}
+                          />
+                        </div>
+                        <div>
+                          <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                            New Time
+                          </label>
+                          <select
+                            value={rescheduleTime}
+                            onChange={(e) => setRescheduleTime(e.target.value)}
+                            className={`w-full p-3 rounded-xl font-medium outline-none ${
+                              isDark ? 'bg-slate-700 text-gray-300 border border-gray-600' : 'bg-gray-50 text-gray-700 border border-gray-200'
+                            }`}
+                          >
+                            <option value="">Select time</option>
+                            {['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'].map(time => (
+                              <option key={time} value={time}>{time}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleRescheduleSession(session.id)}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold"
+                        >
+                          Reschedule
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowReschedule(null);
+                            setRescheduleDate('');
+                            setRescheduleTime('');
+                          }}
+                          className={`px-4 py-2 rounded-xl font-bold ${isDark ? 'bg-slate-700 text-gray-300' : 'bg-gray-200 text-gray-700'}`}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Notes Display */}
                   {session.notes && showNotes !== session.id && (
@@ -451,6 +737,95 @@ const SessionHistory: React.FC = () => {
           )}
         </div>
       </div>
+      
+      {/* Call Modal */}
+      {showCallModal && callMentorId && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <div className={`w-full max-w-4xl h-3/4 rounded-2xl overflow-hidden ${isDark ? 'bg-slate-800' : 'bg-white'}`}>
+            <div className={`p-4 border-b flex items-center justify-between ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold overflow-hidden">
+                  {mentors[callMentorId]?.photoURL ? (
+                    <img src={mentors[callMentorId].photoURL} alt={mentors[callMentorId]?.displayName} className="w-full h-full object-cover" />
+                  ) : (
+                    (mentors[callMentorId]?.displayName || mentors[callMentorId]?.name || 'M')[0]
+                  )}
+                </div>
+                <div>
+                  <p className={`font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    {mentors[callMentorId]?.displayName || mentors[callMentorId]?.name || 'Mentor'}
+                  </p>
+                  <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                    {callType === 'video' ? 'Video Call' : 'Voice Call'} - Mentorship Session
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={endCall}
+                className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+              >
+                <span className="material-symbols-outlined">call_end</span>
+              </button>
+            </div>
+            
+            <div className="flex-1 p-4 h-full">
+              {callType === 'video' ? (
+                <div className="grid grid-cols-2 gap-4 h-full">
+                  <div className="relative bg-gray-900 rounded-xl overflow-hidden">
+                    <video
+                      ref={localVideoRef}
+                      autoPlay
+                      muted
+                      playsInline
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute bottom-4 left-4 text-white text-sm font-bold bg-black/50 px-2 py-1 rounded">
+                      You
+                    </div>
+                  </div>
+                  <div className="relative bg-gray-900 rounded-xl overflow-hidden">
+                    <video
+                      ref={remoteVideoRef}
+                      autoPlay
+                      playsInline
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute bottom-4 left-4 text-white text-sm font-bold bg-black/50 px-2 py-1 rounded">
+                      {mentors[callMentorId]?.displayName || mentors[callMentorId]?.name || 'Mentor'}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <div className="size-32 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-4xl font-bold mx-auto mb-4 overflow-hidden">
+                      {mentors[callMentorId]?.photoURL ? (
+                        <img src={mentors[callMentorId].photoURL} alt={mentors[callMentorId]?.displayName} className="w-full h-full object-cover" />
+                      ) : (
+                        (mentors[callMentorId]?.displayName || mentors[callMentorId]?.name || 'M')[0]
+                      )}
+                    </div>
+                    <p className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      {mentors[callMentorId]?.displayName || mentors[callMentorId]?.name || 'Mentor'}
+                    </p>
+                    <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Voice call in progress...</p>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className={`p-4 border-t flex justify-center gap-4 ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+              <button
+                onClick={endCall}
+                className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold flex items-center gap-2"
+              >
+                <span className="material-symbols-outlined">call_end</span>
+                End Call
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

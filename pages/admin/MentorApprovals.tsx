@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, doc, updateDoc, query, where, setDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, query, where, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../src/firebase';
 import { useAuth } from '../../App';
 
@@ -25,7 +25,21 @@ const MentorApprovals: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
-    loadApplications();
+    // Set up real-time listener for mentor applications
+    const unsubscribe = onSnapshot(
+      query(collection(db, 'mentorApplications'), where('status', '==', 'pending')),
+      (snapshot) => {
+        const appsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MentorApplication));
+        setApplications(appsData);
+      },
+      (error) => {
+        console.error('Error listening to mentor applications:', error);
+        // Fallback to manual loading
+        loadApplications();
+      }
+    );
+
+    return () => unsubscribe();
   }, []);
 
   const loadApplications = async () => {
@@ -44,10 +58,11 @@ const MentorApprovals: React.FC = () => {
     
     await updateDoc(doc(db, 'users', userId), {
       role: 'mentor',
-      mentorStatus: 'active',
+      mentorStatus: 'approved',
       isMentor: true,
       mentorApprovedBy: currentAdmin?.uid,
-      mentorApprovedAt: new Date()
+      mentorApprovedAt: new Date(),
+      updatedAt: new Date()
     });
     
     // Log admin action

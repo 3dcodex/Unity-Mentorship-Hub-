@@ -1,7 +1,13 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+if (!apiKey || apiKey === 'PLACEHOLDER_API_KEY') {
+  console.error('Gemini API key not configured. Please set VITE_GEMINI_API_KEY in your .env.local file');
+}
+
+const ai = new GoogleGenAI({ apiKey });
 
 export const getCareerAdvice = async (role: string, query: string) => {
   const response = await ai.models.generateContent({
@@ -68,20 +74,43 @@ export const generateProfessionalHeadshot = async (description: string) => {
 };
 
 export const generateInterviewQuestion = async (role: string, level: string) => {
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `You are a professional interviewer. Provide ONE challenging interview question for a ${level} level ${role} position. Format it as a JSON object with "question" and "hint" fields.`,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          question: { type: Type.STRING },
-          hint: { type: Type.STRING }
-        },
-        required: ["question", "hint"]
+  if (!apiKey || apiKey === 'PLACEHOLDER_API_KEY') {
+    // Return fallback question immediately
+    return {
+      question: `Tell me about a challenging project you worked on as a ${level} ${role}. What obstacles did you face and how did you overcome them?`,
+      hint: "Use the STAR method (Situation, Task, Action, Result) to structure your answer with specific examples."
+    };
+  }
+  
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: [{
+        parts: [{
+          text: `You are a professional interviewer. Provide ONE challenging interview question for a ${level} level ${role} position. Format it as a JSON object with "question" and "hint" fields.`
+        }]
+      }],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 500,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            question: { type: Type.STRING },
+            hint: { type: Type.STRING }
+          },
+          required: ["question", "hint"]
+        }
       }
-    }
-  });
-  return JSON.parse(response.text || '{}');
+    });
+    return JSON.parse(response.text || '{}');
+  } catch (error) {
+    console.error('Error generating interview question:', error);
+    // Return a fallback question
+    return {
+      question: `Tell me about a challenging project you worked on as a ${level} ${role}. What obstacles did you face and how did you overcome them?`,
+      hint: "Use the STAR method (Situation, Task, Action, Result) to structure your answer with specific examples."
+    };
+  }
 };

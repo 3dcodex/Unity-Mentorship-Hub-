@@ -8,4 +8,15 @@ dist
 .firebase
 .vercel
 
-.vercel
+# Build artifacts
+build/
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db

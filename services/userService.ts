@@ -29,16 +29,17 @@ export const createUserProfile = async (
   phone?: string,
   university?: string,
   isMentor?: boolean,
-  professionalData?: { companyName: string; jobTitle: string; industry: string; yearsExperience: number }
+  professionalData?: { companyName: string; jobTitle: string; industry?: string; yearsExperience?: number }
 ): Promise<void> => {
   const userRef = doc(db, 'users', uid);
   const existingUser = await getDoc(userRef);
 
   if (existingUser.exists()) {
-    return; // prevent overwrite
+    return;
   }
 
   const now = Timestamp.now();
+  const nameParts = name?.split(' ') || [];
 
   const userProfile: any = {
     uid,
@@ -48,20 +49,28 @@ export const createUserProfile = async (
     seekingTags,
     createdAt: now,
     updatedAt: now,
-    accountStatus: role === 'Professional' ? 'pending' : 'active',
-    ...(name && { name, displayName: name }),
-    ...(phone && { phone }),
-    ...(university && { university }),
-    ...(isMentor !== undefined && { isMentor }),
-    ...(professionalData && {
-      companyName: professionalData.companyName,
-      jobTitle: professionalData.jobTitle,
-      industry: professionalData.industry,
-      yearsExperience: professionalData.yearsExperience,
-      mentorExpertise: professionalData.industry,
-      mentorBio: `${professionalData.jobTitle} at ${professionalData.companyName} with ${professionalData.yearsExperience} years of experience.`
-    }),
+    accountStatus: 'active',
+    status: 'active',
   };
+
+  if (name) {
+    userProfile.name = name;
+    userProfile.displayName = name;
+    userProfile.firstName = nameParts[0] || '';
+    userProfile.lastName = nameParts.slice(1).join(' ') || '';
+  }
+
+  if (phone) userProfile.phone = phone;
+  if (university) userProfile.university = university;
+  if (isMentor !== undefined) userProfile.isMentor = isMentor;
+
+  if (professionalData) {
+    userProfile.companyName = professionalData.companyName;
+    userProfile.company = professionalData.companyName;
+    userProfile.jobTitle = professionalData.jobTitle;
+    if (professionalData.industry) userProfile.industry = professionalData.industry;
+    if (professionalData.yearsExperience !== undefined) userProfile.yearsExperience = professionalData.yearsExperience;
+  }
 
   await setDoc(userRef, userProfile);
 };

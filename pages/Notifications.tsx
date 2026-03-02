@@ -11,6 +11,7 @@ interface Notification {
   title: string;
   message: string;
   read: boolean;
+  deleted?: boolean;
   createdAt: any;
   actionUrl?: string;
   fromUser?: string;
@@ -39,6 +40,7 @@ const Notifications: React.FC = () => {
       const q = query(
         collection(db, 'notifications'),
         where('userId', '==', user.uid),
+        where('deleted', '!=', true),
         orderBy('createdAt', 'desc')
       );
       const snapshot = await getDocs(q);
@@ -51,7 +53,8 @@ const Notifications: React.FC = () => {
       try {
         const q = query(
           collection(db, 'notifications'),
-          where('userId', '==', user.uid)
+          where('userId', '==', user.uid),
+          where('deleted', '!=', true)
         );
         const snapshot = await getDocs(q);
         const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Notification[];
@@ -65,6 +68,25 @@ const Notifications: React.FC = () => {
         setNotifications(notifs);
       } catch (fallbackErr) {
         console.error('Fallback error:', fallbackErr);
+        // Final fallback - load all and filter manually
+        try {
+          const q = query(
+            collection(db, 'notifications'),
+            where('userId', '==', user.uid)
+          );
+          const snapshot = await getDocs(q);
+          const allNotifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Notification[];
+          const notifs = allNotifs.filter(n => !n.deleted);
+          notifs.sort((a, b) => {
+            const aTime = a.createdAt?.seconds || 0;
+            const bTime = b.createdAt?.seconds || 0;
+            return bTime - aTime;
+          });
+          console.log('Loaded notifications (final fallback):', notifs);
+          setNotifications(notifs);
+        } catch (finalErr) {
+          console.error('Final fallback error:', finalErr);
+        }
       }
     } finally {
       setLoading(false);
@@ -87,10 +109,29 @@ const Notifications: React.FC = () => {
       const unreadNotifs = notifications.filter(n => !n.read);
       await Promise.all(unreadNotifs.map(n => updateDoc(doc(db, 'notifications', n.id), { read: true })));
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-      // Trigger a storage event to update notification count in Layout
       window.dispatchEvent(new Event('notificationRead'));
     } catch (err) {
       console.error('Error marking all as read:', err);
+    }
+  };
+
+  const deleteNotification = async (notifId: string) => {
+    try {
+      await updateDoc(doc(db, 'notifications', notifId), { deleted: true });
+      setNotifications(prev => prev.filter(n => n.id !== notifId));
+      window.dispatchEvent(new Event('notificationRead'));
+    } catch (err) {
+      console.error('Error deleting notification:', err);
+    }
+  };
+
+  const clearAllNotifications = async () => {
+    try {
+      await Promise.all(notifications.map(n => updateDoc(doc(db, 'notifications', n.id), { deleted: true })));
+      setNotifications([]);
+      window.dispatchEvent(new Event('notificationRead'));
+    } catch (err) {
+      console.error('Error clearing notifications:', err);
     }
   };
 
@@ -160,12 +201,20 @@ const Notifications: React.FC = () => {
               </div>
             </div>
             {unreadCount > 0 && (
-              <button
-                onClick={markAllAsRead}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-all hover:scale-105"
-              >
-                Mark all as read
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={markAllAsRead}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-all hover:scale-105"
+                >
+                  Mark all as read
+                </button>
+                <button
+                  onClick={clearAllNotifications}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-sm transition-all hover:scale-105"
+                >
+                  Clear all
+                </button>
+              </div>
             )}
           </div>
 
@@ -211,8 +260,7 @@ const Notifications: React.FC = () => {
             filteredNotifications.map((notif) => (
               <div
                 key={notif.id}
-                onClick={() => handleNotificationClick(notif)}
-                className={`rounded-2xl p-6 shadow-lg backdrop-blur-sm border cursor-pointer transition-all hover:scale-[1.02] ${
+                className={`rounded-2xl p-6 shadow-lg backdrop-blur-sm border transition-all group ${
                   notif.read
                     ? isDark
                       ? 'bg-slate-800/50 border-gray-700/50'
@@ -223,49 +271,65 @@ const Notifications: React.FC = () => {
                 }`}
               >
                 <div className="flex items-start gap-4">
-                  <div className={`size-12 bg-gradient-to-br ${getNotificationColor(notif.type)} rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg`}>
-                    <span className="material-symbols-outlined text-white text-xl">{getNotificationIcon(notif.type)}</span>
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-4 mb-2">
-                      <h3 className={`font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>{notif.title}</h3>
-                      {!notif.read && (
-                        <span className="size-2 bg-blue-500 rounded-full flex-shrink-0 mt-2"></span>
-                      )}
-                    </div>
-                    <p className={`text-sm font-medium mb-3 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {notif.message}
-                    </p>
-                    
-                    {notif.fromUserName && (
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="size-6 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
-                          {notif.fromUserPhoto ? (
-                            <img src={notif.fromUserPhoto} alt={notif.fromUserName} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-xs font-bold text-gray-500">
-                              {notif.fromUserName[0]}
-                            </div>
+                  <div 
+                    onClick={() => handleNotificationClick(notif)}
+                    className="flex-1 cursor-pointer"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className={`size-12 bg-gradient-to-br ${getNotificationColor(notif.type)} rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg`}>
+                        <span className="material-symbols-outlined text-white text-xl">{getNotificationIcon(notif.type)}</span>
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-4 mb-2">
+                          <h3 className={`font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>{notif.title}</h3>
+                          {!notif.read && (
+                            <span className="size-2 bg-blue-500 rounded-full flex-shrink-0 mt-2"></span>
                           )}
                         </div>
-                        <span className={`text-xs font-bold ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                          {notif.fromUserName}
-                        </span>
+                        <p className={`text-sm font-medium mb-3 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                          {notif.message}
+                        </p>
+                        
+                        {notif.fromUserName && (
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="size-6 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
+                              {notif.fromUserPhoto ? (
+                                <img src={notif.fromUserPhoto} alt={notif.fromUserName} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-xs font-bold text-gray-500">
+                                  {notif.fromUserName[0]}
+                                </div>
+                              )}
+                            </div>
+                            <span className={`text-xs font-bold ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                              {notif.fromUserName}
+                            </span>
+                          </div>
+                        )}
+                        
+                        <div className="flex items-center justify-between">
+                          <span className={`text-xs font-bold ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                            {notif.createdAt?.toDate?.().toLocaleString() || 'Just now'}
+                          </span>
+                          {notif.actionUrl && (
+                            <span className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                              View <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    )}
-                    
-                    <div className="flex items-center justify-between">
-                      <span className={`text-xs font-bold ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                        {notif.createdAt?.toDate?.().toLocaleString() || 'Just now'}
-                      </span>
-                      {notif.actionUrl && (
-                        <span className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                          View <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                        </span>
-                      )}
                     </div>
                   </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteNotification(notif.id);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+                  >
+                    <span className="material-symbols-outlined text-lg">delete</span>
+                  </button>
                 </div>
               </div>
             ))

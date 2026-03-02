@@ -2,8 +2,8 @@ export enum Role {
   SUPER_ADMIN = 'super_admin',
   ADMIN = 'admin',
   MODERATOR = 'moderator',
-  PROFESSIONAL = 'Professional',
-  STUDENT = 'Student'
+  PROFESSIONAL = 'professional',
+  STUDENT = 'student'
 }
 
 export const ROLE_HIERARCHY: Record<Role, number> = {

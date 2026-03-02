@@ -75,13 +75,26 @@ const ProfileView: React.FC = () => {
     if (!user || !userId) return;
     try {
       const chatRoomId = [user.uid, userId].sort().join('_');
-      await setDoc(doc(db, 'chatRooms', chatRoomId), {
+      
+      // Create connection first
+      await setDoc(doc(db, 'connections', chatRoomId), {
         participants: [user.uid, userId],
         createdBy: user.uid,
         createdAt: new Date(),
         lastMessage: null,
+        lastMessageTime: null,
         type: 'mentorship'
       }, { merge: true });
+      
+      // Create conversation
+      await setDoc(doc(db, 'conversations', chatRoomId), {
+        participants: [user.uid, userId],
+        createdAt: new Date(),
+        lastMessage: '',
+        lastMessageTime: null,
+        isActive: true
+      }, { merge: true });
+      
       navigate(`/quick-chat?room=${chatRoomId}`);
     } catch (error) {
       console.error('Error creating chat room:', error);
@@ -139,8 +152,15 @@ const ProfileView: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 py-8 px-4">
-      <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950 py-8 px-4 relative overflow-hidden">
+      {/* Modern Background Elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-blue-400/20 to-purple-600/20 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-br from-indigo-400/20 to-pink-600/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-gradient-to-br from-purple-400/10 to-blue-600/10 rounded-full blur-3xl animate-pulse delay-500"></div>
+      </div>
+      
+      <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 relative z-10">
         {/* Back Button */}
         <button
           onClick={() => navigate(-1)}
@@ -150,109 +170,147 @@ const ProfileView: React.FC = () => {
           Back
         </button>
 
-        {/* Header Card */}
-        <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
-          {/* Cover Image */}
-          <div className="h-32 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"></div>
+        {/* Modern Header Card */}
+        <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-3xl rounded-3xl shadow-2xl border border-white/30 dark:border-slate-700/30 overflow-hidden">
+          {/* Dynamic Cover with Mesh Gradient */}
+          <div className="h-56 bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 relative overflow-hidden">
+            <div className="absolute inset-0 opacity-30" style={{backgroundImage: "url('data:image/svg+xml,%3Csvg width=\"60\" height=\"60\" viewBox=\"0 0 60 60\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cg fill=\"none\" fill-rule=\"evenodd\"%3E%3Cg fill=\"%23ffffff\" fill-opacity=\"0.1\"%3E%3Ccircle cx=\"30\" cy=\"30\" r=\"2\"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')"}}></div>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+          </div>
           
-          {/* Profile Info */}
+          {/* Enhanced Profile Info */}
           <div className="px-8 pb-8">
-            <div className="flex flex-col md:flex-row gap-6 items-start md:items-end -mt-16">
-              {/* Profile Photo */}
-              <div className="relative">
+            <div className="flex flex-col lg:flex-row gap-8 items-start lg:items-end -mt-24">
+              {/* Enhanced Profile Photo */}
+              <div className="relative group">
                 {photoURL ? (
-                  <img
-                    src={photoURL}
-                    alt={displayName}
-                    className="size-32 rounded-2xl object-cover border-4 border-white dark:border-slate-800 shadow-xl"
-                  />
+                  <div className="relative">
+                    <img
+                      src={photoURL}
+                      alt={displayName}
+                      className="size-48 rounded-3xl object-cover border-4 border-white dark:border-slate-900 shadow-2xl group-hover:scale-105 transition-transform duration-300"
+                    />
+                    <div className="absolute inset-0 rounded-3xl bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                  </div>
                 ) : (
-                  <div className="size-32 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-500 border-4 border-white dark:border-slate-800 shadow-xl flex items-center justify-center">
-                    <span className="text-5xl font-black text-white">
+                  <div className="size-48 rounded-3xl bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-600 border-4 border-white dark:border-slate-900 shadow-2xl flex items-center justify-center group-hover:scale-105 transition-transform duration-300 relative overflow-hidden">
+                    <div className="absolute inset-0 opacity-20" style={{backgroundImage: "url('data:image/svg+xml,%3Csvg width=\"40\" height=\"40\" viewBox=\"0 0 40 40\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cg fill=\"%23ffffff\" fill-opacity=\"0.1\"%3E%3Cpath d=\"M20 20c0-5.5-4.5-10-10-10s-10 4.5-10 10 4.5 10 10 10 10-4.5 10-10zm10 0c0-5.5-4.5-10-10-10s-10 4.5-10 10 4.5 10 10 10 10-4.5 10-10z\"/%3E%3C/g%3E%3C/svg%3E')"}}></div>
+                    <span className="text-7xl font-black text-white relative z-10">
                       {displayName.charAt(0).toUpperCase()}
                     </span>
                   </div>
                 )}
                 {profile.isMentor && (
-                  <div className="absolute -bottom-2 -right-2 bg-gradient-to-r from-yellow-400 to-orange-400 size-10 rounded-full flex items-center justify-center border-4 border-white dark:border-slate-800 shadow-lg">
-                    <span className="material-symbols-outlined text-white text-lg">workspace_premium</span>
+                  <div className="absolute -bottom-4 -right-4 bg-gradient-to-r from-yellow-400 to-orange-500 size-16 rounded-2xl flex items-center justify-center border-4 border-white dark:border-slate-900 shadow-xl animate-bounce">
+                    <span className="material-symbols-outlined text-white text-2xl">workspace_premium</span>
                   </div>
                 )}
               </div>
 
-              {/* Name and Role */}
-              <div className="flex-1 space-y-2">
-                <div className="flex items-center gap-3 flex-wrap">
-                  <h1 className="text-3xl font-black text-gray-900 dark:text-white">{displayName}</h1>
+              {/* Enhanced Name and Role */}
+              <div className="flex-1 space-y-4">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <h1 className="text-5xl font-black bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">{displayName}</h1>
                   {profile.isMentor && (
-                    <span className="px-3 py-1 bg-gradient-to-r from-yellow-400 to-orange-400 text-white text-xs font-black rounded-full uppercase tracking-wider">
-                      Mentor
-                    </span>
+                    <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-sm font-black rounded-full uppercase tracking-wider shadow-lg animate-pulse">
+                      <span className="material-symbols-outlined text-lg">star</span>
+                      Verified Mentor
+                    </div>
                   )}
                 </div>
-                <div className="flex items-center gap-4 flex-wrap text-sm">
+                <div className="flex items-center gap-6 flex-wrap text-sm">
                   {profile.role && (
-                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full font-bold">
                       <span className="material-symbols-outlined text-lg">school</span>
-                      <span className="font-bold">{profile.role}</span>
+                      <span>{profile.role}</span>
                     </div>
                   )}
                   {profile.university && (
-                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 rounded-full font-bold">
                       <span className="material-symbols-outlined text-lg">location_on</span>
-                      <span className="font-bold">{profile.university}</span>
+                      <span>{profile.university}</span>
+                    </div>
+                  )}
+                  {profile.location && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-full font-bold">
+                      <span className="material-symbols-outlined text-lg">place</span>
+                      <span>{profile.location}</span>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Action Buttons */}
+              {/* Enhanced Action Buttons */}
               {!isOwnProfile && (
                 <div className="flex flex-wrap gap-3">
                   <button
-                    onClick={() => navigate(`/quick-chat?user=${userId}`)}
-                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2"
+                    onClick={() => {
+                      if (!user || !userId) return;
+                      const chatRoomId = [user.uid, userId].sort().join('_');
+                      // Create connection and navigate
+                      setDoc(doc(db, 'connections', chatRoomId), {
+                        participants: [user.uid, userId],
+                        createdBy: user.uid,
+                        createdAt: new Date(),
+                        lastMessage: null,
+                        lastMessageTime: null
+                      }, { merge: true }).then(() => {
+                        navigate(`/quick-chat`);
+                      }).catch(err => {
+                        console.error('Error creating connection:', err);
+                        navigate(`/quick-chat`);
+                      });
+                    }}
+                    className="group px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center gap-2"
                   >
-                    <span className="material-symbols-outlined text-lg">chat</span>
+                    <span className="material-symbols-outlined group-hover:animate-pulse">chat</span>
                     Message
                   </button>
                   {(isMentorOrAdmin || profile.isMentor) && (
                     <>
                       <button
                         onClick={handleCreateChatRoom}
-                        className="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2"
+                        className="group px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-2xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2"
                       >
-                        <span className="material-symbols-outlined text-lg">group_add</span>
+                        <span className="material-symbols-outlined text-lg group-hover:animate-bounce">group_add</span>
                         Chat Room
                       </button>
                       <button
                         onClick={handleScheduleSession}
-                        className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2"
+                        className="group px-5 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-2xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2"
                       >
-                        <span className="material-symbols-outlined text-lg">calendar_month</span>
+                        <span className="material-symbols-outlined text-lg group-hover:animate-pulse">calendar_month</span>
                         Schedule
                       </button>
-                      <button
-                        onClick={() => setShowComplaintModal(true)}
-                        className="px-4 py-2 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2"
-                      >
-                        <span className="material-symbols-outlined text-lg">report</span>
-                        Complain
-                      </button>
-                      <button
-                        onClick={() => setShowBlockModal(true)}
-                        className={`px-4 py-2 ${isBlocked ? 'bg-gray-600 hover:bg-gray-700' : 'bg-red-600 hover:bg-red-700'} text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2`}
-                      >
-                        <span className="material-symbols-outlined text-lg">{isBlocked ? 'check_circle' : 'block'}</span>
-                        {isBlocked ? 'Unblock' : 'Block'}
-                      </button>
-                      <button
-                        onClick={handleRequestBilling}
-                        className="px-4 py-2 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2"
-                      >
-                        <span className="material-symbols-outlined text-lg">payments</span>
-                        Billing
-                      </button>
+                      {/* More Actions Dropdown */}
+                      <div className="relative group">
+                        <button className="px-4 py-3 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 rounded-2xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2">
+                          <span className="material-symbols-outlined">more_horiz</span>
+                        </button>
+                        <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                          <button
+                            onClick={() => setShowComplaintModal(true)}
+                            className="w-full px-4 py-3 text-left text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-t-2xl flex items-center gap-2 font-bold"
+                          >
+                            <span className="material-symbols-outlined text-lg">report</span>
+                            Report Issue
+                          </button>
+                          <button
+                            onClick={() => setShowBlockModal(true)}
+                            className={`w-full px-4 py-3 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 font-bold ${isBlocked ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+                          >
+                            <span className="material-symbols-outlined text-lg">{isBlocked ? 'check_circle' : 'block'}</span>
+                            {isBlocked ? 'Unblock User' : 'Block User'}
+                          </button>
+                          <button
+                            onClick={handleRequestBilling}
+                            className="w-full px-4 py-3 text-left text-yellow-600 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 rounded-b-2xl flex items-center gap-2 font-bold"
+                          >
+                            <span className="material-symbols-outlined text-lg">payments</span>
+                            Billing
+                          </button>
+                        </div>
+                      </div>
                     </>
                   )}
                 </div>
@@ -261,13 +319,15 @@ const ProfileView: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          {/* Left Column */}
-          <div className="space-y-6">
-            {/* About */}
-            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 space-y-4">
-              <h2 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
-                <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">info</span>
+        <div className="grid lg:grid-cols-4 gap-8">
+          {/* Left Sidebar - Enhanced */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* About Card - Enhanced */}
+            <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl p-6 shadow-lg border border-white/30 dark:border-slate-700/30 space-y-4">
+              <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-3">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
+                  <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">info</span>
+                </div>
                 About
               </h2>
               {profile.mentorBio || profile.bio || profile.professionalBio ? (
@@ -279,10 +339,12 @@ const ProfileView: React.FC = () => {
               )}
             </div>
 
-            {/* Contact Info */}
-            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 space-y-4">
-              <h2 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
-                <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">contact_mail</span>
+            {/* Contact Info - Enhanced */}
+            <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl p-6 shadow-lg border border-white/30 dark:border-slate-700/30 space-y-4">
+              <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-3">
+                <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-xl">
+                  <span className="material-symbols-outlined text-green-600 dark:text-green-400">contact_mail</span>
+                </div>
                 Contact
               </h2>
               <div className="space-y-3">
@@ -338,11 +400,13 @@ const ProfileView: React.FC = () => {
               </div>
             </div>
 
-            {/* Skills/Expertise */}
+            {/* Skills/Expertise - Enhanced */}
             {(profile.skills || profile.mentorExpertise || profile.expertise) && (
-              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 space-y-4">
-                <h2 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
-                  <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">stars</span>
+              <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl p-6 shadow-lg border border-white/30 dark:border-slate-700/30 space-y-4">
+                <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-3">
+                  <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-xl">
+                    <span className="material-symbols-outlined text-purple-600 dark:text-purple-400">stars</span>
+                  </div>
                   Skills & Expertise
                 </h2>
                 <div className="flex flex-wrap gap-2">
@@ -360,7 +424,7 @@ const ProfileView: React.FC = () => {
 
             {/* Interests */}
             {profile.interests && (
-              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 space-y-4">
+              <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl p-6 shadow-lg border border-white/20 dark:border-slate-700/50 space-y-4">
                 <h2 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
                   <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">favorite</span>
                   Interests
@@ -398,11 +462,11 @@ const ProfileView: React.FC = () => {
             )}
           </div>
 
-          {/* Right Column */}
-          <div className="md:col-span-2 space-y-6">
+          {/* Main Content - Enhanced */}
+          <div className="lg:col-span-3 space-y-6">
             {/* Academic Info */}
             {(profile.university || profile.major || profile.yearOfStudy) && (
-              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 space-y-4">
+              <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl p-6 shadow-lg border border-white/20 dark:border-slate-700/50 space-y-4">
                 <h2 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
                   <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">school</span>
                   Academic Information
@@ -491,7 +555,7 @@ const ProfileView: React.FC = () => {
 
             {/* Mentorship Info */}
             {profile.isMentor && (
-              <div className="bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 rounded-2xl p-6 shadow-lg border border-yellow-100 dark:border-yellow-800 space-y-4">
+              <div className="bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 backdrop-blur-xl rounded-2xl p-6 shadow-lg border border-yellow-200/50 dark:border-yellow-800/50 space-y-4">
                 <h2 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
                   <span className="material-symbols-outlined text-yellow-600 dark:text-yellow-400">diversity_3</span>
                   Mentorship

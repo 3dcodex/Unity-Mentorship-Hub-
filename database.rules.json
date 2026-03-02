@@ -1,6 +1,6 @@
 {
   "rules": {
-    "status": {
+    "presence": {
       "$uid": {
         ".read": true,
         ".write": "$uid === auth.uid"

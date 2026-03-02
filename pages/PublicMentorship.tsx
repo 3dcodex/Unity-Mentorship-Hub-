@@ -12,7 +12,7 @@ const PublicMentorship: React.FC = () => {
       id: 'cultural',
       title: 'Cultural Mentorship Track',
       icon: 'diversity_1',
-      color: 'from-purple-50 to-blue-50',
+      color: 'from-purple-100 to-blue-100 dark:from-purple-900/30 dark:to-blue-900/30',
       description: 'Connect with mentors who understand your cultural background and identity. Discuss navigating university as a student from underrepresented communities.',
       benefits: [
         'Mentors from similar cultural backgrounds',
@@ -26,7 +26,7 @@ const PublicMentorship: React.FC = () => {
       id: 'professional',
       title: 'Professional Mentorship Track',
       icon: 'work',
-      color: 'from-blue-50 to-cyan-50',
+      color: 'from-blue-100 to-cyan-100 dark:from-blue-900/30 dark:to-cyan-900/30',
       description: 'Receive guidance from industry professionals and career mentors. Get insights into career paths, resume reviews, and interview preparation.',
       benefits: [
         'Industry professionals as mentors',
@@ -40,7 +40,7 @@ const PublicMentorship: React.FC = () => {
       id: 'peer',
       title: 'Peer Mentorship Track',
       icon: 'people',
-      color: 'from-green-50 to-emerald-50',
+      color: 'from-green-100 to-emerald-100 dark:from-green-900/30 dark:to-emerald-900/30',
       description: 'Connect with successful peers who have navigated similar challenges. Share experiences, study strategies, and student life tips.',
       benefits: [
         'Mentors who recently succeeded in your program',
@@ -54,7 +54,7 @@ const PublicMentorship: React.FC = () => {
       id: 'dei',
       title: 'DEI Mentorship Track',
       icon: 'favorite',
-      color: 'from-pink-50 to-rose-50',
+      color: 'from-pink-100 to-rose-100 dark:from-pink-900/30 dark:to-rose-900/30',
       description: 'Access specialized mentorship focused on diversity, equity, and inclusion initiatives. Support for underrepresented students.',
       benefits: [
         'Mentors committed to DEI values',
@@ -67,24 +67,27 @@ const PublicMentorship: React.FC = () => {
   ];
 
   return (
-    <div className="flex flex-col min-h-screen bg-white font-sans text-gray-900">
+    <div className="flex flex-col min-h-screen bg-white dark:bg-slate-900">
       <PublicHeader />
       <main className="flex-1">
 
       {/* Hero Section */}
-      <section className="py-12 sm:py-16 md:py-24 px-4 sm:px-6 bg-gradient-to-b from-primary/5 to-secondary/5">
-        <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
+      <section className="py-16 px-6 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-slate-900 dark:via-purple-950 dark:to-slate-900">
+        <div className="max-w-7xl mx-auto space-y-6">
+          <div className="inline-flex px-5 py-2 rounded-full bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border border-gray-200 dark:border-gray-700 shadow-lg">
+            <span className="text-sm font-black bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">Mentorship</span>
+          </div>
           <div className="space-y-4">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black leading-tight">
+            <h1 className="text-4xl md:text-6xl font-black leading-tight bg-gradient-to-r from-gray-900 via-purple-900 to-gray-900 dark:from-white dark:via-purple-200 dark:to-white bg-clip-text text-transparent">
               Find Your Mentor
             </h1>
-            <p className="text-base sm:text-lg text-gray-600 max-w-2xl leading-relaxed">
+            <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl leading-relaxed">
               Connect with experienced mentors who understand your journey. Whether you're looking for career guidance, cultural support, or academic help, we have the right mentor for you.
             </p>
           </div>
           <button
             onClick={() => navigate('/signup')}
-            className="inline-flex items-center gap-2 px-6 sm:px-8 py-3 sm:py-4 bg-primary text-white font-black rounded-xl sm:rounded-2xl shadow-lg shadow-primary/20 hover:scale-105 transition-all text-sm sm:text-base"
+            className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white font-black rounded-2xl shadow-xl hover:scale-105 transition-all"
           >
             Get Started Now
             <span className="material-symbols-outlined">arrow_forward</span>
@@ -96,8 +99,8 @@ const PublicMentorship: React.FC = () => {
       <section className="py-12 sm:py-16 md:py-24 px-4 sm:px-6">
         <div className="max-w-7xl mx-auto space-y-12">
           <div className="text-center space-y-2">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black">How It Works</h2>
-            <p className="text-gray-600 text-sm sm:text-base">Get matched with the perfect mentor in 3 easy steps</p>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 dark:text-white">How It Works</h2>
+            <p className="text-gray-600 dark:text-gray-400 text-sm sm:text-base">Get matched with the perfect mentor in 3 easy steps</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
@@ -120,15 +123,15 @@ const PublicMentorship: React.FC = () => {
             ].map((item, idx) => (
               <div key={idx} className="relative group">
                 <div className="absolute -inset-0.5 bg-gradient-to-r from-primary to-secondary rounded-2xl opacity-0 group-hover:opacity-10 transition-opacity blur"></div>
-                <div className="relative bg-white p-8 rounded-2xl border border-gray-200 space-y-4">
-                  <div className="inline-flex items-center justify-center size-12 bg-primary text-white rounded-xl font-black text-lg">
+                <div className="relative bg-white dark:bg-slate-800 p-8 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-4">
+                  <div className="inline-flex items-center justify-center size-12 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white rounded-xl font-black text-lg">
                     {item.step}
                   </div>
-                  <h3 className="text-lg font-black">{item.title}</h3>
-                  <p className="text-sm text-gray-600 leading-relaxed">{item.desc}</p>
+                  <h3 className="text-lg font-black text-gray-900 dark:text-white">{item.title}</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{item.desc}</p>
                 </div>
                 {idx < 2 && (
-                  <div className="hidden md:flex absolute -right-4 top-1/2 transform -translate-y-1/2 size-8 items-center justify-center bg-white border-2 border-gray-200 rounded-full text-gray-400">
+                  <div className="hidden md:flex absolute -right-4 top-1/2 transform -translate-y-1/2 size-8 items-center justify-center bg-white dark:bg-slate-800 border-2 border-gray-200 dark:border-gray-700 rounded-full text-gray-400 dark:text-gray-500">
                     <span className="material-symbols-outlined">arrow_forward</span>
                   </div>
                 )}
@@ -139,11 +142,11 @@ const PublicMentorship: React.FC = () => {
       </section>
 
       {/* Mentorship Tracks */}
-      <section className="py-12 sm:py-16 md:py-24 px-4 sm:px-6 bg-gray-50/50">
+      <section className="py-12 sm:py-16 md:py-24 px-4 sm:px-6 bg-gray-50 dark:bg-slate-800">
         <div className="max-w-7xl mx-auto space-y-12">
           <div className="text-center space-y-2">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black">Mentorship Tracks</h2>
-            <p className="text-gray-600 text-sm sm:text-base">Choose the mentorship experience that matches your needs</p>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 dark:text-white">Mentorship Tracks</h2>
+            <p className="text-gray-600 dark:text-gray-400 text-sm sm:text-base">Choose the mentorship experience that matches your needs</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
@@ -153,25 +156,25 @@ const PublicMentorship: React.FC = () => {
                 onClick={() => setSelectedTrack(selectedTrack === track.id ? null : track.id)}
                 className="group cursor-pointer"
               >
-                <div className={`bg-gradient-to-br ${track.color} p-6 sm:p-8 rounded-2xl sm:rounded-3xl border border-gray-200 space-y-4 transition-all hover:shadow-xl h-full`}>
+                <div className={`bg-gradient-to-br ${track.color} p-6 sm:p-8 rounded-2xl sm:rounded-3xl border border-gray-200 dark:border-gray-700 space-y-4 transition-all hover:shadow-xl h-full`}>
                   <div className="flex items-start justify-between">
                     <div className="space-y-3 flex-1">
                       <div className="flex items-center gap-3">
-                        <div className="size-10 sm:size-12 bg-white rounded-xl flex items-center justify-center text-primary font-black">
-                          <span className="material-symbols-outlined text-lg sm:text-xl">{track.icon}</span>
+                        <div className="size-10 sm:size-12 bg-white dark:bg-slate-900 rounded-xl flex items-center justify-center font-black">
+                          <span className="material-symbols-outlined text-lg sm:text-xl bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">{track.icon}</span>
                         </div>
-                        <h3 className="text-lg sm:text-xl font-black">{track.title}</h3>
+                        <h3 className="text-lg sm:text-xl font-black text-gray-900 dark:text-white">{track.title}</h3>
                       </div>
-                      <p className="text-sm text-gray-700 leading-relaxed">{track.description}</p>
+                      <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{track.description}</p>
                     </div>
                   </div>
 
                   {selectedTrack === track.id && (
-                    <div className="pt-6 border-t border-white/30 space-y-4 animate-in fade-in duration-300">
-                      <h4 className="font-black text-sm">Key Benefits:</h4>
+                    <div className="pt-6 border-t border-gray-200 dark:border-gray-700 space-y-4 animate-in fade-in duration-300">
+                      <h4 className="font-black text-sm text-gray-900 dark:text-white">Key Benefits:</h4>
                       <ul className="space-y-2">
                         {track.benefits.map((benefit, idx) => (
-                          <li key={idx} className="flex items-start gap-2 text-sm">
+                          <li key={idx} className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
                             <span className="material-symbols-outlined text-primary text-base flex-shrink-0 mt-0.5">check_circle</span>
                             <span>{benefit}</span>
                           </li>
@@ -182,7 +185,7 @@ const PublicMentorship: React.FC = () => {
                           e.stopPropagation();
                           navigate(`/mentorship/tracks/${track.id}`);
                         }}
-                        className="w-full mt-4 py-3 bg-primary text-white font-black rounded-lg hover:scale-105 transition-all text-sm"
+                        className="w-full mt-4 py-3 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white font-black rounded-lg hover:scale-105 transition-all text-sm"
                       >
                         Learn More
                       </button>
@@ -200,7 +203,7 @@ const PublicMentorship: React.FC = () => {
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
             <div className="space-y-6">
-              <h2 className="text-2xl sm:text-3xl md:text-4xl font-black">Why Join UnityMentor?</h2>
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 dark:text-white">Why Join UnityMentor?</h2>
               <div className="space-y-4">
                 {[
                   'Personalized matching based on your goals',
@@ -214,7 +217,7 @@ const PublicMentorship: React.FC = () => {
                     <div className="size-6 flex-shrink-0 bg-primary/10 rounded-full flex items-center justify-center mt-1">
                       <span className="material-symbols-outlined text-xs text-primary">check</span>
                     </div>
-                    <span className="text-sm sm:text-base text-gray-700 font-medium">{item}</span>
+                    <span className="text-sm sm:text-base text-gray-700 dark:text-gray-300 font-medium">{item}</span>
                   </div>
                 ))}
               </div>
@@ -231,22 +234,22 @@ const PublicMentorship: React.FC = () => {
       </section>
 
       {/* CTA Section */}
-      <section className="py-12 sm:py-16 md:py-24 px-4 sm:px-6 bg-gradient-to-r from-primary/10 to-secondary/10">
+      <section className="py-12 sm:py-16 md:py-24 px-4 sm:px-6 bg-gray-50 dark:bg-slate-800">
         <div className="max-w-4xl mx-auto text-center space-y-6">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-black">Ready to Find Your Mentor?</h2>
-          <p className="text-gray-600 text-sm sm:text-base max-w-2xl mx-auto">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 dark:text-white">Ready to Find Your Mentor?</h2>
+          <p className="text-gray-600 dark:text-gray-300 text-sm sm:text-base max-w-2xl mx-auto">
             Join thousands of students who have transformed their university experience through meaningful mentorship connections.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center">
             <button
               onClick={() => navigate('/signup')}
-              className="px-6 sm:px-8 py-3 sm:py-4 bg-primary text-white font-black rounded-lg sm:rounded-xl hover:scale-105 transition-all text-sm sm:text-base"
+              className="px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white font-black rounded-lg sm:rounded-xl hover:scale-105 transition-all text-sm sm:text-base"
             >
               Get Started
             </button>
             <button
               onClick={() => navigate('/about')}
-              className="px-6 sm:px-8 py-3 sm:py-4 border-2 border-primary text-primary font-black rounded-lg sm:rounded-xl hover:bg-primary/5 transition-all text-sm sm:text-base"
+              className="px-6 sm:px-8 py-3 sm:py-4 border-2 border-purple-600 dark:border-purple-400 text-purple-600 dark:text-purple-400 font-black rounded-lg sm:rounded-xl hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all text-sm sm:text-base"
             >
               Learn More
             </button>

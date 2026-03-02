@@ -42,7 +42,18 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     // Refresh photo every 5 seconds to catch updates
     const interval = setInterval(loadUserPhoto, 5000);
     
-    return () => clearInterval(interval);
+    // Listen for profile photo update events
+    const handlePhotoUpdate = (event: any) => {
+      if (event.detail?.photoURL) {
+        setUserPhoto(event.detail.photoURL);
+      }
+    };
+    window.addEventListener('profilePhotoUpdated', handlePhotoUpdate);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('profilePhotoUpdated', handlePhotoUpdate);
+    };
   }, [user]);
 
   // Load notification count
@@ -98,7 +109,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       localStorage.removeItem('unity_user_name');
       localStorage.removeItem('unity_user_role');
       setDropdownOpen(false);
-      navigate('/login');
+      window.location.href = '/';
     } catch (err) {
       console.error('Logout failed:', err);
     }
@@ -205,7 +216,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="mb-8 sm:mb-10">
             <h3 className="text-[9px] sm:text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-3 sm:mb-4 px-2 sm:px-3">Student Hub</h3>
             <div className="space-y-1">
-              <SidebarItem to="/dashboard" icon="grid_view" label="Dashboard Home" />
+              <SidebarItem to="/dashboard" icon="grid_view" label="Dashboard" />
               <SidebarItem to="/quick-chat" icon="chat" label="Quick Chat" />
               <SidebarItem to="/mentorship/history" icon="calendar_today" label="My Sessions" />
               <SidebarItem to="/mentorship/book" icon="person_search" label="Book a Mentor" />

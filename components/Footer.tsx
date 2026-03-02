@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import { useLanguage } from '../contexts/LanguageContext';
 import { db } from '../src/firebase';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
 
@@ -10,7 +9,6 @@ interface FooterProps {
 }
 
 const Footer: React.FC<FooterProps> = ({ variant = 'full' }) => {
-  const currentYear = new Date().getFullYear();
   const { isDark, toggleTheme } = useTheme();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -30,11 +28,10 @@ const Footer: React.FC<FooterProps> = ({ variant = 'full' }) => {
         status: 'active'
       });
       
-      setMessage('Successfully subscribed!');
+      setMessage('✓ Subscribed!');
       setEmail('');
     } catch (error) {
-      console.error('Subscription error:', error);
-      setMessage('Failed to subscribe. Please try again.');
+      setMessage('Failed. Try again.');
     } finally {
       setLoading(false);
       setTimeout(() => setMessage(''), 3000);
@@ -43,26 +40,24 @@ const Footer: React.FC<FooterProps> = ({ variant = 'full' }) => {
 
   if (variant === 'simple') {
     return (
-      <footer className="py-8 sm:py-12 md:py-16 px-4 sm:px-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 sm:gap-6">
-          <div className="flex items-center gap-2">
-            <div className="bg-primary p-1.5 rounded-lg text-white">
-              <span className="material-symbols-outlined text-lg font-black">diversity_1</span>
-            </div>
-            <span className="text-base sm:text-lg font-black tracking-tight text-gray-900 dark:text-white">UnityMentor Hub</span>
+      <footer className="py-12 px-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-900">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-6">
+          <div className="flex items-center gap-2.5">
+            <img src="/logo.png" alt="Unity" className="size-10 rounded-xl object-contain" />
+            <span className="text-lg font-black bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">UNITY</span>
           </div>
-          <p className="text-[10px] sm:text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest text-center">
-            © {currentYear} UnityMentor Hub. Empowering student success everywhere.
+          <p className="text-xs font-bold text-gray-500 dark:text-gray-400 text-center">
+            © 2024 Unity Mentorship Hub. All rights reserved.
           </p>
-          <div className="flex gap-4 sm:gap-6 text-gray-400 dark:text-gray-500">
-            <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors" title="Twitter">
-              <span className="material-symbols-outlined">share</span>
+          <div className="flex gap-4">
+            <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="size-9 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center hover:bg-gradient-to-br hover:from-blue-600 hover:to-purple-600 hover:text-white transition-all">
+              <span className="material-symbols-outlined text-lg">share</span>
             </a>
-            <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors" title="LinkedIn">
-              <span className="material-symbols-outlined">work</span>
+            <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="size-9 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center hover:bg-gradient-to-br hover:from-blue-600 hover:to-purple-600 hover:text-white transition-all">
+              <span className="material-symbols-outlined text-lg">work</span>
             </a>
-            <a href="mailto:support@unityhub.com" className="hover:text-primary transition-colors" title="Email">
-              <span className="material-symbols-outlined">alternate_email</span>
+            <a href="mailto:support@unityhub.com" className="size-9 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center hover:bg-gradient-to-br hover:from-blue-600 hover:to-purple-600 hover:text-white transition-all">
+              <span className="material-symbols-outlined text-lg">mail</span>
             </a>
           </div>
         </div>
@@ -71,163 +66,125 @@ const Footer: React.FC<FooterProps> = ({ variant = 'full' }) => {
   }
 
   return (
-    <footer className="py-12 sm:py-16 md:py-20 px-4 sm:px-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50">
-      <div className="max-w-7xl mx-auto space-y-12 sm:space-y-16">
-        {/* Main Footer Content */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8 sm:gap-10">
-          {/* Brand */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="bg-primary p-1.5 rounded-lg text-white">
-                <span className="material-symbols-outlined text-lg font-black">diversity_1</span>
-              </div>
-              <span className="text-base sm:text-lg font-black tracking-tight text-gray-900 dark:text-white">UnityMentor Hub</span>
-            </div>
-            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-              Empowering students to reach their full potential through mentorship, resources, and community support.
-            </p>
-            <div className="flex gap-3 text-gray-400 dark:text-gray-500 pt-2">
-              <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors" title="Twitter">
-                <span className="material-symbols-outlined text-lg">share</span>
-              </a>
-              <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors" title="LinkedIn">
-                <span className="material-symbols-outlined text-lg">work</span>
-              </a>
-              <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors" title="Instagram">
-                <span className="material-symbols-outlined text-lg">image</span>
-              </a>
-              <a href="mailto:support@unityhub.com" className="hover:text-primary transition-colors" title="Email">
-                <span className="material-symbols-outlined text-lg">alternate_email</span>
-              </a>
-            </div>
+    <footer className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-900 dark:to-slate-800 border-t border-gray-200 dark:border-gray-700">
+      {/* Newsletter Section */}
+      <div className="py-12 sm:py-16 px-4 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600">
+        <div className="max-w-4xl mx-auto text-center space-y-4 sm:space-y-6">
+          <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-white/20 backdrop-blur-sm rounded-full">
+            <span className="material-symbols-outlined text-white text-lg sm:text-xl">mail</span>
+            <span className="text-xs sm:text-sm font-black text-white uppercase tracking-wider">Newsletter</span>
           </div>
-
-          {/* Platform Links */}
-          <div className="space-y-3 sm:space-y-4">
-            <h3 className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Platform</h3>
-            <nav className="space-y-2.5 flex flex-col">
-              <Link to="/" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Home</Link>
-              <Link to="/dashboard" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Dashboard</Link>
-              <Link to="/mentorship" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Mentorship</Link>
-              <Link to="/career" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Career Tools</Link>
-              <Link to="/resources" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Resources</Link>
-            </nav>
-          </div>
-
-          {/* Resources */}
-          <div className="space-y-3 sm:space-y-4">
-            <h3 className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Resources</h3>
-            <nav className="space-y-2.5 flex flex-col">
-              <Link to="/help" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Help Center</Link>
-              <Link to="/about" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">About Us</Link>
-              <Link to="/who-we-serve" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Who We Serve</Link>
-              <Link to="/blog" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Blog</Link>
-              <Link to="/help/faq" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">FAQs</Link>
-            </nav>
-          </div>
-
-          {/* Legal */}
-          <div className="space-y-3 sm:space-y-4">
-            <h3 className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Legal</h3>
-            <nav className="space-y-2.5 flex flex-col">
-              <a href="#" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Privacy Policy</a>
-              <a href="#" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Terms of Service</a>
-              <Link to="/help/contact" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Contact Support</Link>
-              <a href="#" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Accessibility</a>
-              <a href="#" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary transition-colors font-medium">Cookie Policy</a>
-            </nav>
-          </div>
-        </div>
-
-        {/* Divider */}
-        <div className="h-px bg-gray-200 dark:bg-gray-700"></div>
-
-        {/* Bottom Section */}
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-6 text-center sm:text-left">
-          <p className="text-[11px] sm:text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-            © {currentYear} UnityMentor Hub. All rights reserved. Empowering student success everywhere.
-          </p>
-          
-          <div className="flex gap-6 text-gray-400 dark:text-gray-500 text-sm font-medium">
-            <LanguageSelector />
-            <button onClick={toggleTheme} className="hover:text-primary transition-colors">
-              {isDark ? '☀️ Light' : '🌙 Dark'}
-            </button>
-          </div>
-        </div>
-
-        {/* Newsletter CTA */}
-        <div className="rounded-2xl bg-primary/5 dark:bg-primary/10 border border-primary/10 dark:border-primary/20 p-6 sm:p-8 text-center space-y-4">
-          <h4 className="text-base sm:text-lg font-black text-gray-900 dark:text-white">Stay Updated</h4>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Subscribe to get the latest mentorship tips and career resources.</p>
-          <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+          <h3 className="text-2xl sm:text-3xl md:text-4xl font-black text-white px-2">Stay in the Loop</h3>
+          <p className="text-base sm:text-lg text-white/90 max-w-2xl mx-auto px-2">Get the latest mentorship tips, success stories, and exclusive resources delivered to your inbox.</p>
+          <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row gap-2 sm:gap-3 max-w-lg mx-auto">
             <input 
               type="email" 
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="your@email.com" 
+              placeholder="Enter your email" 
               required
               disabled={loading}
-              className="flex-1 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 dark:text-white rounded-lg text-sm font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all disabled:opacity-50"
+              className="flex-1 px-4 sm:px-5 py-3 sm:py-4 bg-white dark:bg-slate-800 border-2 border-white/20 dark:border-gray-700 text-gray-900 dark:text-white rounded-xl text-sm sm:text-base font-medium focus:ring-4 focus:ring-white/30 outline-none transition-all disabled:opacity-50"
             />
             <button 
               type="submit"
               disabled={loading}
-              className="px-6 py-2.5 bg-primary text-white font-bold rounded-lg hover:scale-105 transition-all text-sm disabled:opacity-50 disabled:hover:scale-100"
+              className="px-6 sm:px-8 py-3 sm:py-4 bg-white text-purple-600 font-black rounded-xl hover:scale-105 transition-all disabled:opacity-50 disabled:hover:scale-100 shadow-xl text-sm sm:text-base"
             >
               {loading ? 'Subscribing...' : 'Subscribe'}
             </button>
           </form>
           {message && (
-            <p className={`text-sm font-medium ${message.includes('Success') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+            <p className={`text-sm font-bold ${message.includes('✓') ? 'text-green-300' : 'text-red-300'}`}>
               {message}
             </p>
           )}
         </div>
       </div>
-    </footer>
-  );
-};
 
-const LanguageSelector: React.FC = () => {
-  const { language, setLanguage } = useLanguage();
-  const [isOpen, setIsOpen] = useState(false);
+      {/* Main Footer */}
+      <div className="py-12 sm:py-16 px-4">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8 mb-8 sm:mb-12">
+          {/* Brand */}
+          <div className="col-span-1 sm:col-span-2 md:col-span-1 space-y-3 sm:space-y-4">
+            <div className="flex items-center gap-2.5">
+                  <img src="/logo.png" alt="Unity" className="size-11 rounded-2xl object-contain" />
+              <div className="flex flex-col -space-y-1">
+                <span className="text-xl font-black bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">UNITY</span>
+                <span className="text-[9px] font-extrabold text-gray-400 dark:text-gray-500 uppercase tracking-[0.15em]">Mentorship Hub</span>
+              </div>
+            </div>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+              Empowering students through inclusive mentorship and community support.
+            </p>
+            <div className="flex gap-2 sm:gap-3">
+              <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="size-10 rounded-xl bg-gray-200 dark:bg-gray-800 flex items-center justify-center hover:bg-gradient-to-br hover:from-blue-600 hover:to-purple-600 hover:text-white transition-all">
+                <span className="material-symbols-outlined text-lg">share</span>
+              </a>
+              <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="size-10 rounded-xl bg-gray-200 dark:bg-gray-800 flex items-center justify-center hover:bg-gradient-to-br hover:from-blue-600 hover:to-purple-600 hover:text-white transition-all">
+                <span className="material-symbols-outlined text-lg">work</span>
+              </a>
+              <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="size-10 rounded-xl bg-gray-200 dark:bg-gray-800 flex items-center justify-center hover:bg-gradient-to-br hover:from-blue-600 hover:to-purple-600 hover:text-white transition-all">
+                <span className="material-symbols-outlined text-lg">image</span>
+              </a>
+              <a href="mailto:support@unityhub.com" className="size-10 rounded-xl bg-gray-200 dark:bg-gray-800 flex items-center justify-center hover:bg-gradient-to-br hover:from-blue-600 hover:to-purple-600 hover:text-white transition-all">
+                <span className="material-symbols-outlined text-lg">mail</span>
+              </a>
+            </div>
+          </div>
 
-  const languages = [
-    { code: 'en' as const, label: 'English', flag: '🇬🇧' },
-    { code: 'fr' as const, label: 'Français', flag: '🇫🇷' },
-    { code: 'es' as const, label: 'Español', flag: '🇪🇸' },
-  ];
+          {/* Platform */}
+          <div className="space-y-3 sm:space-y-4">
+            <h4 className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Platform</h4>
+            <nav className="space-y-2 sm:space-y-2.5 flex flex-col">
+              <Link to="/" className="text-sm text-gray-600 dark:text-gray-400 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-blue-600 hover:to-purple-600 transition-all font-medium">Home</Link>
+              <Link to="/about" className="text-sm text-gray-600 dark:text-gray-400 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-blue-600 hover:to-purple-600 transition-all font-medium">About Us</Link>
+              <Link to="/who-we-serve" className="text-sm text-gray-600 dark:text-gray-400 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-blue-600 hover:to-purple-600 transition-all font-medium">Who We Serve</Link>
+              <Link to="/mentorship-info" className="text-sm text-gray-600 dark:text-gray-400 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-blue-600 hover:to-purple-600 transition-all font-medium">Mentorship</Link>
+              <Link to="/ourimpact" className="text-sm text-gray-600 dark:text-gray-400 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-blue-600 hover:to-purple-600 transition-all font-medium">Our Impact</Link>
+            </nav>
+          </div>
 
-  const currentLang = languages.find(l => l.code === language) || languages[0];
+          {/* Resources */}
+          <div className="space-y-3 sm:space-y-4">
+            <h4 className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Resources</h4>
+            <nav className="space-y-2 sm:space-y-2.5 flex flex-col">
+              <Link to="/resources" className="text-sm text-gray-600 dark:text-gray-400 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-blue-600 hover:to-purple-600 transition-all font-medium">All Resources</Link>
+              <Link to="/career" className="text-sm text-gray-600 dark:text-gray-400 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-blue-600 hover:to-purple-600 transition-all font-medium">Career Tools</Link>
+              <Link to="/community" className="text-sm text-gray-600 dark:text-gray-400 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-blue-600 hover:to-purple-600 transition-all font-medium">Community</Link>
+              <Link to="/help" className="text-sm text-gray-600 dark:text-gray-400 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-blue-600 hover:to-purple-600 transition-all font-medium">Help Center</Link>
+              <Link to="/blog" className="text-sm text-gray-600 dark:text-gray-400 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-blue-600 hover:to-purple-600 transition-all font-medium">Blog</Link>
+            </nav>
+          </div>
 
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="hover:text-primary transition-colors flex items-center gap-1"
-      >
-        {currentLang.flag} {currentLang.label}
-      </button>
-      {isOpen && (
-        <div className="absolute bottom-full mb-2 right-0 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-2 min-w-[140px]">
-          {languages.map((lang) => (
-            <button
-              key={lang.code}
-              onClick={() => {
-                setLanguage(lang.code);
-                setIsOpen(false);
-              }}
-              className={`w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 ${
-                language === lang.code ? 'text-primary font-bold' : 'text-gray-700 dark:text-gray-300'
-              }`}
-            >
-              {lang.flag} {lang.label}
-            </button>
-          ))}
+          {/* Support */}
+          <div className="space-y-3 sm:space-y-4">
+            <h4 className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Support</h4>
+            <nav className="space-y-2 sm:space-y-2.5 flex flex-col">
+              <Link to="/help/contact" className="text-sm text-gray-600 dark:text-gray-400 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-blue-600 hover:to-purple-600 transition-all font-medium">Contact Us</Link>
+              <Link to="/help/faq" className="text-sm text-gray-600 dark:text-gray-400 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-blue-600 hover:to-purple-600 transition-all font-medium">FAQs</Link>
+              <Link to="/signup" className="text-sm text-gray-600 dark:text-gray-400 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-blue-600 hover:to-purple-600 transition-all font-medium">Sign Up</Link>
+              <Link to="/login" className="text-sm text-gray-600 dark:text-gray-400 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-blue-600 hover:to-purple-600 transition-all font-medium">Login</Link>
+              <button onClick={toggleTheme} className="text-sm text-gray-600 dark:text-gray-400 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-blue-600 hover:to-purple-600 transition-all font-medium text-left">
+                {isDark ? '☀️ Light Mode' : '🌙 Dark Mode'}
+              </button>
+            </nav>
+          </div>
         </div>
-      )}
-    </div>
+
+        {/* Bottom Bar */}
+        <div className="max-w-7xl mx-auto pt-6 sm:pt-8 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-4">
+          <p className="text-xs font-bold text-gray-500 dark:text-gray-400 text-center">
+            © 2024 Unity Mentorship Hub. All rights reserved.
+          </p>
+          <div className="flex flex-wrap justify-center gap-4 sm:gap-6 text-xs font-medium">
+            <a href="#" className="text-gray-500 dark:text-gray-400 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-blue-600 hover:to-purple-600 transition-all">Privacy Policy</a>
+            <a href="#" className="text-gray-500 dark:text-gray-400 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-blue-600 hover:to-purple-600 transition-all">Terms of Service</a>
+            <a href="#" className="text-gray-500 dark:text-gray-400 hover:text-transparent hover:bg-clip-text hover:bg-gradient-to-r hover:from-blue-600 hover:to-purple-600 transition-all">Cookies</a>
+          </div>
+        </div>
+      </div>
+    </footer>
   );
 };
 

@@ -156,3 +156,14 @@ export const broadcastNotification = async (title: string, message: string, type
     return false;
   }
 };
+
+export const deleteUser = async (userId: string, adminId: string, adminName: string) => {
+  try {
+    await deleteDoc(doc(db, 'users', userId));
+    await logAdminAction(adminId, adminName, 'DELETE_USER', 'Permanently deleted user account', userId);
+    return true;
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    return false;
+  }
+};

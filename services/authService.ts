@@ -1,6 +1,7 @@
 import { User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../src/firebase';
+import { errorService } from './errorService';
 
 export interface UserRole {
   role: 'student' | 'mentor' | 'admin' | 'super_admin' | 'moderator';
@@ -18,7 +19,7 @@ export const checkUserRole = async (user: User): Promise<UserRole | null> => {
       status: data.status || 'active'
     };
   } catch (error) {
-    console.error('Error checking user role:', error);
+    errorService.handleError(error, 'checkUserRole');
     return null;
   }
 };
@@ -31,8 +32,11 @@ export const checkAdminAccess = async (user: User): Promise<boolean> => {
     const userRole = await checkUserRole(user);
     console.log('User role from Firestore:', userRole);
     
-    if (userRole?.role === 'admin' || userRole?.role === 'super_admin') {
-      console.log('Admin access granted via Firestore role');
+    // Check if role has admin panel access
+    if (userRole?.role === 'admin' || 
+        userRole?.role === 'super_admin' || 
+        userRole?.role === 'moderator') {
+      console.log('Admin access granted via Firestore role:', userRole.role);
       return true;
     }
     
@@ -40,15 +44,17 @@ export const checkAdminAccess = async (user: User): Promise<boolean> => {
     const tokenResult = await user.getIdTokenResult();
     console.log('Custom claims:', tokenResult.claims);
     
-    if (tokenResult.claims.admin || tokenResult.claims.super_admin) {
+    if (tokenResult.claims.admin || 
+        tokenResult.claims.super_admin || 
+        tokenResult.claims.moderator) {
       console.log('Admin access granted via custom claims');
       return true;
     }
     
-    console.log('Admin access denied');
+    console.log('Admin access denied - role:', userRole?.role);
     return false;
   } catch (error) {
-    console.error('Error checking admin access:', error);
+    errorService.handleError(error, 'checkAdminAccess');
     return false;
   }
 };
@@ -63,7 +69,7 @@ export const checkModeratorAccess = async (user: User): Promise<boolean> => {
     const userRole = await checkUserRole(user);
     return ['moderator', 'admin', 'super_admin'].includes(userRole?.role || '');
   } catch (error) {
-    console.error('Error checking moderator access:', error);
+    errorService.handleError(error, 'checkModeratorAccess');
     return false;
   }
 };

@@ -11,13 +11,14 @@ console.log("Navigator online?", typeof navigator !== "undefined" ? navigator.on
 
 // Your web app's Firebase configuration
 const firebaseConfig: FirebaseOptions = {
-  apiKey: "AIzaSyDC3ZItYS0WU-n5cIOUwlyeQzDxcM5j-uA",
-  authDomain: "unity-mentorship-hub-ca76e.firebaseapp.com",
-  projectId: "unity-mentorship-hub-ca76e",
-  storageBucket: "unity-mentorship-hub-ca76e.appspot.com",
-  messagingSenderId: "538275309573",
-  appId: "1:538275309573:web:41c34922ec7004e1ec946c",
-  measurementId: "G-W277069DZ0",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://unity-mentorship-hub-ca76e-default-rtdb.firebaseio.com/",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
 // Initialize Firebase app

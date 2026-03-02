@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../App';
 import { checkAdminAccess } from '../services/authService';
+import { useAdminTimeout } from '../hooks/useAdminTimeout';
+import AdminErrorBoundary from './AdminErrorBoundary';
 
 interface AdminRouteProps {
   children: React.ReactNode;
@@ -11,6 +13,9 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
   const { user, loading } = useAuth();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [checking, setChecking] = useState(true);
+  
+  // Auto-logout after 30 minutes of inactivity
+  useAdminTimeout(30);
 
   useEffect(() => {
     const verifyAdmin = async () => {
@@ -59,7 +64,11 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
     );
   }
 
-  return <>{children}</>;
+  return (
+    <AdminErrorBoundary>
+      {children}
+    </AdminErrorBoundary>
+  );
 };
 
 export default AdminRoute;

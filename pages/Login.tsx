@@ -1,10 +1,9 @@
 
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, sendPasswordResetEmail, signInWithPopup, GoogleAuthProvider, OAuthProvider } from 'firebase/auth';
 import { auth } from '../src/firebase';
 import { useAuth } from '../App';
-import Footer from '../components/Footer';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -13,13 +12,20 @@ const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-    const [showPassword, setShowPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetMessage, setResetMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [resetAttempts, setResetAttempts] = useState(0);
+  const [lastResetTime, setLastResetTime] = useState<number>(0);
 
   // If already signed in, go to dashboard
-  if (!loading && user) {
-    navigate('/dashboard');
-    return null;
-  }
+  React.useEffect(() => {
+    if (!loading && user) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [loading, user, navigate]);
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
@@ -33,31 +39,23 @@ const Login: React.FC = () => {
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const user = userCredential.user;
       
-      // Wait a moment for auth to settle
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
       // Fetch user data from Firestore
       const { doc, getDoc } = await import('firebase/firestore');
       const { db } = await import('../src/firebase');
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       
-      let isAdmin = false;
       if (userDoc.exists()) {
         const userData = userDoc.data();
         localStorage.setItem('unity_user_name', userData.displayName || user.email || 'User');
         localStorage.setItem('unity_user_role', userData.role || 'Domestic Student');
-        isAdmin = userData.role === 'admin' || userData.role === 'super_admin';
-        console.log('User role:', userData.role, 'isAdmin:', isAdmin);
       } else {
         localStorage.setItem('unity_user_name', user.email || 'User');
       }
       
       localStorage.setItem('unity_onboarding_complete', 'true');
       
-      // Force navigation after a brief delay
-      setTimeout(() => {
-        navigate(isAdmin ? '/admin' : '/dashboard', { replace: true });
-      }, 100);
+      // Keep loading state and use window.location for clean navigation
+      window.location.href = '/dashboard';
     } catch (err: any) {
       console.error('Login error:', err);
       setError(err?.message ?? 'Sign-in failed');
@@ -65,109 +63,339 @@ const Login: React.FC = () => {
     }
   };
 
-  return (
-    <div className="flex flex-col min-h-screen bg-white dark:bg-slate-900 p-4 sm:p-6">
-      <div className="flex items-center justify-center flex-1">
-      <div className="max-w-md w-full space-y-8 sm:space-y-12">
-        <div className="text-center space-y-4 sm:space-y-6">
-          <Link to="/" className="inline-flex flex-col items-center gap-2 group">
-            <div className="h-12 sm:h-16">
-              <img 
-                src="https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&q=80&w=200" 
-                alt="Unity Logo" 
-                className="h-full object-contain"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 80'%3E%3Crect fill='%231392ec' width='200' height='80'/%3E%3Ctext x='50%25' y='50%25' font-size='32' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='middle'%3EUNITY%3C/text%3E%3C/svg%3E";
-                }}
-              />
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="text-xl sm:text-2xl font-black tracking-tight text-[#001f3f]">UNITY</span>
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Mentorship Hub</span>
-            </div>
-          </Link>
-          <div className="space-y-2">
-            <h1 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">Welcome back</h1>
-            <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 font-medium">Log in to your inclusive student success hub.</p>
-          </div>
-        </div>
+  const handleOAuthLogin = async (provider: 'google' | 'linkedin') => {
+    setError(null);
+    setIsLoading(true);
+    try {
+      const authProvider = provider === 'google' 
+        ? new GoogleAuthProvider()
+        : new OAuthProvider('microsoft.com'); // LinkedIn uses Microsoft OAuth
+      
+      const result = await signInWithPopup(auth, authProvider);
+      const user = result.user;
+      
+      // Fetch/create user data in Firestore
+      const { doc, getDoc, setDoc, serverTimestamp } = await import('firebase/firestore');
+      const { db } = await import('../src/firebase');
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      
+      if (!userDoc.exists()) {
+        // Create new user document
+        await setDoc(doc(db, 'users', user.uid), {
+          displayName: user.displayName || user.email?.split('@')[0] || 'User',
+          email: user.email,
+          role: 'Domestic Student',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+      
+      const userData = userDoc.exists() ? userDoc.data() : { displayName: user.displayName, role: 'Domestic Student' };
+      localStorage.setItem('unity_user_name', userData.displayName || user.email || 'User');
+      localStorage.setItem('unity_user_role', userData.role || 'Domestic Student');
+      localStorage.setItem('unity_onboarding_complete', 'true');
+      
+      window.location.href = '/dashboard';
+    } catch (err: any) {
+      console.error('OAuth login error:', err);
+      setError(err?.message ?? `${provider} sign-in failed`);
+      setIsLoading(false);
+    }
+  };
 
-        <form onSubmit={handleLogin} className="space-y-4 sm:space-y-6">
-          <div className="space-y-3 sm:space-y-4">
-            <div className="space-y-2">
-              <label className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Email Address</label>
-              <input 
-                type="email" 
-                required 
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-gray-50 dark:bg-slate-800 border-none rounded-xl sm:rounded-2xl p-3 sm:p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 dark:focus:ring-blue-500/20 outline-none transition-all dark:text-white" 
-                placeholder="alex@university.edu" 
+  const handleForgotPassword = async () => {
+    // Validation
+    if (!resetEmail.trim()) {
+      setResetMessage({ type: 'error', text: 'Please enter your email' });
+      return;
+    }
+
+    // Rate limiting - client side (3 attempts per 15 minutes)
+    const now = Date.now();
+    const fifteenMinutes = 15 * 60 * 1000;
+    
+    if (now - lastResetTime < fifteenMinutes && resetAttempts >= 3) {
+      const waitTime = Math.ceil((fifteenMinutes - (now - lastResetTime)) / 60000);
+      setResetMessage({ 
+        type: 'error', 
+        text: `Too many attempts. Please wait ${waitTime} minutes.` 
+      });
+      return;
+    }
+
+    // Reset counter if 15 minutes passed
+    if (now - lastResetTime >= fifteenMinutes) {
+      setResetAttempts(0);
+    }
+    
+    setResetLoading(true);
+    setResetMessage(null);
+    
+    try {
+      const actionCodeSettings = {
+        url: window.location.origin + '/login',
+        handleCodeInApp: false,
+      };
+      
+      await sendPasswordResetEmail(auth, resetEmail.trim(), actionCodeSettings);
+      
+      // Log attempt to Firestore for audit trail
+      try {
+        const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+        const { db } = await import('../src/firebase');
+        await setDoc(doc(db, 'passwordResetLogs', `${Date.now()}_${resetEmail}`), {
+          email: resetEmail.trim(),
+          timestamp: serverTimestamp(),
+          ip: 'client', // In production, get from backend
+          userAgent: navigator.userAgent,
+        });
+      } catch (logError) {
+        console.error('Failed to log reset attempt:', logError);
+      }
+      
+      // Generic success message (prevents email enumeration)
+      setResetMessage({ 
+        type: 'success', 
+        text: 'If an account exists with this email, a reset link has been sent. Check spam folder.' 
+      });
+      
+      setResetAttempts(prev => prev + 1);
+      setLastResetTime(now);
+      
+      setTimeout(() => {
+        setShowForgotModal(false);
+        setResetEmail('');
+        setResetMessage(null);
+      }, 5000);
+    } catch (err: any) {
+      // Generic error message (prevents email enumeration)
+      if (err.code === 'auth/too-many-requests') {
+        setResetMessage({ 
+          type: 'error', 
+          text: 'Too many attempts. Please try again later.' 
+        });
+      } else {
+        // Don't reveal if email exists or not
+        setResetMessage({ 
+          type: 'success', 
+          text: 'If an account exists with this email, a reset link has been sent.' 
+        });
+      }
+      
+      setResetAttempts(prev => prev + 1);
+      setLastResetTime(now);
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  // Show loading overlay during login
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-slate-900">
+        <div className="text-center space-y-4">
+          <div className="size-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mx-auto"></div>
+          <p className="font-bold text-gray-600 dark:text-gray-400">Signing you in...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-slate-900 dark:via-indigo-950 dark:to-purple-950 flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Animated Background Elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 left-10 w-72 h-72 bg-blue-400/20 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-purple-400/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
+        <div className="absolute top-1/2 left-1/2 w-80 h-80 bg-indigo-400/20 rounded-full blur-3xl animate-pulse delay-500"></div>
+      </div>
+      
+      <div className="max-w-md w-full space-y-6 relative z-10">
+        {/* Glass Card */}
+        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/20 dark:border-slate-700/50 p-8 space-y-8">
+          <div className="text-center space-y-4">
+            <Link to="/" className="inline-flex flex-col items-center gap-3 group">
+              <img 
+                src="/logo.png" 
+                alt="Unity" 
+                className="size-16 rounded-2xl object-contain"
               />
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between items-center px-1">
-                <label className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">Password</label>
-                <button type="button" className="text-[9px] sm:text-[10px] font-black text-primary hover:underline uppercase tracking-widest">Forgot?</button>
+              <div className="flex flex-col items-center">
+                <span className="text-2xl font-black bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">UNITY</span>
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Mentorship Hub</span>
               </div>
+            </Link>
+            <div className="space-y-2">
+              <h1 className="text-3xl font-black text-gray-900 dark:text-white">Welcome back</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Continue your journey to success</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-600 dark:text-gray-400">Email Address</label>
+                <input 
+                  type="email" 
+                  required 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-slate-800/50 border-2 border-gray-200 dark:border-slate-700 rounded-xl p-4 text-sm font-medium focus:border-blue-500 dark:focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all dark:text-white" 
+                  placeholder="alex@university.edu" 
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-bold text-gray-600 dark:text-gray-400">Password</label>
+                  <button 
+                    type="button"
+                    onClick={() => setShowForgotModal(true)}
+                    className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    Forgot?
+                  </button>
+                </div>
                 <div className="relative">
                   <input
                     type={showPassword ? "text" : "password"}
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-gray-50 dark:bg-slate-800 border-none rounded-xl sm:rounded-2xl p-3 sm:p-4 text-sm font-medium focus:ring-4 focus:ring-primary/5 dark:focus:ring-blue-500/20 outline-none transition-all pr-10 dark:text-white"
+                    className="w-full bg-gray-50 dark:bg-slate-800/50 border-2 border-gray-200 dark:border-slate-700 rounded-xl p-4 text-sm font-medium focus:border-blue-500 dark:focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all pr-12 dark:text-white"
                     placeholder="••••••••"
                   />
                   <button
                     type="button"
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-primary dark:hover:text-blue-400"
+                    className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition"
                     onClick={() => setShowPassword((v) => !v)}
                     tabIndex={-1}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
                   >
-                    <span className="material-symbols-outlined">{showPassword ? "visibility_off" : "visibility"}</span>
+                    <span className="material-symbols-outlined text-xl">{showPassword ? "visibility_off" : "visibility"}</span>
                   </button>
                 </div>
+              </div>
             </div>
+
+            <button 
+              type="submit" 
+              disabled={isLoading}
+              className="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 transform hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isLoading ? (
+                <span className="material-symbols-outlined animate-spin">progress_activity</span>
+              ) : (
+                <>
+                  Sign In
+                  <span className="material-symbols-outlined">arrow_forward</span>
+                </>
+              )}
+            </button>
+          </form>
+
+          {error && (
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+              <p className="text-sm text-red-600 dark:text-red-400 text-center font-medium">{error}</p>
+            </div>
+          )}
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200 dark:border-gray-700"></div></div>
+            <div className="relative flex justify-center text-xs font-medium text-gray-500 dark:text-gray-400"><span className="bg-white/80 dark:bg-slate-900/80 px-4">Or continue with</span></div>
           </div>
 
-          <button 
-            type="submit" 
-            disabled={isLoading}
-            className="w-full py-4 sm:py-5 bg-primary dark:bg-blue-600 text-white font-black rounded-xl sm:rounded-2xl shadow-xl shadow-primary/20 dark:shadow-blue-600/20 hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base"
+          <div className="grid grid-cols-2 gap-3">
+            <button onClick={() => handleOAuthLogin('google')} disabled={isLoading} className="flex items-center justify-center gap-2 py-3 bg-white dark:bg-slate-800 border-2 border-gray-200 dark:border-slate-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-lg transition-all font-medium text-sm dark:text-gray-300 disabled:opacity-50 group">
+              <img src="https://www.google.com/favicon.ico" className="size-5" alt="Google" /> 
+              <span className="group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">Google</span>
+            </button>
+            <button onClick={() => handleOAuthLogin('linkedin')} disabled={isLoading} className="flex items-center justify-center gap-2 py-3 bg-white dark:bg-slate-800 border-2 border-gray-200 dark:border-slate-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-lg transition-all font-medium text-sm dark:text-gray-300 disabled:opacity-50 group">
+              <svg className="size-5" fill="#0A66C2" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+              <span className="group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">LinkedIn</span>
+            </button>
+          </div>
+
+          <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+            New to Unity? <Link to="/signup" className="font-bold text-blue-600 dark:text-blue-400 hover:underline">Create an account</Link>
+          </p>
+        </div>
+        
+        {/* Minimal Footer */}
+        <div className="text-center pb-6">
+          <p className="text-xs text-gray-400 dark:text-gray-500">
+            © 2024 Unity Mentorship Hub. All rights reserved.
+          </p>
+        </div>
+      </div>
+      {showForgotModal && (
+        <div 
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={() => {
+            setShowForgotModal(false);
+            setResetEmail('');
+            setResetMessage(null);
+          }}
+        >
+          <div 
+            className="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6"
+            onClick={(e) => e.stopPropagation()}
           >
-            {isLoading ? (
-              <span className="material-symbols-outlined animate-spin text-lg sm:text-xl">progress_activity</span>
-            ) : 'Sign In'}
-          </button>
-        </form>
-
-        {error && (
-          <div className="text-xs sm:text-sm text-red-600 text-center font-bold mt-2">{error}</div>
-        )}
-
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100 dark:border-gray-700"></div></div>
-          <div className="relative flex justify-center text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500"><span className="bg-white dark:bg-slate-900 px-4">Or continue with</span></div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-black text-gray-900 dark:text-white">Reset Password</h2>
+              <button
+                onClick={() => {
+                  setShowForgotModal(false);
+                  setResetEmail('');
+                  setResetMessage(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Enter your email and we'll send you a password reset link.
+            </p>
+            
+            <input
+              type="email"
+              value={resetEmail}
+              onChange={(e) => {
+                setResetEmail(e.target.value);
+                setResetMessage(null);
+              }}
+              placeholder="your@email.com"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-gray-600 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none dark:text-white mb-4"
+              disabled={resetLoading}
+            />
+            
+            {resetMessage && (
+              <div className={`mb-4 p-3 rounded-lg text-sm font-medium ${
+                resetMessage.type === 'success' 
+                  ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' 
+                  : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'
+              }`}>
+                {resetMessage.text}
+              </div>
+            )}
+            
+            <button
+              onClick={handleForgotPassword}
+              disabled={resetLoading || !resetEmail.trim()}
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+            >
+              {resetLoading ? (
+                <>
+                  <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                  Sending...
+                </>
+              ) : (
+                'Send Reset Link'
+              )}
+            </button>
+          </div>
         </div>
-
-        <div className="grid grid-cols-2 gap-3 sm:gap-4">
-          <button className="flex items-center justify-center gap-2 sm:gap-3 py-3 sm:py-4 border border-gray-100 dark:border-gray-700 rounded-xl sm:rounded-2xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-all font-bold text-xs dark:text-gray-300">
-            <img src="https://developers.google.com/static/identity/images/branding_guideline/logo_standard_cO8025APcVccDE5DMsy59Euqo9G7M35xfDCulqWkQg.png" className="size-4 sm:size-5" alt="Google" onError={(e) => (e.currentTarget.style.display = 'none')} /> Google
-          </button>
-          <button className="flex items-center justify-center gap-2 sm:gap-3 py-3 sm:py-4 border border-gray-100 dark:border-gray-700 rounded-xl sm:rounded-2xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-all font-bold text-xs dark:text-gray-300">
-            <img src="https://cdn.worldvectorlogo.com/logos/linkedin-icon-2.svg" className="size-4 sm:size-5" alt="LinkedIn" onError={(e) => (e.currentTarget.style.display = 'none')} /> LinkedIn
-          </button>
-        </div>
-
-        <p className="text-center text-xs font-bold text-gray-400 dark:text-gray-500">
-          New to Unity? <Link to="/signup" className="text-primary hover:underline">Create an account</Link>
-        </p>
-      </div>
-      </div>
-      <Footer />
+      )}
     </div>
   );
 };

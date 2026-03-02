@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, getDocs, where } from 'firebase/firestore';
+import { collection, query, getDocs, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../src/firebase';
 import { useAuth } from '../../App';
 import { usePermissions } from '../../src/hooks/usePermissions';
+import { formatRole, formatNumber } from '../../utils/formatters';
+import LoadingSpinner from '../../components/LoadingSpinner';
 
 interface DashboardStats {
   totalUsers: number;
@@ -26,10 +28,48 @@ const AdminDashboard: React.FC = () => {
     pendingApprovals: 0,
     activeReports: 0,
   });
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
   useEffect(() => {
-    loadDashboardStats();
-  }, []);
+    if (!loading) {
+      loadDashboardStats();
+      
+      // Set up real-time listeners for key metrics
+      const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+        setStats(prev => ({
+          ...prev,
+          totalUsers: snapshot.size,
+          activeMentors: snapshot.docs.filter(d => 
+            (d.data().role === 'mentor' || d.data().role === 'professional') && 
+            d.data().status === 'active'
+          ).length
+        }));
+        setLastUpdated(new Date());
+      });
+
+      const unsubscribeMentorApps = onSnapshot(
+        query(collection(db, 'mentorApplications'), where('status', '==', 'pending')),
+        (snapshot) => {
+          setStats(prev => ({ ...prev, pendingApprovals: snapshot.size }));
+          setLastUpdated(new Date());
+        }
+      );
+
+      const unsubscribeReports = onSnapshot(
+        query(collection(db, 'reports'), where('status', '==', 'open')),
+        (snapshot) => {
+          setStats(prev => ({ ...prev, activeReports: snapshot.size }));
+          setLastUpdated(new Date());
+        }
+      );
+
+      return () => {
+        unsubscribeUsers();
+        unsubscribeMentorApps();
+        unsubscribeReports();
+      };
+    }
+  }, [loading]);
 
   const loadDashboardStats = async () => {
     try {
@@ -40,19 +80,44 @@ const AdminDashboard: React.FC = () => {
 
       setStats({
         totalUsers: usersSnap.size,
-        activeMentors: usersSnap.docs.filter(d => d.data().role === 'mentor' && d.data().status === 'active').length,
+        activeMentors: usersSnap.docs.filter(d => 
+          (d.data().role === 'mentor' || d.data().role === 'professional') && 
+          d.data().status === 'active'
+        ).length,
         totalSessions: sessionsSnap.size,
         monthlyRevenue: 0,
         pendingApprovals: mentorAppsSnap.size,
         activeReports: reportsSnap.size,
       });
+      setLastUpdated(new Date());
     } catch (error) {
       console.error('Error loading stats:', error);
+      setStats({
+        totalUsers: 0,
+        activeMentors: 0,
+        totalSessions: 0,
+        monthlyRevenue: 0,
+        pendingApprovals: 0,
+        activeReports: 0,
+      });
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+        <div className="text-center">
+          <LoadingSpinner size="lg" />
+          <p className="text-gray-600 font-bold mt-4">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
   const menuItems = [
     { icon: 'group', label: 'User Management', path: '/admin/users', gradient: 'from-blue-500 to-blue-600', badge: 0, permission: 'canManageUsers' },
+    { icon: 'manage_accounts', label: 'Enhanced User Mgmt', path: '/admin/users-enhanced', gradient: 'from-blue-600 to-indigo-600', badge: 0, permission: 'canManageUsers' },
+    { icon: 'support_agent', label: 'User Helper', path: '/admin/user-helper', gradient: 'from-cyan-500 to-blue-600', badge: 0, permission: 'canManageUsers' },
     { icon: 'verified_user', label: 'Mentor Approvals', path: '/admin/mentor-approvals', gradient: 'from-green-500 to-emerald-600', badge: stats.pendingApprovals, permission: 'canManageMentors' },
     { icon: 'event', label: 'Session Management', path: '/admin/sessions', gradient: 'from-purple-500 to-purple-600', badge: 0, permission: 'canManageSessions' },
     { icon: 'payments', label: 'Payments & Billing', path: '/admin/payments', gradient: 'from-yellow-500 to-orange-600', badge: 0, permission: 'canManagePayments' },
@@ -60,9 +125,15 @@ const AdminDashboard: React.FC = () => {
     { icon: 'report', label: 'Reports & Disputes', path: '/admin/reports', gradient: 'from-red-500 to-pink-600', badge: stats.activeReports, permission: 'canManageReports' },
     { icon: 'support_agent', label: 'Support Tickets', path: '/admin/support', gradient: 'from-blue-500 to-indigo-600', badge: 0, permission: 'canAccessAdminPanel' },
     { icon: 'analytics', label: 'Analytics', path: '/admin/analytics', gradient: 'from-indigo-500 to-purple-600', badge: 0, permission: 'canViewAnalytics' },
+    { icon: 'insights', label: 'Advanced Analytics', path: '/admin/advanced-analytics', gradient: 'from-purple-600 to-pink-600', badge: 0, permission: 'canViewAnalytics' },
+    { icon: 'history', label: 'Activity Log', path: '/admin/activity-log', gradient: 'from-gray-600 to-gray-700', badge: 0, permission: 'canAccessAdminPanel' },
     { icon: 'star', label: 'Reviews & Ratings', path: '/admin/reviews', gradient: 'from-orange-500 to-red-600', badge: 0, permission: 'canManageReviews' },
     { icon: 'category', label: 'Categories', path: '/admin/categories', gradient: 'from-pink-500 to-rose-600', badge: 0, permission: 'canManageCategories' },
     { icon: 'notifications', label: 'Notifications', path: '/admin/notifications', gradient: 'from-cyan-500 to-blue-600', badge: 0, permission: 'canAccessAdminPanel' },
+    { icon: 'email', label: 'Communication Center', path: '/admin/communication', gradient: 'from-green-500 to-teal-600', badge: 0, permission: 'canAccessAdminPanel' },
+    { icon: 'mail', label: 'Newsletter', path: '/admin/newsletter', gradient: 'from-purple-500 to-pink-600', badge: 0, permission: 'canAccessAdminPanel' },
+    { icon: 'gavel', label: 'Content Moderation', path: '/admin/moderation', gradient: 'from-red-600 to-orange-600', badge: 0, permission: 'canAccessAdminPanel' },
+    { icon: 'monitor_heart', label: 'System Health', path: '/admin/system-health', gradient: 'from-emerald-500 to-green-600', badge: 0, permission: 'canAccessAdminPanel' },
     { icon: 'security', label: 'Security & Logs', path: '/admin/security', gradient: 'from-gray-600 to-gray-700', badge: 0, permission: 'canViewSecurityLogs' },
     { icon: 'settings', label: 'Platform Settings', path: '/admin/settings', gradient: 'from-slate-600 to-slate-700', badge: 0, permission: 'canManageSettings' },
   ];
@@ -86,10 +157,13 @@ const AdminDashboard: React.FC = () => {
             <p className="text-gray-600 font-medium">Manage your Unity Mentorship Hub platform</p>
             <div className="flex items-center gap-2 mt-2">
               <span className="px-3 py-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs font-bold rounded-full uppercase">
-                {role.replace('_', ' ')}
+                {formatRole(String(role))}
               </span>
               <span className="text-gray-500 text-sm">• {permissions.maxRoleLevel > 0 ? `Level ${permissions.maxRoleLevel}` : 'Standard Access'}</span>
             </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Last updated: {lastUpdated.toLocaleTimeString()}
+            </p>
           </div>
           <button className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-2xl font-bold hover:scale-105 transition-all shadow-lg shadow-green-500/30">
             <span className="flex items-center gap-2">
@@ -102,7 +176,11 @@ const AdminDashboard: React.FC = () => {
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {statCards.map((stat, idx) => (
-            <div key={idx} className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl hover:shadow-2xl transition-all hover:scale-105 border border-white/50">
+            <div 
+              key={idx} 
+              onClick={() => navigate(stat.path)}
+              className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 shadow-xl hover:shadow-2xl transition-all hover:scale-105 border border-white/50 cursor-pointer"
+            >
               <div className="flex items-start justify-between mb-4">
                 <div className={`w-14 h-14 bg-gradient-to-br ${stat.gradient} rounded-2xl flex items-center justify-center shadow-lg`}>
                   <span className="material-symbols-outlined text-white text-2xl">{stat.icon}</span>

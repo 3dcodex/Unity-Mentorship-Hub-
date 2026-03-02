@@ -1,10 +1,28 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Footer from '../components/Footer';
 
 const Mentorship: React.FC = () => {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Simulate initial load
+    const timer = setTimeout(() => setLoading(false), 300);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-slate-900">
+        <div className="text-center space-y-4">
+          <div className="size-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mx-auto"></div>
+          <p className="font-medium text-gray-600 dark:text-gray-400">Loading mentorship...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-in fade-in duration-500 space-y-6 sm:space-y-8 md:space-y-16 bg-white dark:bg-slate-900 min-h-screen">

@@ -1,1803 +1,1213 @@
 import React, { useState, useEffect } from 'react';
-import { rolePrivileges } from '../rolePrivileges';
-import { Role } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { signOut, updatePassword, updateEmail, deleteUser, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { auth, db, storage } from '../src/firebase';
-import { doc, getDoc, updateDoc, Timestamp, setDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, Timestamp, setDoc, writeBatch, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { generateProfessionalHeadshot } from '../services/geminiService';
 import { useAuth } from '../App';
+import { Role } from '../types';
 
 const ProfileSettings: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const userRole: Role = (localStorage.getItem('unity_user_role') as Role) || 'Student';
-  const privileges = rolePrivileges[userRole] || [];
   
-  // Dark mode
-  const [darkMode, setDarkMode] = useState(localStorage.getItem('unity_dark_mode') === 'true');
+  const [userRole, setUserRole] = useState<Role>('Student');
+  const [activeTab, setActiveTab] = useState('account');
   
-  // Basic profile state
-  const [userName, setUserName] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState(user?.email || '');
-  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  const [newEmail, setNewEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  const [bio, setBio] = useState('');
+  const [location, setLocation] = useState('');
+  const [interests, setInterests] = useState<string[]>([]);
   
-  // Student fields
+  const [linkedin, setLinkedin] = useState('');
+  const [github, setGithub] = useState('');
+  const [website, setWebsite] = useState('');
+  
   const [school, setSchool] = useState('');
-  const [programName, setProgramName] = useState('');
-  const [currentYear, setCurrentYear] = useState('');
+  const [major, setMajor] = useState('');
+  const [year, setYear] = useState('');
   
-  // Professional fields
-  const [companyName, setCompanyName] = useState('');
+  const [company, setCompany] = useState('');
   const [jobTitle, setJobTitle] = useState('');
-  
-  // Loading states
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [isChangingEmail, setIsChangingEmail] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  
-  // Modal states
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [showEmailModal, setShowEmailModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  
-  // Password/Email change states
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [newEmail, setNewEmail] = useState(email);
-  const [passwordToDelete, setPasswordToDelete] = useState('');
-  
-  // Alert states
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   
   // Mentor fields
   const [isMentor, setIsMentor] = useState(false);
+  const [mentorStatus, setMentorStatus] = useState<'none' | 'pending' | 'approved'>('none');
   const [mentorExpertise, setMentorExpertise] = useState('');
   const [mentorBio, setMentorBio] = useState('');
-  const [mentorApplicationStatus, setMentorApplicationStatus] = useState<'none' | 'pending' | 'approved' | 'rejected'>('none');
-  
-  // Additional profile fields
-  const [bio, setBio] = useState('');
-  const [location, setLocation] = useState('');
-  const [website, setWebsite] = useState('');
-  const [linkedin, setLinkedin] = useState('');
-  const [github, setGithub] = useState('');
-  const [twitter, setTwitter] = useState('');
-  const [skills, setSkills] = useState('');
-  const [interests, setInterests] = useState('');
-  const [achievements, setAchievements] = useState('');
-  const [workExperience, setWorkExperience] = useState('');
-  const [education, setEducation] = useState('');
-  const [certifications, setCertifications] = useState('');
   const [availability, setAvailability] = useState('');
+  const [mentorTags, setMentorTags] = useState<string[]>([]);
   
-  // General Settings state
+  // Preferences
   const [campusInvolvement, setCampusInvolvement] = useState('');
   const [languagesSpoken, setLanguagesSpoken] = useState('');
-  const [notifyCampusEvents, setNotifyCampusEvents] = useState(false);
-  const [notifyMentorshipRequests, setNotifyMentorshipRequests] = useState(false);
-  const [notifyCommunityUpdates, setNotifyCommunityUpdates] = useState(false);
-  const [financialAidStatus, setFinancialAidStatus] = useState('');
-
-
+  const [notifyCampusEvents, setNotifyCampusEvents] = useState(true);
+  const [notifyMentorshipRequests, setNotifyMentorshipRequests] = useState(true);
+  const [notifyCommunityUpdates, setNotifyCommunityUpdates] = useState(true);
+  const [resumeAutoSave, setResumeAutoSave] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
   
-  // Professional profile fields
-  const [companyWebsite, setCompanyWebsite] = useState('');
-  const [companyIndustry, setCompanyIndustry] = useState('');
-  const [companySize, setCompanySize] = useState('');
-  const [professionalBio, setProfessionalBio] = useState('');
-  const [offerInternships, setOfferInternships] = useState(false);
-  const [hostWebinars, setHostWebinars] = useState(false);
+  // Complete Profile
+  const [skills, setSkills] = useState<string[]>([]);
+  const [certifications, setCertifications] = useState<string[]>([]);
+  const [achievements, setAchievements] = useState<string[]>([]);
   
-  // Domestic Student fields
-  const [university, setUniversity] = useState('');
-  const [major, setMajor] = useState('');
-  const [yearOfStudy, setYearOfStudy] = useState(1);
-  const [clubsSocieties, setClubsSocieties] = useState('');
-  const [offerPeerMentorship, setOfferPeerMentorship] = useState(false);
-  const [campusBuddy, setCampusBuddy] = useState(false);
-  const [maxMentees, setMaxMentees] = useState(1);
-  const [expertise, setExpertise] = useState('');
-  const [willingMentorIntl, setWillingMentorIntl] = useState(false);
-  const [culturalFamiliarity, setCulturalFamiliarity] = useState('');
-  const [eventHost, setEventHost] = useState(false);
-  const [eventApproval, setEventApproval] = useState('Yes');
-  const [eventModeration, setEventModeration] = useState(false);
-  const [resumeAutoSave, setResumeAutoSave] = useState(localStorage.getItem('unity_resume_auto_save') === 'true');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showAdminBadge, setShowAdminBadge] = useState(false);
+  const [tabLoading, setTabLoading] = useState(false);
 
-  const handleResumeAutoSaveChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setResumeAutoSave(e.target.checked);
-    localStorage.setItem('unity_resume_auto_save', e.target.checked ? 'true' : 'false');
-  };
-
-  // Load user profile data based on role
   useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+    
     if (user) {
-      getDoc(doc(db, 'users', user.uid)).then(docSnap => {
-        if (docSnap.exists()) {
-          const d = docSnap.data();
-          
-          // Common fields
-          setCampusInvolvement(d.campusInvolvement || '');
-          setLanguagesSpoken(d.languagesSpoken || '');
-          setNotifyCampusEvents(d.notifyCampusEvents || false);
-          setNotifyMentorshipRequests(d.notifyMentorshipRequests || false);
-          setNotifyCommunityUpdates(d.notifyCommunityUpdates || false);
-          
-          // Student fields
-          if (userRole === 'Student') {
-            setUniversity(d.university || '');
-            setMajor(d.major || '');
-            setYearOfStudy(d.yearOfStudy || 1);
-            setClubsSocieties(d.clubsSocieties || '');
-            setOfferPeerMentorship(d.offerPeerMentorship || false);
-            setCampusBuddy(d.campusBuddy || false);
-            setMaxMentees(d.maxMentees || 1);
-            setExpertise(d.expertise || '');
-            setWillingMentorIntl(d.willingMentorIntl || false);
-            setCulturalFamiliarity(d.culturalFamiliarity || '');
-            setEventHost(d.eventHost || false);
-            setEventApproval(d.eventApproval || 'Yes');
-            setEventModeration(d.eventModeration || false);
-            setFinancialAidStatus(d.financialAidStatus || '');
-          }
-          
-
-          // Professional fields
-          if (userRole === 'Professional') {
-            setCompanyName(d.companyName || '');
-            setCompanyWebsite(d.companyWebsite || '');
-            setCompanyIndustry(d.companyIndustry || '');
-            setCompanySize(d.companySize || '');
-            setProfessionalBio(d.professionalBio || '');
-            setOfferInternships(d.offerInternships || false);
-            setHostWebinars(d.hostWebinars || false);
-          }
-        }
-      });
+      loadProfile();
+      unsubscribe = setupRealTimeListener();
     }
-  }, [user, userRole]);
-    // Save profile based on role
-    const handleSaveRoleProfile = async () => {
-      if (!user) return;
-      setIsSaving(true);
-      setError(null);
-      try {
-        const baseData = {
-          campusInvolvement,
-          languagesSpoken,
-          notifyCampusEvents,
-          notifyMentorshipRequests,
-          notifyCommunityUpdates,
-          updatedAt: Timestamp.now(),
-        };
-        
-        let roleData = {};
-        
-        if (userRole === 'Student') {
-          roleData = {
-            university,
-            major,
-            yearOfStudy,
-            clubsSocieties,
-            offerPeerMentorship,
-            campusBuddy,
-            maxMentees,
-            expertise,
-            willingMentorIntl,
-            culturalFamiliarity,
-            eventHost,
-            eventApproval,
-            eventModeration,
-            financialAidStatus,
-          };
-        } else if (userRole === 'Professional') {
-          roleData = {
-            companyName,
-            companyWebsite,
-            companyIndustry,
-            companySize,
-            professionalBio,
-            offerInternships,
-            hostWebinars,
-          };
-        }
-        
-        await setDoc(doc(db, 'users', user.uid), {
-          ...baseData,
-          ...roleData,
-        }, { merge: true });
-        
-        setSuccess('Profile saved successfully!');
-        setTimeout(() => setSuccess(null), 3000);
-      } catch (err: any) {
-        console.error('Save role profile error:', err);
-        setError('Failed to save profile');
-      } finally {
-        setIsSaving(false);
+    
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
       }
     };
-    const handleSaveDomesticStudentProfile = async () => {
-      if (!user) return;
-      setIsSaving(true);
-      setError(null);
-      try {
-        await setDoc(doc(db, 'users', user.uid), {
-          campusInvolvement,
-          languagesSpoken,
-          notifyCampusEvents,
-          notifyMentorshipRequests,
-          notifyCommunityUpdates,
-          university,
-          major,
-          yearOfStudy,
-          clubsSocieties,
-          offerPeerMentorship,
-          campusBuddy,
-          maxMentees,
-          expertise,
-          willingMentorIntl,
-          culturalFamiliarity,
-          eventHost,
-          eventApproval,
-          eventModeration,
-          financialAidStatus,
-          updatedAt: Timestamp.now(),
-        }, { merge: true });
-        setSuccess('Domestic Student profile saved!');
-        setTimeout(() => setSuccess(null), 3000);
-      } catch (err: any) {
-        console.error('Save domestic student profile error:', err);
-        setError('Failed to save profile');
-      } finally {
-        setIsSaving(false);
-      }
-    };
-
-
-  // Load user profile from Firestore
-  useEffect(() => {
-    if (user) {
-      loadUserProfile();
-    }
   }, [user]);
 
-  const loadUserProfile = async () => {
+  const setupRealTimeListener = () => {
+    if (!user) return;
+    
+    const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
+      if (docSnap.exists()) {
+        const d = docSnap.data();
+        setMentorStatus(d.mentorStatus || 'none');
+        setIsMentor(d.isMentor || false);
+        
+        // Update other fields that might change
+        if (d.role) setUserRole(d.role);
+        if (d.mentorExpertise) setMentorExpertise(d.mentorExpertise);
+        if (d.mentorBio) setMentorBio(d.mentorBio);
+        if (d.availability) setAvailability(d.availability);
+        if (d.mentorTags) setMentorTags(d.mentorTags);
+      }
+    });
+    
+    return unsubscribe;
+  };
+
+  useEffect(() => {
+    setShowAdminBadge(['admin', 'super_admin', 'moderator'].includes(userRole));
+  }, [userRole]);
+
+  const loadProfile = async () => {
     if (!user) return;
     try {
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      if (userDoc.exists()) {
-        const data = userDoc.data();
-        const name = data.name || data.displayName || localStorage.getItem('unity_user_name') || 'User';
-        setUserName(name);
-        setFirstName(data.firstName || '');
-        setLastName(data.lastName || '');
-        setProfilePhoto(data.photoURL || null);
-        setPhone(data.phone || '');
-        setEmail(data.email || user.email || '');
-        setSchool(data.school || '');
-        setProgramName(data.programName || '');
-        setCurrentYear(data.currentYear || '');
-        setCompanyName(data.companyName || '');
-        setJobTitle(data.jobTitle || '');
-      } else {
-        setUserName(localStorage.getItem('unity_user_name') || 'User');
+      const docSnap = await getDoc(doc(db, 'users', user.uid));
+      if (docSnap.exists()) {
+        const d = docSnap.data();
+        setUserRole(d.role || 'Student');
+        setFirstName(d.firstName || d.name?.split(' ')[0] || '');
+        setLastName(d.lastName || d.name?.split(' ')[1] || '');
+        setEmail(d.email || user.email || '');
+        setPhone(d.phone || '');
+        setProfilePhoto(d.photoURL || null);
+        setBio(d.bio || '');
+        setLocation(d.location || '');
+        setLinkedin(d.linkedin || '');
+        setGithub(d.github || '');
+        setWebsite(d.website || '');
+        setSchool(d.school || d.university || '');
+        setMajor(d.major || d.programName || '');
+        setYear(d.year || d.currentYear || '');
+        setCompany(d.company || d.companyName || '');
+        setJobTitle(d.jobTitle || '');
+        setIsMentor(d.isMentor || false);
+        setMentorStatus(d.mentorStatus || 'none');
+        setMentorExpertise(d.mentorExpertise || '');
+        setMentorBio(d.mentorBio || '');
+        setAvailability(d.availability || '');
+        setMentorTags(d.mentorTags || []);
+        setCampusInvolvement(d.campusInvolvement || '');
+        setLanguagesSpoken(d.languagesSpoken || '');
+        setNotifyCampusEvents(d.notifyCampusEvents ?? true);
+        setNotifyMentorshipRequests(d.notifyMentorshipRequests ?? true);
+        setNotifyCommunityUpdates(d.notifyCommunityUpdates ?? true);
+        setResumeAutoSave(d.resumeAutoSave || false);
+        setDarkMode(d.darkMode || false);
+        setSkills(d.skills || []);
+        setCertifications(d.certifications || []);
+        setAchievements(d.achievements || []);
+        setInterests(d.interests || []);
       }
     } catch (err) {
       console.error('Error loading profile:', err);
-      setUserName(localStorage.getItem('unity_user_name') || 'User');
+    }
+  };
+
+  const handleSave = async () => {
+    if (!user) return;
+    
+    if (!firstName.trim() || !lastName.trim()) {
+      setError('First name and last name are required');
+      return;
+    }
+    
+    setIsLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      const batch = writeBatch(db);
+      const userRef = doc(db, 'users', user.uid);
+      
+      const updateData: any = {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        name: `${firstName} ${lastName}`.trim(),
+        displayName: `${firstName} ${lastName}`.trim(),
+        phone: phone.trim(),
+        bio: bio.trim(),
+        location: location.trim(),
+        linkedin: linkedin.trim(),
+        github: github.trim(),
+        website: website.trim(),
+        interests,
+        updatedAt: Timestamp.now(),
+      };
+
+      if (userRole === 'Student') {
+        updateData.school = school.trim();
+        updateData.major = major.trim();
+        updateData.year = year;
+        updateData.currentYear = year;
+      } else if (userRole === 'Professional') {
+        updateData.company = company.trim();
+        updateData.companyName = company.trim();
+        updateData.jobTitle = jobTitle.trim();
+      }
+
+      batch.set(userRef, updateData, { merge: true });
+      await batch.commit();
+      
+      setSuccess('Profile updated successfully!');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to save profile');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
-
+    
+    setIsLoading(true);
+    setError('');
+    setSuccess('');
+    
     try {
-      setIsSaving(true);
-      setError(null);
-      
-      // Create unique filename
-      const timestamp = Date.now();
-      const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const filename = `${user.uid}_${timestamp}_${sanitizedFileName}`;
-      const fileRef = ref(storage, `profile-photos/${filename}`);
-      
-      // Upload file
-      const uploadResult = await uploadBytes(fileRef, file);
-      
-      // Get download URL
-      const photoURL = await getDownloadURL(fileRef);
-      
-      // Update Firestore
-      await setDoc(doc(db, 'users', user.uid), {
-        photoURL,
-        updatedAt: Timestamp.now(),
-      }, { merge: true });
-      
-      // Update local state
-      setProfilePhoto(photoURL);
-      
-      setSuccess('Profile photo updated successfully!');
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err: any) {
-      console.error('Photo upload error:', err);
-      setError('Failed to upload photo. Please try again.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleGenImage = async () => {
-    if (!user) return;
-    setIsGenerating(true);
-    setError(null);
-    try {
-      const img = await generateProfessionalHeadshot(`a professional student mentor with friendly expression`);
-      if (img) {
-        setProfilePhoto(img);
-        await setDoc(doc(db, 'users', user.uid), {
-          photoURL: img,
-          updatedAt: Timestamp.now(),
+      // Convert image to base64 data URL
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const photoURL = reader.result as string;
+        
+        await setDoc(doc(db, 'users', user.uid), { 
+          photoURL, 
+          updatedAt: Timestamp.now() 
         }, { merge: true });
-        setSuccess('AI-generated photo set successfully!');
-        setTimeout(() => setSuccess(null), 3000);
-      }
+        
+        setProfilePhoto(photoURL);
+        setSuccess('Photo updated successfully!');
+        setTimeout(() => setSuccess(''), 3000);
+        setIsLoading(false);
+        
+        // Trigger event to refresh photo across all components
+        window.dispatchEvent(new CustomEvent('profilePhotoUpdated', { detail: { photoURL } }));
+      };
+      
+      reader.onerror = () => {
+        setError('Failed to read image file.');
+        setIsLoading(false);
+      };
+      
+      reader.readAsDataURL(file);
     } catch (err: any) {
-      setError('Failed to generate photo');
-    } finally {
-      setIsGenerating(false);
+      console.error('Upload error:', err);
+      setError('Failed to upload photo.');
+      setIsLoading(false);
     }
   };
 
   const handleChangePassword = async () => {
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      setError('All password fields are required');
+    if (!user?.email || !currentPassword || !newPassword || !confirmPassword) {
+      setError('All fields required');
       return;
     }
     if (newPassword !== confirmPassword) {
-      setError('New passwords do not match');
+      setError('Passwords do not match');
       return;
     }
     if (newPassword.length < 6) {
       setError('Password must be at least 6 characters');
       return;
     }
-
-    setIsChangingPassword(true);
-    setError(null);
+    
+    setIsLoading(true);
+    setError('');
+    setSuccess('');
     try {
-      if (!user || !user.email) throw new Error('User not found');
-      
       const credential = EmailAuthProvider.credential(user.email, currentPassword);
       await reauthenticateWithCredential(user, credential);
       await updatePassword(user, newPassword);
-      
       setSuccess('Password changed successfully!');
+      setShowPasswordModal(false);
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      setTimeout(() => setSuccess(null), 3000);
+      setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
-      console.error('Change password error:', err);
-      setError('Failed to change password');
+      setError(err.code === 'auth/wrong-password' ? 'Incorrect current password' : 'Failed to change password');
     } finally {
-      setIsChangingPassword(false);
+      setIsLoading(false);
     }
   };
 
   const handleChangeEmail = async () => {
-    if (!newEmail || !currentPassword) {
-      setError('Email and password are required');
+    if (!user?.email || !currentPassword || !newEmail) {
+      setError('All fields required');
       return;
     }
-    if (!newEmail.includes('@')) {
-      setError('Invalid email address');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+      setError('Invalid email format');
       return;
     }
-
-    setIsChangingEmail(true);
-    setError(null);
+    if (newEmail === user.email) {
+      setError('New email must be different');
+      return;
+    }
+    
+    setIsLoading(true);
+    setError('');
+    setSuccess('');
     try {
-      if (!user || !user.email) throw new Error('User not found');
-      
       const credential = EmailAuthProvider.credential(user.email, currentPassword);
       await reauthenticateWithCredential(user, credential);
       await updateEmail(user, newEmail);
-
-      await setDoc(doc(db, 'users', user.uid), {
-        email: newEmail,
-        updatedAt: Timestamp.now(),
-      }, { merge: true });
-      
+      await setDoc(doc(db, 'users', user.uid), { email: newEmail, updatedAt: Timestamp.now() }, { merge: true });
+      setEmail(newEmail);
       setSuccess('Email changed successfully!');
       setShowEmailModal(false);
-      setEmail(newEmail);
       setCurrentPassword('');
-      setTimeout(() => setSuccess(null), 3000);
+      setNewEmail('');
+      setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
-      console.error('Change email error:', err);
-      setError('Failed to change email');
+      if (err.code === 'auth/wrong-password') setError('Incorrect password');
+      else if (err.code === 'auth/email-already-in-use') setError('Email already in use');
+      else if (err.code === 'auth/requires-recent-login') setError('Please log out and log in again');
+      else setError('Failed to change email');
     } finally {
-      setIsChangingEmail(false);
+      setIsLoading(false);
     }
   };
 
   const handleDeleteAccount = async () => {
-    if (!passwordToDelete) {
-      setError('Password is required to delete account');
+    if (!user?.email || !currentPassword) {
+      setError('Password is required');
       return;
     }
-
-    setIsDeleting(true);
-    setError(null);
+    
+    setIsLoading(true);
+    setError('');
     try {
-      if (!user || !user.email) throw new Error('User not found');
-      
-      const credential = EmailAuthProvider.credential(user.email, passwordToDelete);
+      const credential = EmailAuthProvider.credential(user.email, currentPassword);
       await reauthenticateWithCredential(user, credential);
       
-      deleteUser(user);
       await updateDoc(doc(db, 'users', user.uid), {
         deletedAt: Timestamp.now(),
         isDeleted: true,
       }).catch(() => {});
       
-      localStorage.removeItem('unity_onboarding_complete');
-      localStorage.removeItem('unity_user_name');
-      localStorage.removeItem('unity_user_role');
-      
+      await deleteUser(user);
+      localStorage.clear();
       navigate('/login');
     } catch (err: any) {
-      setError(err?.message || 'Failed to delete account');
-      setIsDeleting(false);
+      setError(err.code === 'auth/wrong-password' ? 'Incorrect password' : 'Failed to delete account');
+      setIsLoading(false);
     }
   };
 
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      localStorage.removeItem('unity_onboarding_complete');
-      localStorage.removeItem('unity_user_name');
-      localStorage.removeItem('unity_user_role');
+      localStorage.clear();
       navigate('/login');
     } catch (err: any) {
-      setError(err?.message || 'Failed to logout');
+      setError('Failed to logout');
     }
   };
-
-  const handleSaveProfile = async () => {
-    if (!user) return;
-    setIsSaving(true);
-    setError(null);
-    try {
-      const updateData: any = {
-        name: userName,
-        displayName: userName,
-        firstName,
-        lastName,
-        phone,
-        isMentor,
-        mentorExpertise,
-        mentorBio,
-        updatedAt: Timestamp.now(),
-      };
-      
-      if (userRole === 'Student') {
-        updateData.school = school;
-        updateData.programName = programName;
-        updateData.currentYear = currentYear;
-      } else if (userRole === 'Professional') {
-        updateData.companyName = companyName;
-        updateData.jobTitle = jobTitle;
-      }
-      
-      await setDoc(doc(db, 'users', user.uid), updateData, { merge: true });
-      
-      localStorage.setItem('unity_user_name', userName);
-      setSuccess('Profile saved successfully!');
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err: any) {
-      console.error('Save profile error:', err);
-      setError(err?.message || 'Failed to save profile');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-
-
-  // Load mentor status from Firestore
-  useEffect(() => {
-    if (user) {
-      getDoc(doc(db, 'users', user.uid)).then(docSnap => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setIsMentor(data.isMentor || false);
-          setMentorExpertise(data.mentorExpertise || '');
-          setMentorBio(data.mentorBio || '');
-          setBio(data.bio || '');
-          setPhone(data.phone || '');
-          setLocation(data.location || '');
-          setWebsite(data.website || '');
-          setLinkedin(data.linkedin || '');
-          setGithub(data.github || '');
-          setTwitter(data.twitter || '');
-          setSkills(data.skills || '');
-          setInterests(data.interests || '');
-          setAchievements(data.achievements || '');
-          setWorkExperience(data.workExperience || '');
-          setEducation(data.education || '');
-          setCertifications(data.certifications || '');
-          setAvailability(data.availability || '');
-        }
-      });
-      
-      // Check mentor application status
-      getDoc(doc(db, 'mentorApplications', user.uid)).then(appSnap => {
-        if (appSnap.exists()) {
-          const appData = appSnap.data();
-          setMentorApplicationStatus(appData.status || 'none');
-        }
-      });
-    }
-  }, [user]);
-
-  const handleMentorToggle = async (checked: boolean) => {
-    if (!user) return;
-    setIsMentor(checked);
-    setIsSaving(true);
-    setError(null);
-    try {
-      await setDoc(doc(db, 'users', user.uid), {
-        isMentor: checked,
-        mentorExpertise: checked ? mentorExpertise : '',
-        mentorBio: checked ? mentorBio : '',
-        updatedAt: Timestamp.now(),
-      }, { merge: true });
-      setSuccess(checked ? 'You are now a mentor!' : 'Mentor status removed');
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err: any) {
-      console.error('Mentor toggle error:', err);
-      setError(err?.message || 'Failed to update mentor status');
-      setIsMentor(!checked);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleMentorProfileSave = async () => {
-    if (!user) return;
-    setIsSaving(true);
-    setError(null);
-    try {
-      await setDoc(doc(db, 'users', user.uid), {
-        isMentor,
-        mentorExpertise,
-        mentorBio,
-        bio,
-        phone,
-        location,
-        website,
-        linkedin,
-        github,
-        twitter,
-        skills,
-        interests,
-        achievements,
-        workExperience,
-        education,
-        certifications,
-        availability,
-        updatedAt: Timestamp.now(),
-      }, { merge: true });
-      setSuccess('Profile updated successfully!');
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err: any) {
-      console.error('Profile save error:', err);
-      setError(err?.message || 'Failed to save profile');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleApplyMentor = async () => {
-    if (!user) return;
-    setIsSaving(true);
-    setError(null);
-    try {
-      await setDoc(doc(db, 'mentorApplications', user.uid), {
-        userId: user.uid,
-        userName: userName,
-        email: user.email,
-        status: 'pending',
-        appliedAt: Timestamp.now(),
-        userRole,
-      });
-      setSuccess('Mentor application submitted! Admin will review your request.');
-      setTimeout(() => setSuccess(null), 5000);
-    } catch (err: any) {
-      console.error('Apply mentor error:', err);
-      setError('Failed to submit application');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-
 
   return (
-    <div className={`min-h-screen ${darkMode ? 'dark bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'}`}>
-      <div className="max-w-6xl mx-auto py-8 px-4 sm:px-6 space-y-8">
-        {/* Page Header */}
-        <div className="text-center space-y-4 py-8">
-          <h1 className="text-4xl md:text-5xl font-black bg-gradient-to-r from-primary via-blue-600 to-purple-600 bg-clip-text text-transparent">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
             Profile Settings
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-            Manage your account, preferences, and role-specific settings all in one place
-          </p>
+          <p className="text-slate-600 dark:text-slate-400">Manage your account and preferences</p>
         </div>
-        
-        {/* Role & Privilege Summary */}
-        <section>
-          <div className={`${darkMode ? 'dark bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} rounded-2xl p-6 border shadow-sm mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4`}>
-            <div>
-              <h2 className="text-lg font-black text-gray-900 dark:text-white mb-1 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">verified_user</span>
-                {userRole} Privileges
-              </h2>
-              <ul className="text-xs text-gray-600 dark:text-gray-300 list-disc ml-6">
-                {privileges.map(p => (
-                  <li key={p}>{p.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}</li>
-                ))}
-              </ul>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="material-symbols-outlined text-4xl">
-                {userRole === 'Student' && 'school'}
-                {userRole === 'Professional' && 'business_center'}
-                {(userRole === 'admin' || userRole === 'super_admin' || userRole === 'moderator') && 'admin_panel_settings'}
-              </span>
-              <span className="text-xs font-bold mt-1">
-                {userRole === 'Student' && '🎓 Student'}
-                {userRole === 'Professional' && '💼 Working Professional'}
-                {userRole === 'admin' && '⚡ Admin'}
-                {userRole === 'super_admin' && '👑 Super Admin'}
-                {userRole === 'moderator' && '🛡️ Moderator'}
-              </span>
-            </div>
-          </div>
-        </section>
+
         {/* Alerts */}
         {success && (
-          <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-xl">
-            <span className="material-symbols-outlined text-green-600 dark:text-green-400">check_circle</span>
-            <p className="text-sm font-bold text-green-600 dark:text-green-400">{success}</p>
+          <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-green-700 dark:text-green-300">
+            {success}
           </div>
         )}
         {error && (
-          <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-xl">
-            <span className="material-symbols-outlined text-red-600 dark:text-red-400">error</span>
-            <p className="text-sm font-bold text-red-600 dark:text-red-400">{error}</p>
+          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-300">
+            {error}
           </div>
         )}
 
-
-        {/* Account Overview */}
-        <section className={`${darkMode ? 'dark bg-slate-900/50 border-slate-700/50' : 'bg-white/80 border-gray-200'} backdrop-blur-xl rounded-3xl p-8 border shadow-2xl relative overflow-hidden`}>
-          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl"></div>
-          <div className="relative z-10">
-            <h2 className="text-3xl font-black bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent mb-8 flex items-center gap-3">
-              <span className="material-symbols-outlined text-primary text-4xl">account_circle</span>
-              Account Overview
-            </h2>
-
-            {/* Profile Photo Section - Centered & Prominent */}
-            <div className="flex flex-col items-center mb-10">
-              <div className="relative group">
-                <div className="absolute inset-0 bg-gradient-to-r from-primary to-blue-600 rounded-full blur-xl opacity-50 group-hover:opacity-75 transition-opacity"></div>
-                {profilePhoto ? (
-                  <img src={profilePhoto} alt="Profile" className="relative w-32 h-32 rounded-full shadow-2xl border-4 border-white dark:border-gray-700 object-cover" />
-                ) : (
-                  <div className="relative w-32 h-32 rounded-full shadow-2xl border-4 border-white dark:border-gray-700 bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-white text-5xl font-black">
-                    {userName[0] || 'U'}
-                  </div>
-                )}
-              </div>
-              <div className="mt-6 flex gap-3">
-                <label className="cursor-pointer">
-                  <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
-                  <div className="px-6 py-3 bg-primary hover:bg-primary/90 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2">
-                    <span className="material-symbols-outlined text-sm">upload</span>
-                    Upload Photo
-                  </div>
-                </label>
-                <button 
-                  onClick={handleGenImage} 
-                  disabled={isGenerating}
-                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2 disabled:opacity-50"
+        <div className="grid lg:grid-cols-4 gap-6">
+          
+          {/* Sidebar */}
+          <div className="lg:col-span-1">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl p-6 sticky top-8">
+              <div className="flex flex-col items-center mb-6">
+                <div className="relative group">
+                  {profilePhoto ? (
+                    <img src={profilePhoto} alt="Profile" className="w-24 h-24 rounded-full object-cover border-4 border-blue-100 dark:border-blue-900" />
+                  ) : (
+                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-3xl font-bold border-4 border-blue-100 dark:border-blue-900">
+                      {firstName[0] || 'U'}
+                    </div>
+                  )}
+                  <label className="absolute bottom-0 right-0 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full cursor-pointer shadow-lg transition">
+                    <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" disabled={isLoading} />
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </label>
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!user) return;
+                    setIsLoading(true);
+                    try {
+                      const aiPhotoURL = `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`;
+                      await setDoc(doc(db, 'users', user.uid), { photoURL: aiPhotoURL, updatedAt: Timestamp.now() }, { merge: true });
+                      setProfilePhoto(aiPhotoURL);
+                      setSuccess('AI photo generated!');
+                      setTimeout(() => setSuccess(''), 3000);
+                      
+                      // Trigger event to refresh photo across all components
+                      window.dispatchEvent(new CustomEvent('profilePhotoUpdated', { detail: { photoURL: aiPhotoURL } }));
+                    } catch (err: any) {
+                      setError(err.message);
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  }}
+                  disabled={isLoading}
+                  className="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline"
                 >
-                  <span className="material-symbols-outlined text-sm">auto_awesome</span>
-                  {isGenerating ? 'Generating...' : 'AI Photo'}
+                  ✨ Generate AI Photo
                 </button>
-              </div>
-            </div>
-
-            {/* Account Info Grid */}
-            <div className="grid md:grid-cols-2 gap-6 mb-8">
-              {/* First Name Card */}
-              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
-                    <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">person</span>
-                  </div>
-                  <label className="font-black text-sm text-gray-700 dark:text-gray-300 uppercase tracking-wider">First Name</label>
+                <h3 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">{firstName} {lastName}</h3>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-slate-500 dark:text-slate-400">{userRole}</span>
+                  {showAdminBadge && (
+                    <span className="px-2 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold rounded-full">
+                      {userRole === 'super_admin' ? '👑' : userRole === 'admin' ? '⚡' : '🛡️'}
+                    </span>
+                  )}
                 </div>
-                <input 
-                  type="text" 
-                  value={firstName} 
-                  onChange={e => setFirstName(e.target.value)} 
-                  className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-xl px-4 py-3 text-lg font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none" 
-                />
-              </div>
-
-              {/* Last Name Card */}
-              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
-                    <span className="material-symbols-outlined text-purple-600 dark:text-purple-400">badge</span>
-                  </div>
-                  <label className="font-black text-sm text-gray-700 dark:text-gray-300 uppercase tracking-wider">Last Name</label>
-                </div>
-                <input 
-                  type="text" 
-                  value={lastName} 
-                  onChange={e => setLastName(e.target.value)} 
-                  className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-xl px-4 py-3 text-lg font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none" 
-                />
-              </div>
-
-              {/* Phone Card */}
-              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
-                    <span className="material-symbols-outlined text-green-600 dark:text-green-400">phone</span>
-                  </div>
-                  <label className="font-black text-sm text-gray-700 dark:text-gray-300 uppercase tracking-wider">Phone Number</label>
-                </div>
-                <input 
-                  type="tel" 
-                  value={phone} 
-                  onChange={e => setPhone(e.target.value)} 
-                  className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-xl px-4 py-3 text-lg font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none" 
-                />
-              </div>
-
-              {/* Email Card */}
-              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
-                    <span className="material-symbols-outlined text-purple-600 dark:text-purple-400">email</span>
-                  </div>
-                  <label className="font-black text-sm text-gray-700 dark:text-gray-300 uppercase tracking-wider">Email Address</label>
-                </div>
-                <input 
-                  type="email" 
-                  value={email} 
-                  readOnly 
-                  className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-xl px-4 py-3 text-lg font-bold text-gray-500 dark:text-gray-400 mb-3" 
-                />
-                <button 
-                  onClick={() => setShowEmailModal(true)}
-                  className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2"
-                >
-                  <span className="material-symbols-outlined text-sm">edit</span>
-                  Change Email
-                </button>
-              </div>
-
-              {/* Password Card */}
-              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-xl flex items-center justify-center">
-                    <span className="material-symbols-outlined text-orange-600 dark:text-orange-400">lock</span>
-                  </div>
-                  <label className="font-black text-sm text-gray-700 dark:text-gray-300 uppercase tracking-wider">Password</label>
-                </div>
-                <div className="text-gray-400 dark:text-gray-500 text-sm mb-3 font-medium">••••••••••••</div>
-                <button 
-                  onClick={() => setShowPasswordModal(true)}
-                  className="w-full px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2"
-                >
-                  <span className="material-symbols-outlined text-sm">edit</span>
-                  Change Password
-                </button>
               </div>
               
-              {/* Student-specific fields */}
-              {userRole === 'Student' && (
-                <>
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
-                        <span className="material-symbols-outlined text-indigo-600 dark:text-indigo-400">school</span>
-                      </div>
-                      <label className="font-black text-sm text-gray-700 dark:text-gray-300 uppercase tracking-wider">School</label>
-                    </div>
-                    <input 
-                      type="text" 
-                      value={school} 
-                      onChange={e => setSchool(e.target.value)} 
-                      className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-xl px-4 py-3 text-lg font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none" 
-                    />
-                  </div>
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-10 h-10 bg-teal-100 dark:bg-teal-900/30 rounded-xl flex items-center justify-center">
-                        <span className="material-symbols-outlined text-teal-600 dark:text-teal-400">menu_book</span>
-                      </div>
-                      <label className="font-black text-sm text-gray-700 dark:text-gray-300 uppercase tracking-wider">Program Name</label>
-                    </div>
-                    <input 
-                      type="text" 
-                      value={programName} 
-                      onChange={e => setProgramName(e.target.value)} 
-                      className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-xl px-4 py-3 text-lg font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none" 
-                    />
-                  </div>
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-10 h-10 bg-cyan-100 dark:bg-cyan-900/30 rounded-xl flex items-center justify-center">
-                        <span className="material-symbols-outlined text-cyan-600 dark:text-cyan-400">calendar_today</span>
-                      </div>
-                      <label className="font-black text-sm text-gray-700 dark:text-gray-300 uppercase tracking-wider">Current Year</label>
-                    </div>
-                    <input 
-                      type="text" 
-                      value={currentYear} 
-                      onChange={e => setCurrentYear(e.target.value)} 
-                      className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-xl px-4 py-3 text-lg font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none" 
-                    />
-                  </div>
-                </>
-              )}
-              
-              {/* Professional-specific fields */}
-              {userRole === 'Professional' && (
-                <>
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
-                        <span className="material-symbols-outlined text-indigo-600 dark:text-indigo-400">business</span>
-                      </div>
-                      <label className="font-black text-sm text-gray-700 dark:text-gray-300 uppercase tracking-wider">Company Name</label>
-                    </div>
-                    <input 
-                      type="text" 
-                      value={companyName} 
-                      onChange={e => setCompanyName(e.target.value)} 
-                      className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-xl px-4 py-3 text-lg font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none" 
-                    />
-                  </div>
-                  <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-10 h-10 bg-teal-100 dark:bg-teal-900/30 rounded-xl flex items-center justify-center">
-                        <span className="material-symbols-outlined text-teal-600 dark:text-teal-400">work</span>
-                      </div>
-                      <label className="font-black text-sm text-gray-700 dark:text-gray-300 uppercase tracking-wider">Job Title</label>
-                    </div>
-                    <input 
-                      type="text" 
-                      value={jobTitle} 
-                      onChange={e => setJobTitle(e.target.value)} 
-                      className="w-full bg-gray-50 dark:bg-slate-700 border-none rounded-xl px-4 py-3 text-lg font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none" 
-                    />
-                  </div>
-                </>
-              )}
-            </div>
+              <nav className="space-y-2">
+                {['account', 'profile', 'mentor', 'preferences', 'complete', 'security'].map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`w-full text-left px-4 py-3 rounded-xl font-medium transition ${
+                      activeTab === tab
+                        ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    {tab === 'complete' ? 'Complete Profile' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  </button>
+                ))}
+              </nav>
 
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 pt-6 border-t border-gray-200 dark:border-gray-700">
-              <button 
-                onClick={handleSaveProfile} 
-                disabled={isSaving}
-                className="flex-1 px-8 py-4 bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-700 text-white rounded-xl font-black shadow-xl hover:scale-105 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {isSaving ? (
-                  <>
-                    <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <span className="material-symbols-outlined">save</span>
-                    Save Changes
-                  </>
-                )}
-              </button>
-              <button 
-                onClick={handleLogout}
-                className="px-8 py-4 bg-gray-600 hover:bg-gray-700 text-white rounded-xl font-black shadow-lg hover:scale-105 transition-all flex items-center justify-center gap-2"
-              >
-                <span className="material-symbols-outlined">logout</span>
-                Logout
-              </button>
-              <button 
-                onClick={() => setShowDeleteModal(true)}
-                className="px-8 py-4 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black shadow-lg hover:scale-105 transition-all flex items-center justify-center gap-2"
-              >
-                <span className="material-symbols-outlined">delete_forever</span>
-                Delete Account
-              </button>
+              <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700 space-y-2">
+                <button onClick={handleLogout} className="w-full px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition">
+                  Logout
+                </button>
+                <button onClick={() => setShowDeleteModal(true)} className="w-full px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition">
+                  Delete Account
+                </button>
+              </div>
             </div>
           </div>
-        </section>
 
-        {/* Resume Auto-Save */}
-        <div className={`${darkMode ? 'dark bg-gradient-to-br from-emerald-900/20 via-teal-900/20 to-cyan-900/20 border-emerald-700/30' : 'bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 border-emerald-200'} backdrop-blur-2xl rounded-3xl p-6 border-2 shadow-2xl hover:shadow-emerald-500/10 transition-all duration-300 relative overflow-hidden group`}> 
-          <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 to-teal-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-          <div className="relative z-10">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl shadow-lg">
-                  <span className="material-symbols-outlined text-white text-2xl">sync</span>
+          {/* Main Content */}
+          <div className="lg:col-span-3">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl p-8">
+              
+              {activeTab === 'account' && (
+                <div className="space-y-6">
+                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">Account Information</h2>
+                  
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">First Name</label>
+                      <input
+                        type="text"
+                        value={firstName}
+                        onChange={e => setFirstName(e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Last Name</label>
+                      <input
+                        type="text"
+                        value={lastName}
+                        onChange={e => setLastName(e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Email</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="email"
+                          value={email}
+                          readOnly
+                          className="flex-1 px-4 py-3 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-500"
+                        />
+                        <button
+                          onClick={() => setShowEmailModal(true)}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm transition"
+                        >
+                          Change
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Phone</label>
+                      <input
+                        type="tel"
+                        value={phone}
+                        onChange={e => setPhone(e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {userRole === 'Student' && (
+                    <div className="grid md:grid-cols-2 gap-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">School</label>
+                        <input
+                          type="text"
+                          value={school}
+                          onChange={e => setSchool(e.target.value)}
+                          className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Major</label>
+                        <input
+                          type="text"
+                          value={major}
+                          onChange={e => setMajor(e.target.value)}
+                          className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Year</label>
+                        <select
+                          value={year}
+                          onChange={e => setYear(e.target.value)}
+                          className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        >
+                          <option value="">Select Year</option>
+                          <option value="Freshman">Freshman</option>
+                          <option value="Sophomore">Sophomore</option>
+                          <option value="Junior">Junior</option>
+                          <option value="Senior">Senior</option>
+                          <option value="Graduate">Graduate</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {userRole === 'Professional' && (
+                    <div className="grid md:grid-cols-2 gap-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Company</label>
+                        <input
+                          type="text"
+                          value={company}
+                          onChange={e => setCompany(e.target.value)}
+                          className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Job Title</label>
+                        <input
+                          type="text"
+                          value={jobTitle}
+                          onChange={e => setJobTitle(e.target.value)}
+                          className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleSave}
+                    disabled={isLoading}
+                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-medium transition disabled:opacity-50"
+                  >
+                    {isLoading ? 'Saving...' : 'Save Changes'}
+                  </button>
                 </div>
-                <div>
-                  <h2 className="text-xl font-black bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">Resume Auto-Save</h2>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Automatically save your resume changes</p>
+              )}
+
+              {activeTab === 'profile' && (
+                <div className="space-y-6">
+                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">Profile Details</h2>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Bio</label>
+                    <textarea
+                      value={bio}
+                      onChange={e => setBio(e.target.value)}
+                      rows={4}
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Location</label>
+                    <input
+                      type="text"
+                      value={location}
+                      onChange={e => setLocation(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Interests</label>
+                    <input
+                      type="text"
+                      value={interests.join(', ')}
+                      onChange={e => setInterests(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+                      placeholder="Technology, Sports, Music (comma-separated)"
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Social Links</h3>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">LinkedIn</label>
+                      <input
+                        type="url"
+                        value={linkedin}
+                        onChange={e => setLinkedin(e.target.value)}
+                        placeholder="https://linkedin.com/in/username"
+                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">GitHub</label>
+                      <input
+                        type="url"
+                        value={github}
+                        onChange={e => setGithub(e.target.value)}
+                        placeholder="https://github.com/username"
+                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Website</label>
+                      <input
+                        type="url"
+                        value={website}
+                        onChange={e => setWebsite(e.target.value)}
+                        placeholder="https://yourwebsite.com"
+                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={async () => {
+                      if (!user) return;
+                      setIsLoading(true);
+                      setError('');
+                      setSuccess('');
+                      try {
+                        await setDoc(doc(db, 'users', user.uid), {
+                          bio: bio.trim(),
+                          location: location.trim(),
+                          interests,
+                          linkedin: linkedin.trim(),
+                          github: github.trim(),
+                          website: website.trim(),
+                          updatedAt: Timestamp.now()
+                        }, { merge: true });
+                        setSuccess('Profile updated!');
+                        setTimeout(() => setSuccess(''), 3000);
+                      } catch (err: any) {
+                        setError(err.message);
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }}
+                    disabled={isLoading}
+                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-medium transition disabled:opacity-50"
+                  >
+                    {isLoading ? 'Saving...' : 'Save Profile'}
+                  </button>
                 </div>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={resumeAutoSave}
-                  onChange={handleResumeAutoSaveChange}
-                  className="sr-only peer"
-                />
-                <div className="w-14 h-7 bg-gray-300 dark:bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 dark:peer-focus:ring-emerald-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-emerald-500 peer-checked:to-teal-600"></div>
-              </label>
-            </div>
-            <div className="mt-4 p-4 bg-white/50 dark:bg-slate-800/50 rounded-xl border border-emerald-200/50 dark:border-emerald-700/50">
-              <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                {resumeAutoSave ? (
-                  <span className="flex items-center gap-2"><span className="text-emerald-600 dark:text-emerald-400">✓</span> Auto-save is <strong>enabled</strong>. Your resume changes will be saved automatically.</span>
-                ) : (
-                  <span className="flex items-center gap-2"><span className="text-gray-400">○</span> Auto-save is <strong>disabled</strong>. Remember to click Save to persist your changes.</span>
-                )}
-              </p>
+              )}
+
+              {activeTab === 'mentor' && (
+                <div className="space-y-6">
+                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">Mentor Profile</h2>
+                  
+                  {mentorStatus === 'none' && (
+                    <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+                      <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">Become a Mentor</h3>
+                      <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">Share your knowledge and help others grow</p>
+                      <button
+                        onClick={async () => {
+                          if (!user) return;
+                          setIsLoading(true);
+                          try {
+                            // Update user status
+                            await setDoc(doc(db, 'users', user.uid), { 
+                              mentorStatus: 'pending', 
+                              updatedAt: Timestamp.now() 
+                            }, { merge: true });
+                            
+                            // Create mentor application for admin review
+                            await setDoc(doc(db, 'mentorApplications', user.uid), {
+                              userId: user.uid,
+                              name: `${firstName} ${lastName}`.trim() || user.displayName || 'Unknown',
+                              email: user.email,
+                              expertise: mentorExpertise ? [mentorExpertise] : [],
+                              credentials: bio || 'No credentials provided',
+                              experience: mentorBio || 'No experience provided',
+                              status: 'pending',
+                              appliedAt: Timestamp.now(),
+                              documents: [],
+                              adminNotes: ''
+                            });
+                            
+                            setMentorStatus('pending');
+                            setSuccess('Application submitted!');
+                            setTimeout(() => setSuccess(''), 3000);
+                          } catch (err: any) {
+                            setError(err.message);
+                          } finally {
+                            setIsLoading(false);
+                          }
+                        }}
+                        disabled={isLoading}
+                        className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-medium transition disabled:opacity-50"
+                      >
+                        Apply to Become a Mentor
+                      </button>
+                    </div>
+                  )}
+
+                  {mentorStatus === 'pending' && (
+                    <div className="p-6 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl border border-yellow-200 dark:border-yellow-800">
+                      <h3 className="text-lg font-semibold text-yellow-900 dark:text-yellow-300 mb-2">⏳ Application Pending</h3>
+                      <p className="text-sm text-yellow-700 dark:text-yellow-400">Your mentor application is under review</p>
+                    </div>
+                  )}
+
+                  {mentorStatus === 'approved' && (
+                    <div className="space-y-6">
+                      <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
+                        <p className="text-sm text-green-700 dark:text-green-300">✓ Approved Mentor</p>
+                      </div>
+
+                      <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                        <div>
+                          <h3 className="font-semibold text-slate-900 dark:text-white">Active Mentor Status</h3>
+                          <p className="text-sm text-slate-600 dark:text-slate-400">Toggle your availability</p>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (!user) return;
+                            const newStatus = !isMentor;
+                            setIsMentor(newStatus);
+                            try {
+                              await setDoc(doc(db, 'users', user.uid), { isMentor: newStatus, updatedAt: Timestamp.now() }, { merge: true });
+                              setSuccess(newStatus ? 'Mentor mode enabled' : 'Mentor mode disabled');
+                              setTimeout(() => setSuccess(''), 3000);
+                            } catch (err: any) {
+                              setError(err.message);
+                              setIsMentor(!newStatus);
+                            }
+                          }}
+                          className={`relative w-14 h-7 rounded-full transition ${isMentor ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'}`}
+                        >
+                          <span className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${isMentor ? 'translate-x-7' : ''}`} />
+                        </button>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Expertise Areas</label>
+                        <input
+                          type="text"
+                          value={mentorExpertise}
+                          onChange={e => setMentorExpertise(e.target.value)}
+                          placeholder="e.g., Web Development, Data Science, Leadership"
+                          className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">This helps students find you based on your expertise</p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Mentor Tags</label>
+                        <input
+                          type="text"
+                          value={mentorTags?.join(', ') || ''}
+                          onChange={e => setMentorTags(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+                          placeholder="Academic Excellence, Career Transition, STEM Careers (comma-separated)"
+                          className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Tags help match you with students seeking specific guidance</p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Mentor Bio</label>
+                        <textarea
+                          value={mentorBio}
+                          onChange={e => setMentorBio(e.target.value)}
+                          rows={4}
+                          placeholder="Tell mentees about your experience and what you can help with"
+                          className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Availability</label>
+                        <input
+                          type="text"
+                          value={availability}
+                          onChange={e => setAvailability(e.target.value)}
+                          placeholder="e.g., Weekdays 6-8 PM EST"
+                          className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                      </div>
+
+                      <button
+                        onClick={async () => {
+                          if (!user) return;
+                          setIsLoading(true);
+                          try {
+                            await setDoc(doc(db, 'users', user.uid), {
+                              mentorExpertise,
+                              mentorBio,
+                              availability,
+                              mentorTags,
+                              updatedAt: Timestamp.now()
+                            }, { merge: true });
+                            setSuccess('Mentor profile updated!');
+                            setTimeout(() => setSuccess(''), 3000);
+                          } catch (err: any) {
+                            setError(err.message);
+                          } finally {
+                            setIsLoading(false);
+                          }
+                        }}
+                        disabled={isLoading}
+                        className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-medium transition disabled:opacity-50"
+                      >
+                        {isLoading ? 'Saving...' : 'Save Mentor Profile'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'preferences' && (
+                <div className="space-y-6">
+                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">Preferences</h2>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Campus Involvement</label>
+                    <input
+                      type="text"
+                      value={campusInvolvement}
+                      onChange={e => setCampusInvolvement(e.target.value)}
+                      placeholder="Clubs, organizations, activities"
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Languages Spoken</label>
+                    <input
+                      type="text"
+                      value={languagesSpoken}
+                      onChange={e => setLanguagesSpoken(e.target.value)}
+                      placeholder="e.g., English, Spanish, Mandarin"
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-4 pt-6 border-t border-slate-200 dark:border-slate-700">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Notifications</h3>
+                    
+                    {[
+                      { label: 'Campus Events', state: notifyCampusEvents, setState: setNotifyCampusEvents },
+                      { label: 'Mentorship Requests', state: notifyMentorshipRequests, setState: setNotifyMentorshipRequests },
+                      { label: 'Community Updates', state: notifyCommunityUpdates, setState: setNotifyCommunityUpdates }
+                    ].map(({ label, state, setState }) => (
+                      <div key={label} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                        <span className="text-slate-700 dark:text-slate-300">{label}</span>
+                        <button
+                          onClick={() => setState(!state)}
+                          className={`relative w-14 h-7 rounded-full transition ${state ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'}`}
+                        >
+                          <span className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${state ? 'translate-x-7' : ''}`} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-4 pt-6 border-t border-slate-200 dark:border-slate-700">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Settings</h3>
+                    
+                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                      <div>
+                        <span className="text-slate-700 dark:text-slate-300 font-medium">Resume Auto-Save</span>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">Automatically save profile changes</p>
+                      </div>
+                      <button
+                        onClick={() => setResumeAutoSave(!resumeAutoSave)}
+                        className={`relative w-14 h-7 rounded-full transition ${resumeAutoSave ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'}`}
+                      >
+                        <span className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${resumeAutoSave ? 'translate-x-7' : ''}`} />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                      <div>
+                        <span className="text-slate-700 dark:text-slate-300 font-medium">Dark Mode</span>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">Toggle dark theme</p>
+                      </div>
+                      <button
+                        onClick={() => setDarkMode(!darkMode)}
+                        className={`relative w-14 h-7 rounded-full transition ${darkMode ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'}`}
+                      >
+                        <span className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${darkMode ? 'translate-x-7' : ''}`} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={async () => {
+                      if (!user) return;
+                      setIsLoading(true);
+                      try {
+                        await setDoc(doc(db, 'users', user.uid), {
+                          campusInvolvement,
+                          languagesSpoken,
+                          notifyCampusEvents,
+                          notifyMentorshipRequests,
+                          notifyCommunityUpdates,
+                          resumeAutoSave,
+                          darkMode,
+                          updatedAt: Timestamp.now()
+                        }, { merge: true });
+                        setSuccess('Preferences saved!');
+                        setTimeout(() => setSuccess(''), 3000);
+                      } catch (err: any) {
+                        setError(err.message);
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }}
+                    disabled={isLoading}
+                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-medium transition disabled:opacity-50"
+                  >
+                    {isLoading ? 'Saving...' : 'Save Preferences'}
+                  </button>
+                </div>
+              )}
+
+              {activeTab === 'complete' && (
+                <div className="space-y-6">
+                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">Complete Profile</h2>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Skills</label>
+                    <input
+                      type="text"
+                      value={skills.join(', ')}
+                      onChange={e => setSkills(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+                      placeholder="React, Python, Leadership (comma-separated)"
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Certifications</label>
+                    <input
+                      type="text"
+                      value={certifications.join(', ')}
+                      onChange={e => setCertifications(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+                      placeholder="AWS Certified, Google Analytics (comma-separated)"
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Achievements</label>
+                    <textarea
+                      value={achievements.join('\n')}
+                      onChange={e => setAchievements(e.target.value.split('\n').filter(Boolean))}
+                      rows={4}
+                      placeholder="One achievement per line"
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
+
+                  <button
+                    onClick={async () => {
+                      if (!user) return;
+                      setIsLoading(true);
+                      try {
+                        await setDoc(doc(db, 'users', user.uid), {
+                          skills,
+                          certifications,
+                          achievements,
+                          updatedAt: Timestamp.now()
+                        }, { merge: true });
+                        setSuccess('Profile updated!');
+                        setTimeout(() => setSuccess(''), 3000);
+                      } catch (err: any) {
+                        setError(err.message);
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }}
+                    disabled={isLoading}
+                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-medium transition disabled:opacity-50"
+                  >
+                    {isLoading ? 'Saving...' : 'Save Complete Profile'}
+                  </button>
+                </div>
+              )}
+
+              {activeTab === 'security' && (
+                <div className="space-y-6">
+                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">Security Settings</h2>
+                  
+                  <div className="p-6 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">Email</h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">Current: {email}</p>
+                    <button
+                      onClick={() => setShowEmailModal(true)}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
+                    >
+                      Change Email
+                    </button>
+                  </div>
+
+                  <div className="p-6 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">Password</h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">Keep your account secure with a strong password</p>
+                    <button
+                      onClick={() => setShowPasswordModal(true)}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
+                    >
+                      Change Password
+                    </button>
+                  </div>
+
+                  <div className="p-6 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
+                    <h3 className="text-lg font-semibold text-red-900 dark:text-red-300 mb-2">Danger Zone</h3>
+                    <p className="text-sm text-red-700 dark:text-red-400 mb-4">Once you delete your account, there is no going back</p>
+                    <button
+                      onClick={() => setShowDeleteModal(true)}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition"
+                    >
+                      Delete Account
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Become a Mentor - Only show if not already a mentor and no pending application */}
-        {!isMentor && mentorApplicationStatus !== 'pending' && (
-        <section className={`${darkMode ? 'dark bg-gradient-to-br from-green-900/30 via-emerald-900/30 to-teal-900/30 border-green-700/30' : 'bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 border-green-200'} backdrop-blur-2xl rounded-3xl p-8 border-2 shadow-2xl hover:shadow-green-500/20 transition-all duration-300 relative overflow-hidden group`}>
-          <div className="absolute inset-0 bg-gradient-to-r from-green-500/10 via-emerald-500/10 to-teal-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-          <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/10 rounded-full blur-3xl"></div>
-          <div className="relative z-10">
-            <div className="flex items-start gap-4 mb-6">
-              <div className="p-4 bg-gradient-to-br from-green-500 to-teal-600 rounded-2xl shadow-lg">
-                <span className="material-symbols-outlined text-white text-4xl">school</span>
+        {/* Email Modal */}
+        {showEmailModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-md w-full">
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Change Email</h3>
+              
+              <div className="space-y-4">
+                <input
+                  type="email"
+                  placeholder="New Email"
+                  value={newEmail}
+                  onChange={e => setNewEmail(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+                <input
+                  type="password"
+                  placeholder="Current Password"
+                  value={currentPassword}
+                  onChange={e => setCurrentPassword(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                />
               </div>
-              <div className="flex-1">
-                <h2 className="text-2xl font-black bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 bg-clip-text text-transparent mb-2">Become a Mentor</h2>
-                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                  Share your expertise and help students succeed. Apply to become an official mentor and make a lasting impact on the next generation.
-                </p>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="text-center p-4 bg-white/50 dark:bg-slate-800/50 rounded-xl">
-                <div className="text-2xl font-black text-green-600 dark:text-green-400">1000+</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Students Helped</div>
-              </div>
-              <div className="text-center p-4 bg-white/50 dark:bg-slate-800/50 rounded-xl">
-                <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">500+</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Active Mentors</div>
-              </div>
-              <div className="text-center p-4 bg-white/50 dark:bg-slate-800/50 rounded-xl">
-                <div className="text-2xl font-black text-teal-600 dark:text-teal-400">4.9★</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Avg Rating</div>
-              </div>
-            </div>
-            <button
-              onClick={handleApplyMentor}
-              disabled={isSaving}
-              className="w-full px-8 py-4 bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 hover:from-green-700 hover:via-emerald-700 hover:to-teal-700 text-white rounded-xl font-black shadow-xl hover:shadow-2xl hover:scale-105 transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50"
-            >
-              {isSaving ? (
-                <>
-                  <span className="material-symbols-outlined animate-spin text-2xl">progress_activity</span>
-                  <span>Submitting...</span>
-                </>
-              ) : (
-                <>
-                  <span className="material-symbols-outlined text-2xl">school</span>
-                  <span>Apply to Become a Mentor</span>
-                  <span className="material-symbols-outlined">arrow_forward</span>
-                </>
-              )}
-            </button>
-          </div>
-        </section>
-        )}
-        
-        {/* Application Pending Message */}
-        {!isMentor && mentorApplicationStatus === 'pending' && (
-        <section className={`${darkMode ? 'dark bg-gradient-to-br from-yellow-900/30 via-amber-900/30 to-orange-900/30 border-yellow-700/30' : 'bg-gradient-to-br from-yellow-50 via-amber-50 to-orange-50 border-yellow-200'} backdrop-blur-2xl rounded-3xl p-8 border-2 shadow-2xl relative overflow-hidden`}>
-          <div className="relative z-10">
-            <div className="flex items-start gap-4">
-              <div className="p-4 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-2xl shadow-lg">
-                <span className="material-symbols-outlined text-white text-4xl">pending</span>
-              </div>
-              <div className="flex-1">
-                <h2 className="text-2xl font-black bg-gradient-to-r from-yellow-600 via-amber-600 to-orange-600 bg-clip-text text-transparent mb-2">Application Under Review</h2>
-                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                  Your mentor application is currently being reviewed by our admin team. You'll receive a notification once a decision has been made. Thank you for your patience!
-                </p>
+
+              {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => { setShowEmailModal(false); setError(''); setCurrentPassword(''); setNewEmail(''); }}
+                  className="flex-1 px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl hover:bg-slate-300 dark:hover:bg-slate-600 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleChangeEmail}
+                  disabled={isLoading}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition disabled:opacity-50"
+                >
+                  {isLoading ? 'Changing...' : 'Change'}
+                </button>
               </div>
             </div>
           </div>
-        </section>
         )}
-        
-        {/* Already a Mentor Message */}
-        {isMentor && (
-        <section className={`${darkMode ? 'dark bg-gradient-to-br from-blue-900/30 via-indigo-900/30 to-purple-900/30 border-blue-700/30' : 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border-blue-200'} backdrop-blur-2xl rounded-3xl p-8 border-2 shadow-2xl relative overflow-hidden`}>
-          <div className="relative z-10">
-            <div className="flex items-start gap-4">
-              <div className="p-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl shadow-lg">
-                <span className="material-symbols-outlined text-white text-4xl">verified</span>
+
+        {/* Password Modal */}
+        {showPasswordModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-md w-full">
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Change Password</h3>
+              
+              <div className="space-y-4">
+                <input
+                  type="password"
+                  placeholder="Current Password"
+                  value={currentPassword}
+                  onChange={e => setCurrentPassword(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+                <input
+                  type="password"
+                  placeholder="New Password"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+                <input
+                  type="password"
+                  placeholder="Confirm New Password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                />
               </div>
-              <div className="flex-1">
-                <h2 className="text-2xl font-black bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">You're a Verified Mentor! 🎉</h2>
-                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-4">
-                  You have full mentor privileges and can now guide students on their journey. Keep up the great work!
-                </p>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => window.location.href = '/mentorship'}
-                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2"
-                  >
-                    <span className="material-symbols-outlined">diversity_3</span>
-                    View Mentorship Dashboard
-                  </button>
-                </div>
+
+              {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => { setShowPasswordModal(false); setError(''); setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); }}
+                  className="flex-1 px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl hover:bg-slate-300 dark:hover:bg-slate-600 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleChangePassword}
+                  disabled={isLoading}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition disabled:opacity-50"
+                >
+                  {isLoading ? 'Changing...' : 'Change'}
+                </button>
               </div>
             </div>
           </div>
-        </section>
         )}
 
-        {/* Complete Profile */}
-        <section className={`${darkMode ? 'dark bg-gradient-to-br from-indigo-900/20 via-purple-900/20 to-pink-900/20 border-indigo-700/30' : 'bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 border-indigo-200'} backdrop-blur-2xl rounded-3xl p-8 border-2 shadow-2xl hover:shadow-indigo-500/10 transition-all duration-300 relative overflow-hidden group`}>
-          <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 via-purple-500/5 to-pink-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-          <div className="relative z-10">
-            <div className="flex items-center gap-4 mb-8">
-              <div className="p-3 bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-600 rounded-2xl shadow-lg">
-                <span className="material-symbols-outlined text-white text-3xl">person</span>
-              </div>
-              <div>
-                <h2 className="text-3xl font-black bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">Complete Profile</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Build your professional presence</p>
-              </div>
-            </div>
-          <div className="space-y-6">
-            {/* Bio */}
-            <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-indigo-400 dark:hover:border-indigo-500 transition-all">
-              <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
-                <span className="material-symbols-outlined text-sm text-indigo-500">description</span>
-                About Me
-              </label>
-              <textarea
-                value={bio}
-                onChange={(e) => setBio(e.target.value)}
-                placeholder="Tell others about yourself..."
-                className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-indigo-500 transition-all min-h-[100px]"
-              />
-            </div>
-
-            {/* Contact Information */}
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-purple-400 dark:hover:border-purple-500 transition-all">
-                <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-sm text-purple-500">phone</span>
-                  Phone
-                </label>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+1 (555) 123-4567"
-                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-purple-500 transition-all"
-                />
-              </div>
-              <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-pink-400 dark:hover:border-pink-500 transition-all">
-                <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-sm text-pink-500">location_on</span>
-                  Location
-                </label>
-                <input
-                  type="text"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  placeholder="City, Country"
-                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-pink-500 transition-all"
-                />
-              </div>
-            </div>
-
-            {/* Social Links */}
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-blue-400 dark:hover:border-blue-500 transition-all">
-                <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-sm text-blue-500">language</span>
-                  Website
-                </label>
-                <input
-                  type="url"
-                  value={website}
-                  onChange={(e) => setWebsite(e.target.value)}
-                  placeholder="https://yourwebsite.com"
-                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-blue-500 transition-all"
-                />
-              </div>
-              <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-blue-400 dark:hover:border-blue-500 transition-all">
-                <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-sm text-blue-600">work</span>
-                  LinkedIn
-                </label>
-                <input
-                  type="url"
-                  value={linkedin}
-                  onChange={(e) => setLinkedin(e.target.value)}
-                  placeholder="https://linkedin.com/in/username"
-                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-blue-600 transition-all"
-                />
-              </div>
-              <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-gray-400 dark:hover:border-gray-500 transition-all">
-                <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-sm text-gray-700 dark:text-gray-400">code</span>
-                  GitHub
-                </label>
-                <input
-                  type="url"
-                  value={github}
-                  onChange={(e) => setGithub(e.target.value)}
-                  placeholder="https://github.com/username"
-                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-gray-500 transition-all"
-                />
-              </div>
-              <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-sky-400 dark:hover:border-sky-500 transition-all">
-                <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-sm text-sky-500">tag</span>
-                  Twitter
-                </label>
-                <input
-                  type="url"
-                  value={twitter}
-                  onChange={(e) => setTwitter(e.target.value)}
-                  placeholder="https://twitter.com/username"
-                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-sky-500 transition-all"
-                />
-              </div>
-            </div>
-
-            {/* Skills & Interests */}
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-emerald-400 dark:hover:border-emerald-500 transition-all">
-                <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-sm text-emerald-500">psychology</span>
-                  Skills
-                </label>
-                <input
-                  type="text"
-                  value={skills}
-                  onChange={(e) => setSkills(e.target.value)}
-                  placeholder="e.g. Python, React, Data Analysis"
-                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-emerald-500 transition-all"
-                />
-              </div>
-              <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-amber-400 dark:hover:border-amber-500 transition-all">
-                <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-sm text-amber-500">favorite</span>
-                  Interests
-                </label>
-                <input
-                  type="text"
-                  value={interests}
-                  onChange={(e) => setInterests(e.target.value)}
-                  placeholder="e.g. AI, Entrepreneurship, Music"
-                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-amber-500 transition-all"
-                />
-              </div>
-            </div>
-
-            {/* Professional Info */}
-            <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-indigo-400 dark:hover:border-indigo-500 transition-all">
-              <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
-                <span className="material-symbols-outlined text-sm text-indigo-500">work_history</span>
-                Work Experience
-              </label>
-              <textarea
-                value={workExperience}
-                onChange={(e) => setWorkExperience(e.target.value)}
-                placeholder="List your work experience..."
-                className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-indigo-500 transition-all min-h-[80px]"
-              />
-            </div>
-
-            <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-purple-400 dark:hover:border-purple-500 transition-all">
-              <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
-                <span className="material-symbols-outlined text-sm text-purple-500">school</span>
-                Education
-              </label>
-              <textarea
-                value={education}
-                onChange={(e) => setEducation(e.target.value)}
-                placeholder="List your education background..."
-                className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-purple-500 transition-all min-h-[80px]"
-              />
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-blue-400 dark:hover:border-blue-500 transition-all">
-                <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-sm text-blue-500">verified</span>
-                  Certifications
-                </label>
-                <input
-                  type="text"
-                  value={certifications}
-                  onChange={(e) => setCertifications(e.target.value)}
-                  placeholder="e.g. AWS Certified, PMP"
-                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-blue-500 transition-all"
-                />
-              </div>
-              <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-yellow-400 dark:hover:border-yellow-500 transition-all">
-                <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-sm text-yellow-600">emoji_events</span>
-                  Achievements
-                </label>
-                <input
-                  type="text"
-                  value={achievements}
-                  onChange={(e) => setAchievements(e.target.value)}
-                  placeholder="e.g. Dean's List, Hackathon Winner"
-                  className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-yellow-500 transition-all"
-                />
-              </div>
-            </div>
-
-            <div className="bg-white/50 dark:bg-slate-800/50 rounded-2xl p-5 border border-gray-200/50 dark:border-gray-700/50 hover:border-green-400 dark:hover:border-green-500 transition-all">
-              <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
-                <span className="material-symbols-outlined text-sm text-green-500">schedule</span>
-                Availability
-              </label>
+        {/* Delete Modal */}
+        {showDeleteModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-md w-full">
+              <h3 className="text-xl font-bold text-red-600 dark:text-red-400 mb-4">Delete Account</h3>
+              <p className="text-slate-600 dark:text-slate-400 mb-4">This action cannot be undone. Please enter your password to confirm.</p>
+              
               <input
-                type="text"
-                value={availability}
-                onChange={(e) => setAvailability(e.target.value)}
-                placeholder="e.g. Weekdays 6-9 PM EST"
-                className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-green-500 transition-all"
+                type="password"
+                placeholder="Enter your password"
+                value={currentPassword}
+                onChange={e => setCurrentPassword(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-red-500 outline-none mb-4"
               />
-            </div>
 
-            {/* Mentor Toggle */}
-            <div className="pt-6 border-t-2 border-gray-200/50 dark:border-gray-700/50">
-              <div className="bg-gradient-to-r from-teal-50 to-cyan-50 dark:from-teal-900/20 dark:to-cyan-900/20 rounded-2xl p-6 border-2 border-teal-200 dark:border-teal-700/50">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-xl">
-                      <span className="material-symbols-outlined text-white text-2xl">diversity_3</span>
-                    </div>
-                    <div>
-                      <label className="font-bold text-lg text-gray-900 dark:text-white">Available as Mentor</label>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Help others grow and learn</p>
-                    </div>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isMentor}
-                      onChange={(e) => handleMentorToggle(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-14 h-7 bg-gray-300 dark:bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 dark:peer-focus:ring-teal-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-teal-500 peer-checked:to-cyan-600"></div>
-                  </label>
-                </div>
-                {isMentor && (
-                  <div className="space-y-4 mt-6 pt-6 border-t border-teal-200 dark:border-teal-700/50">
-                    <div className="bg-white/70 dark:bg-slate-800/70 rounded-xl p-4">
-                      <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-sm text-teal-500">lightbulb</span>
-                        Mentorship Expertise
-                      </label>
-                      <input
-                        type="text"
-                        value={mentorExpertise}
-                        onChange={(e) => setMentorExpertise(e.target.value)}
-                        placeholder="e.g., Computer Science, Career Guidance"
-                        className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-lg px-4 py-3 text-base font-medium focus:ring-2 focus:ring-teal-500 transition-all"
-                      />
-                    </div>
-                    <div className="bg-white/70 dark:bg-slate-800/70 rounded-xl p-4">
-                      <label className="font-bold text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-sm text-cyan-500">chat</span>
-                        Mentor Bio
-                      </label>
-                      <textarea
-                        value={mentorBio}
-                        onChange={(e) => setMentorBio(e.target.value)}
-                        placeholder="Tell students how you can help them..."
-                        className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-lg px-4 py-3 text-base font-medium focus:ring-2 focus:ring-cyan-500 transition-all min-h-[100px]"
-                      />
-                    </div>
-                  </div>
-                )}
+              {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setShowDeleteModal(false); setError(''); setCurrentPassword(''); }}
+                  className="flex-1 px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl hover:bg-slate-300 dark:hover:bg-slate-600 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={isLoading}
+                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl transition disabled:opacity-50"
+                >
+                  {isLoading ? 'Deleting...' : 'Delete'}
+                </button>
               </div>
             </div>
-
-            <button
-              onClick={handleMentorProfileSave}
-              disabled={isSaving}
-              className="w-full px-8 py-4 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white rounded-xl font-black shadow-xl hover:shadow-2xl hover:scale-105 transition-all duration-300 flex items-center justify-center gap-3"
-            >
-              {isSaving ? (
-                <>
-                  <span className="material-symbols-outlined animate-spin text-2xl">progress_activity</span>
-                  <span>Saving...</span>
-                </>
-              ) : (
-                <>
-                  <span className="material-symbols-outlined text-2xl">save</span>
-                  <span>Save Complete Profile</span>
-                </>
-              )}
-            </button>
           </div>
-          </div>
-        </section>
-
-        {/* Role-specific sections */}
-                {/* Student Profile Settings */}
-                {userRole === 'Student' && (
-                  <section className={`${darkMode ? 'dark bg-gray-900 border-gray-700' : 'bg-white border-gray-100'} rounded-3xl p-8 border shadow-lg mb-8`}> 
-                    <h2 className="text-2xl font-black text-primary mb-6 flex items-center gap-3">
-                      <span className="material-symbols-outlined text-primary text-3xl">school</span>
-                      Student Profile
-                    </h2>
-                    
-                    {/* Academic Information */}
-                    <div className="mb-8">
-                      <h3 className="text-lg font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary">menu_book</span>
-                        Academic Information
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">University</label>
-                          <input 
-                            type="text" 
-                            placeholder="Your university" 
-                            value={university} 
-                            onChange={e => setUniversity(e.target.value)} 
-                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary" 
-                          />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Major</label>
-                          <input 
-                            type="text" 
-                            placeholder="Your major" 
-                            value={major} 
-                            onChange={e => setMajor(e.target.value)} 
-                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary" 
-                          />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Year of Study</label>
-                          <select 
-                            value={yearOfStudy} 
-                            onChange={e => setYearOfStudy(Number(e.target.value))} 
-                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary"
-                          >
-                            <option value={1}>1st Year</option>
-                            <option value={2}>2nd Year</option>
-                            <option value={3}>3rd Year</option>
-                            <option value={4}>4th Year</option>
-                            <option value={5}>5th Year+</option>
-                          </select>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Financial Aid Status</label>
-                          <select 
-                            value={financialAidStatus} 
-                            onChange={e => setFinancialAidStatus(e.target.value)} 
-                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary"
-                          >
-                            <option value="">Select...</option>
-                            <option value="Not Applied">Not Applied</option>
-                            <option value="Applied">Applied</option>
-                            <option value="Approved">Approved</option>
-                            <option value="Denied">Denied</option>
-                            <option value="Pending">Pending</option>
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Campus Involvement */}
-                    <div className="mb-8">
-                      <h3 className="text-lg font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary">groups</span>
-                        Campus Involvement
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Clubs & Societies</label>
-                          <input 
-                            type="text" 
-                            placeholder="e.g. Robotics Club, Debate Society" 
-                            value={clubsSocieties} 
-                            onChange={e => setClubsSocieties(e.target.value)} 
-                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary" 
-                          />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Campus Involvement Level</label>
-                          <select 
-                            value={campusInvolvement} 
-                            onChange={e => setCampusInvolvement(e.target.value)} 
-                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary"
-                          >
-                            <option value="">Select...</option>
-                            <option value="Low">Low</option>
-                            <option value="Medium">Medium</option>
-                            <option value="High">High</option>
-                          </select>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Languages Spoken</label>
-                          <input 
-                            type="text" 
-                            placeholder="e.g. English, Spanish" 
-                            value={languagesSpoken} 
-                            onChange={e => setLanguagesSpoken(e.target.value)} 
-                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary" 
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Mentorship Preferences */}
-                    <div className="mb-8">
-                      <h3 className="text-lg font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary">diversity_3</span>
-                        Mentorship Preferences
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                          <input 
-                            type="checkbox" 
-                            checked={offerPeerMentorship} 
-                            onChange={e => setOfferPeerMentorship(e.target.checked)} 
-                            className="w-5 h-5 text-primary focus:ring-primary rounded"
-                          />
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Offer Peer Mentorship</label>
-                        </div>
-                        <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                          <input 
-                            type="checkbox" 
-                            checked={campusBuddy} 
-                            onChange={e => setCampusBuddy(e.target.checked)} 
-                            className="w-5 h-5 text-primary focus:ring-primary rounded"
-                          />
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Available for Campus Buddy Program</label>
-                        </div>
-                        <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                          <input 
-                            type="checkbox" 
-                            checked={willingMentorIntl} 
-                            onChange={e => setWillingMentorIntl(e.target.checked)} 
-                            className="w-5 h-5 text-primary focus:ring-primary rounded"
-                          />
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Willing to Mentor International Students</label>
-                        </div>
-                        <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                          <input 
-                            type="checkbox" 
-                            checked={eventHost} 
-                            onChange={e => setEventHost(e.target.checked)} 
-                            className="w-5 h-5 text-primary focus:ring-primary rounded"
-                          />
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Can Host Campus Events</label>
-                        </div>
-                        {offerPeerMentorship && (
-                          <>
-                            <div className="flex flex-col gap-2">
-                              <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Max Mentees Allowed</label>
-                              <input 
-                                type="number" 
-                                min="1" 
-                                max="20" 
-                                value={maxMentees} 
-                                onChange={e => setMaxMentees(Number(e.target.value))} 
-                                className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary" 
-                              />
-                            </div>
-                            <div className="flex flex-col gap-2">
-                              <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Areas of Expertise</label>
-                              <select 
-                                value={expertise} 
-                                onChange={e => setExpertise(e.target.value)} 
-                                className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary"
-                              >
-                                <option value="">Select...</option>
-                                <option value="Academic Tutoring">Academic Tutoring</option>
-                                <option value="Career Guidance">Career Guidance</option>
-                                <option value="Leadership">Leadership</option>
-                                <option value="Other">Other</option>
-                              </select>
-                            </div>
-                          </>
-                        )}
-                        {willingMentorIntl && (
-                          <div className="flex flex-col gap-2">
-                            <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Cultural Familiarity Level</label>
-                            <select 
-                              value={culturalFamiliarity} 
-                              onChange={e => setCulturalFamiliarity(e.target.value)} 
-                              className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary"
-                            >
-                              <option value="">Select...</option>
-                              <option value="Low">Low</option>
-                              <option value="Medium">Medium</option>
-                              <option value="High">High</option>
-                            </select>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Notification Preferences */}
-                    <div className="mb-8">
-                      <h3 className="text-lg font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary">notifications</span>
-                        Notification Preferences
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                          <input 
-                            type="checkbox" 
-                            checked={notifyCampusEvents} 
-                            onChange={e => setNotifyCampusEvents(e.target.checked)} 
-                            className="w-5 h-5 text-primary focus:ring-primary rounded"
-                          />
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Campus Event Invites</label>
-                        </div>
-                        <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                          <input 
-                            type="checkbox" 
-                            checked={notifyMentorshipRequests} 
-                            onChange={e => setNotifyMentorshipRequests(e.target.checked)} 
-                            className="w-5 h-5 text-primary focus:ring-primary rounded"
-                          />
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Mentorship Requests</label>
-                        </div>
-                        <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                          <input 
-                            type="checkbox" 
-                            checked={notifyCommunityUpdates} 
-                            onChange={e => setNotifyCommunityUpdates(e.target.checked)} 
-                            className="w-5 h-5 text-primary focus:ring-primary rounded"
-                          />
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Community Group Updates</label>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Save Button */}
-                    <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
-                      <button 
-                        className="px-8 py-3 bg-primary hover:bg-primary/90 transition text-white rounded-xl font-bold shadow-lg flex items-center gap-2" 
-                        onClick={handleSaveDomesticStudentProfile} 
-                        disabled={isSaving}
-                      >
-                        {isSaving ? (
-                          <>
-                            <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                            Saving...
-                          </>
-                        ) : (
-                          <>
-                            <span className="material-symbols-outlined">save</span>
-                            Save Profile
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </section>
-                )}
-
-                {/* Professional Profile Settings */}
-                {userRole === 'Professional' && (
-                  <section className={`${darkMode ? 'dark bg-gray-900 border-gray-700' : 'bg-white border-gray-100'} rounded-3xl p-8 border shadow-lg mb-8`}>
-                    <h2 className="text-2xl font-black text-primary mb-6 flex items-center gap-3">
-                      <span className="material-symbols-outlined text-primary text-3xl">business_center</span>
-                      Professional Profile
-                    </h2>
-                    
-                    <div className="mb-8">
-                      <h3 className="text-lg font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary">corporate_fare</span>
-                        Company Information
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Company Name</label>
-                          <input type="text" placeholder="Your company" value={companyName} onChange={e => setCompanyName(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary" />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Company Website</label>
-                          <input type="url" placeholder="https://company.com" value={companyWebsite} onChange={e => setCompanyWebsite(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary" />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Industry</label>
-                          <input type="text" placeholder="e.g. Technology, Healthcare" value={companyIndustry} onChange={e => setCompanyIndustry(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary" />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Company Size</label>
-                          <select value={companySize} onChange={e => setCompanySize(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary">
-                            <option value="">Select...</option>
-                            <option value="1-10">1-10 employees</option>
-                            <option value="11-50">11-50 employees</option>
-                            <option value="51-200">51-200 employees</option>
-                            <option value="201-500">201-500 employees</option>
-                            <option value="501+">501+ employees</option>
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mb-8">
-                      <h3 className="text-lg font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary">person</span>
-                        Professional Bio
-                      </h3>
-                      <textarea value={professionalBio} onChange={e => setProfessionalBio(e.target.value)} placeholder="Tell students about your company and what opportunities you offer..." className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary min-h-[120px]" />
-                    </div>
-
-                    <div className="mb-8">
-                      <h3 className="text-lg font-black text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary">handshake</span>
-                        Engagement Options
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                          <input type="checkbox" checked={offerInternships} onChange={e => setOfferInternships(e.target.checked)} className="w-5 h-5 text-primary focus:ring-primary rounded" />
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Offer Internships</label>
-                        </div>
-                        <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-                          <input type="checkbox" checked={hostWebinars} onChange={e => setHostWebinars(e.target.checked)} className="w-5 h-5 text-primary focus:ring-primary rounded" />
-                          <label className="font-bold text-sm text-gray-700 dark:text-gray-200">Host Webinars/AMAs</label>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
-                      <button className="px-8 py-3 bg-primary hover:bg-primary/90 transition text-white rounded-xl font-bold shadow-lg flex items-center gap-2" onClick={handleSaveRoleProfile} disabled={isSaving}>
-                        {isSaving ? <><span className="material-symbols-outlined animate-spin">progress_activity</span>Saving...</> : <><span className="material-symbols-outlined">save</span>Save Profile</>}
-                      </button>
-                    </div>
-                  </section>
-                )}
-
+        )}
       </div>
-
-
-      {/* Password Modal */}
-      {showPasswordModal && (
-        <PasswordModal 
-          onClose={() => setShowPasswordModal(false)}
-          currentPassword={currentPassword}
-          setCurrentPassword={setCurrentPassword}
-          newPassword={newPassword}
-          setNewPassword={setNewPassword}
-          confirmPassword={confirmPassword}
-          setConfirmPassword={setConfirmPassword}
-          onSubmit={handleChangePassword}
-          isLoading={isChangingPassword}
-          darkMode={darkMode}
-        />
-      )}
-
-      {/* Email Modal */}
-      {showEmailModal && (
-        <EmailModal
-          onClose={() => setShowEmailModal(false)}
-          newEmail={newEmail}
-          setNewEmail={setNewEmail}
-          currentPassword={currentPassword}
-          setCurrentPassword={setCurrentPassword}
-          onSubmit={handleChangeEmail}
-          isLoading={isChangingEmail}
-          darkMode={darkMode}
-        />
-      )}
-
-      {/* Delete Account Modal */}
-      {showDeleteModal && (
-        <DeleteAccountModal
-          onClose={() => setShowDeleteModal(false)}
-          password={passwordToDelete}
-          setPassword={setPasswordToDelete}
-          onSubmit={handleDeleteAccount}
-          isLoading={isDeleting}
-          darkMode={darkMode}
-        />
-      )}
     </div>
   );
 };
-
-const PasswordModal: React.FC<any> = ({ onClose, currentPassword, setCurrentPassword, newPassword, setNewPassword, confirmPassword, setConfirmPassword, onSubmit, isLoading, darkMode }) => (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-    <div className={`${darkMode ? 'dark bg-gray-800' : 'bg-white'} rounded-3xl p-8 max-w-md w-full space-y-6`}>
-      <h2 className="text-2xl font-black text-gray-900 dark:text-white">Change Password</h2>
-      <div className="space-y-4">
-        <input placeholder="Current Password" type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} disabled={isLoading} className="w-full bg-gray-50 dark:bg-gray-700 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20" />
-        <input placeholder="New Password" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} disabled={isLoading} className="w-full bg-gray-50 dark:bg-gray-700 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20" />
-        <input placeholder="Confirm Password" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} disabled={isLoading} className="w-full bg-gray-50 dark:bg-gray-700 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20" />
-      </div>
-      <div className="flex gap-3">
-        <button onClick={onClose} disabled={isLoading} className="flex-1 py-3 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white font-black rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-all">Cancel</button>
-        <button onClick={onSubmit} disabled={isLoading} className="flex-1 py-3 bg-primary text-white font-black rounded-xl hover:scale-105 transition-all disabled:opacity-50">{isLoading ? 'Updating...' : 'Update'}</button>
-      </div>
-    </div>
-  </div>
-);
-
-const EmailModal: React.FC<any> = ({ onClose, newEmail, setNewEmail, currentPassword, setCurrentPassword, onSubmit, isLoading, darkMode }) => (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-    <div className={`${darkMode ? 'dark bg-gray-800' : 'bg-white'} rounded-3xl p-8 max-w-md w-full space-y-6`}>
-      <h2 className="text-2xl font-black text-gray-900 dark:text-white">Change Email</h2>
-      <div className="space-y-4">
-        <input placeholder="New Email" type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} disabled={isLoading} className="w-full bg-gray-50 dark:bg-gray-700 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20" />
-        <input placeholder="Current Password" type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} disabled={isLoading} className="w-full bg-gray-50 dark:bg-gray-700 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-primary/20" />
-      </div>
-      <div className="flex gap-3">
-        <button onClick={onClose} disabled={isLoading} className="flex-1 py-3 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white font-black rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-all">Cancel</button>
-        <button onClick={onSubmit} disabled={isLoading} className="flex-1 py-3 bg-primary text-white font-black rounded-xl hover:scale-105 transition-all disabled:opacity-50">{isLoading ? 'Updating...' : 'Update'}</button>
-      </div>
-    </div>
-  </div>
-);
-
-const DeleteAccountModal: React.FC<any> = ({ onClose, password, setPassword, onSubmit, isLoading, darkMode }) => (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-    <div className={`${darkMode ? 'dark bg-gray-800' : 'bg-white'} rounded-3xl p-8 max-w-md w-full space-y-6`}>
-      <h2 className="text-2xl font-black text-red-600 dark:text-red-400">Delete Account</h2>
-      <p className="text-sm text-gray-600 dark:text-gray-400">This action cannot be undone. All your data will be permanently deleted.</p>
-      <div>
-        <input placeholder="Enter your password to confirm" type="password" value={password} onChange={e => setPassword(e.target.value)} disabled={isLoading} className="w-full bg-gray-50 dark:bg-gray-700 dark:text-white border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-red-500/20" />
-      </div>
-      <div className="flex gap-3">
-        <button onClick={onClose} disabled={isLoading} className="flex-1 py-3 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white font-black rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-all">Cancel</button>
-        <button onClick={onSubmit} disabled={isLoading} className="flex-1 py-3 bg-red-600 dark:bg-red-700 text-white font-black rounded-xl hover:scale-105 transition-all disabled:opacity-50">{isLoading ? 'Deleting...' : 'Delete'}</button>
-      </div>
-    </div>
-  </div>
-);
 
 export default ProfileSettings;

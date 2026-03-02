@@ -1,4 +1,4 @@
-import React, { useEffect, useState, createContext, useContext } from 'react';
+import React, { useEffect, useState, createContext, useContext, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from './src/firebase';
@@ -6,83 +6,100 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import Layout from './components/Layout';
 import { useAutoLogout } from './hooks/useAutoLogout';
+import { presenceService } from './services/presenceService';
+
+// Critical pages - loaded immediately
 import Landing from './pages/Landing';
-import About from './pages/About';
-import WhoWeServe from './pages/WhoWeServe';
-import Dashboard from './pages/Dashboard';
-import Mentorship from './pages/Mentorship';
-import MentorshipBooking from './pages/MentorshipBooking';
-import Career from './pages/Career';
-import QuickChat from './pages/QuickChat';
-import ExploreTracks from './pages/ExploreTracks';
-import HowItWorks from './pages/HowItWorks';
-import MentorMatching from './pages/MentorMatching';
-import BookChat from './pages/BookChat';
-import Resources from './pages/Resources';
-import Community from './pages/Community';
-import HelpCenterNew from './pages/HelpCenterNew';
-import FAQPage from './pages/FAQPage';
-import BlogPage from './pages/BlogPage';
-import ContactSupport from './pages/ContactSupport';
-import SessionHistory from './pages/SessionHistory';
-import Analytics from './pages/Analytics';
-import ResumeBuilderNew from './pages/ResumeBuilderNew';
-import MockInterview from './pages/MockInterview';
-import ProfileSettings from './pages/ProfileSettings';
-import LocalTips from './pages/LocalTips';
-import PostOpportunity from './pages/PostOpportunity';
-import CoverLetterTemplates from './pages/CoverLetterTemplates';
-import LiveEvent from './pages/LiveEvent';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
-import PendingApproval from './pages/PendingApproval';
-import Billing from './pages/Billing';
-import ProfileView from './pages/ProfileView';
-import Notifications from './pages/Notifications';
+
+// Lazy load all other pages
+const About = lazy(() => import('./pages/About'));
+const WhoWeServe = lazy(() => import('./pages/WhoWeServe'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Mentorship = lazy(() => import('./pages/Mentorship'));
+const MentorshipBooking = lazy(() => import('./pages/MentorshipBooking'));
+const Career = lazy(() => import('./pages/career/Career'));
+const QuickChat = lazy(() => import('./pages/QuickChat'));
+const ExploreTracks = lazy(() => import('./pages/ExploreTracks'));
+const HowItWorks = lazy(() => import('./pages/HowItWorks'));
+const MentorMatching = lazy(() => import('./pages/MentorMatching'));
+const BookChat = lazy(() => import('./pages/BookChat'));
+const Resources = lazy(() => import('./pages/resources/Resources'));
+const Community = lazy(() => import('./pages/community/Community'));
+const HelpCenterNew = lazy(() => import('./pages/support/HelpCenterNew'));
+const FAQPage = lazy(() => import('./pages/support/FAQPage'));
+const BlogPage = lazy(() => import('./pages/support/BlogPage'));
+const ContactSupport = lazy(() => import('./pages/support/ContactSupport'));
+const SessionHistory = lazy(() => import('./pages/SessionHistory'));
+const Analytics = lazy(() => import('./pages/Analytics'));
+const ResumeBuilderNew = lazy(() => import('./pages/career/ResumeBuilderNew'));
+const MockInterview = lazy(() => import('./pages/career/MockInterview'));
+const ProfileSettings = lazy(() => import('./pages/ProfileSettings'));
+const LocalTips = lazy(() => import('./pages/LocalTips'));
+const PostOpportunity = lazy(() => import('./pages/career/PostOpportunity'));
+const CoverLetterTemplates = lazy(() => import('./pages/career/CoverLetterTemplates'));
+const LiveEvent = lazy(() => import('./pages/LiveEvent'));
+const PendingApproval = lazy(() => import('./pages/PendingApproval'));
+const Billing = lazy(() => import('./pages/Billing'));
+const ProfileView = lazy(() => import('./pages/ProfileView'));
+const Notifications = lazy(() => import('./pages/Notifications'));
+const OurImpact = lazy(() => import('./pages/OurImpact'));
+const Messages = lazy(() => import('./pages/Messages'));
+
+// AdminRoute must be loaded immediately as it's a wrapper component
 import AdminRoute from './components/AdminRoute';
-import AdminDebug from './pages/AdminDebug';
-import OurImpact from './pages/OurImpact';
 
-// Admin Pages
-import AdminDashboard from './pages/admin/AdminDashboard';
-import UserManagement from './pages/admin/UserManagement';
-import MentorApprovals from './pages/admin/MentorApprovals';
-import SessionManagement from './pages/admin/SessionManagement';
-import PaymentManagement from './pages/admin/PaymentManagement';
-import ReportsManagement from './pages/admin/ReportsManagement';
-import PlatformSettings from './pages/admin/PlatformSettings';
-import AdminAnalytics from './pages/admin/AdminAnalytics';
-import PayoutManagement from './pages/admin/PayoutManagement';
-import ReviewsManagement from './pages/admin/ReviewsManagement';
-import NotificationsManagement from './pages/admin/NotificationsManagement';
-import SecurityManagement from './pages/admin/SecurityManagement';
-import CategoryManagement from './pages/admin/CategoryManagement';
-import AdminPromotion from './pages/admin/AdminPromotion';
-import SupportTickets from './pages/admin/SupportTickets';
-import GroupManagement from './pages/admin/GroupManagement';
-import MyTickets from './pages/MyTickets';
-import AdminSetup from './pages/AdminSetup';
-import FixAdmin from './pages/FixAdmin';
-import AdminMentorRequests from './pages/AdminMentorRequests';
+// Admin Pages - lazy loaded
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
+const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
+const UserManagementEnhanced = lazy(() => import('./pages/admin/UserManagementEnhanced'));
+const CommunicationCenter = lazy(() => import('./pages/admin/CommunicationCenter'));
+const ContentModeration = lazy(() => import('./pages/admin/ContentModeration'));
+const SystemHealth = lazy(() => import('./pages/admin/SystemHealth'));
+const MentorApprovals = lazy(() => import('./pages/admin/MentorApprovals'));
+const SessionManagement = lazy(() => import('./pages/admin/SessionManagement'));
+const PaymentManagement = lazy(() => import('./pages/admin/PaymentManagement'));
+const ReportsManagement = lazy(() => import('./pages/admin/ReportsManagement'));
+const PlatformSettings = lazy(() => import('./pages/admin/PlatformSettings'));
+const AdminAnalytics = lazy(() => import('./pages/admin/AdminAnalytics'));
+const AdvancedAnalytics = lazy(() => import('./pages/admin/AdvancedAnalytics'));
+const ActivityLog = lazy(() => import('./pages/admin/ActivityLog'));
+const PayoutManagement = lazy(() => import('./pages/admin/PayoutManagement'));
+const ReviewsManagement = lazy(() => import('./pages/admin/ReviewsManagement'));
+const NotificationsManagement = lazy(() => import('./pages/admin/NotificationsManagement'));
+const NewsletterManagement = lazy(() => import('./pages/admin/NewsletterManagement'));
+const SecurityManagement = lazy(() => import('./pages/admin/SecurityManagement'));
+const CategoryManagement = lazy(() => import('./pages/admin/CategoryManagement'));
+const AdminPromotion = lazy(() => import('./pages/admin/AdminPromotion'));
+const SupportTickets = lazy(() => import('./pages/admin/SupportTickets'));
+const GroupManagement = lazy(() => import('./pages/admin/GroupManagement'));
+const MyTickets = lazy(() => import('./pages/support/MyTickets'));
+const AdminMentorRequests = lazy(() => import('./pages/AdminMentorRequests'));
+const UserHelper = lazy(() => import('./pages/admin/UserHelper'));
 
-// New Sub-pages
-import FinancialAid from './pages/FinancialAid';
-import AcademicSupport from './pages/AcademicSupport';
-import DEIResources from './pages/DEIResources';
-import CommunityFeed from './pages/CommunityFeed';
-import MemberDirectory from './pages/MemberDirectory';
-import DiscussionGroups from './pages/DiscussionGroups';
-import GroupDetail from './pages/GroupDetail';
-import JoinProfessionalTrack from './pages/JoinProfessionalTrack';
-import JoinCulturalTrack from './pages/JoinCulturalTrack';
-import PublicMentorship from './pages/PublicMentorship';
-import Search from './pages/Search';
-import BecomeMentor from './pages/BecomeMentor';
+// Sub-pages - lazy loaded
+const FinancialAid = lazy(() => import('./pages/resources/FinancialAid'));
+const AcademicSupport = lazy(() => import('./pages/resources/AcademicSupport'));
+const DEIResources = lazy(() => import('./pages/resources/DEIResources'));
+const CommunityFeed = lazy(() => import('./pages/community/CommunityFeed'));
+const MemberDirectory = lazy(() => import('./pages/community/MemberDirectory'));
+const DiscussionGroups = lazy(() => import('./pages/community/DiscussionGroups'));
+const GroupDetail = lazy(() => import('./pages/community/GroupDetail'));
+const JoinProfessionalTrack = lazy(() => import('./pages/JoinProfessionalTrack'));
+const JoinCulturalTrack = lazy(() => import('./pages/JoinCulturalTrack'));
+const PublicMentorship = lazy(() => import('./pages/PublicMentorship'));
+const Search = lazy(() => import('./pages/Search'));
+const BecomeMentor = lazy(() => import('./pages/BecomeMentor'));
 
-// Pillar Pages
-import PeerMentorship from './pages/PeerMentorship';
-import AccessibleResources from './pages/AccessibleResources';
-import SafeSpaces from './pages/SafeSpaces';
+// Pillar Pages - lazy loaded
+const PeerMentorship = lazy(() => import('./pages/PeerMentorship'));
+const AccessibleResources = lazy(() => import('./pages/resources/AccessibleResources'));
+const SafeSpaces = lazy(() => import('./pages/SafeSpaces'));
+
+// Debug pages
+import DebugRole from './pages/DebugRole';
+import DiagnosticPage from './pages/DiagnosticPage';
 
 // firebase is initialized in `src/firebase.ts`
 
@@ -92,45 +109,45 @@ const AuthContext = createContext<AuthState>({ user: null, loading: true });
 
 export const useAuth = () => useContext(AuthContext);
 
+// Loading fallback component
+const LoadingFallback = () => (
+  <div style={{ 
+    display: 'flex', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    height: '100vh',
+    fontSize: '18px',
+    color: '#666'
+  }}>
+    Loading...
+  </div>
+);
+
 const ProtectedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const onboardingComplete = localStorage.getItem('unity_onboarding_complete') === 'true';
   const location = useLocation();
   const { user, loading } = useAuth();
-  const [accountStatus, setAccountStatus] = useState<string | null>(null);
   const [checkingStatus, setCheckingStatus] = useState(true);
   useAutoLogout();
 
-  // Check account status for professionals
+  // Check account status removed - no longer needed
   useEffect(() => {
-    const checkAccountStatus = async () => {
-      if (user) {
-        const { doc, getDoc } = await import('firebase/firestore');
-        const { db } = await import('./src/firebase');
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          setAccountStatus(userDoc.data().accountStatus || 'active');
-        }
-      }
-      setCheckingStatus(false);
-    };
-    if (!loading) {
-      checkAccountStatus();
-    }
-  }, [user, loading]);
+    setCheckingStatus(false);
+  }, [loading]);
 
-  // Keep onboarding redirect behavior
+  // Keep onboarding redirect behavior but exclude login redirect
   if (!onboardingComplete && !['/login', '/signup', '/', '/about', '/who-we-serve', '/mentorship-info', '/peer-mentorship', '/accessible-resources', '/safe-spaces', '/pending-approval'].includes(location.pathname)) {
-    return <Navigate to="/signup" replace />;
+    // If user is logged in but onboarding not complete, set it complete and continue
+    if (user) {
+      localStorage.setItem('unity_onboarding_complete', 'true');
+    } else {
+      return <Navigate to="/signup" replace />;
+    }
   }
 
   // If not loading and no user, redirect to login
   if (!loading && !user) {
     return <Navigate to="/login" replace />;
-  }
-
-  // Redirect pending professionals to pending approval page
-  if (!checkingStatus && accountStatus === 'pending' && location.pathname !== '/pending-approval') {
-    return <Navigate to="/pending-approval" replace />;
   }
 
   return <Layout>{children}</Layout>;
@@ -144,6 +161,22 @@ const App: React.FC = () => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setLoading(false);
+      
+      // Handle presence tracking
+      if (u) {
+        presenceService.setUserOnline(u.uid);
+        
+        // Set offline when page unloads
+        const handleBeforeUnload = () => {
+          presenceService.setUserOffline(u.uid);
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        
+        return () => {
+          window.removeEventListener('beforeunload', handleBeforeUnload);
+          presenceService.setUserOffline(u.uid);
+        };
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -153,7 +186,8 @@ const App: React.FC = () => {
       <LanguageProvider>
         <AuthContext.Provider value={{ user, loading }}>
           <Router>
-        <Routes>
+            <Suspense fallback={<LoadingFallback />}>
+              <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/about" element={<About />} />
         <Route path="/ourimpact" element={<OurImpact />} />
@@ -165,8 +199,8 @@ const App: React.FC = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/pending-approval" element={<PendingApproval />} />
-        <Route path="/admin-setup" element={<AdminSetup />} />
-        <Route path="/fix-admin" element={<FixAdmin />} />
+        <Route path="/debug-role" element={<ProtectedLayout><DebugRole /></ProtectedLayout>} />
+        <Route path="/diagnostic" element={<DiagnosticPage />} />
         
         <Route path="/dashboard" element={<ProtectedLayout><Dashboard /></ProtectedLayout>} />
         <Route path="/dashboard/tips" element={<ProtectedLayout><LocalTips /></ProtectedLayout>} />
@@ -214,11 +248,15 @@ const App: React.FC = () => {
         
         <Route path="/billing" element={<ProtectedLayout><Billing /></ProtectedLayout>} />
         <Route path="/notifications" element={<ProtectedLayout><Notifications /></ProtectedLayout>} />
-        <Route path="/admin-debug" element={<ProtectedLayout><AdminDebug /></ProtectedLayout>} />
+        <Route path="/messages" element={<ProtectedLayout><Messages /></ProtectedLayout>} />
         
         {/* Admin Routes - Protected */}
         <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
         <Route path="/admin/users" element={<AdminRoute><UserManagement /></AdminRoute>} />
+        <Route path="/admin/users-enhanced" element={<AdminRoute><UserManagementEnhanced /></AdminRoute>} />
+        <Route path="/admin/communication" element={<AdminRoute><CommunicationCenter /></AdminRoute>} />
+        <Route path="/admin/moderation" element={<AdminRoute><ContentModeration /></AdminRoute>} />
+        <Route path="/admin/system-health" element={<AdminRoute><SystemHealth /></AdminRoute>} />
         <Route path="/admin/mentor-approvals" element={<AdminRoute><MentorApprovals /></AdminRoute>} />
         <Route path="/admin/sessions" element={<AdminRoute><SessionManagement /></AdminRoute>} />
         <Route path="/admin/payments" element={<AdminRoute><PaymentManagement /></AdminRoute>} />
@@ -227,16 +265,21 @@ const App: React.FC = () => {
         <Route path="/admin/reviews" element={<AdminRoute><ReviewsManagement /></AdminRoute>} />
         <Route path="/admin/settings" element={<AdminRoute><PlatformSettings /></AdminRoute>} />
         <Route path="/admin/analytics" element={<AdminRoute><AdminAnalytics /></AdminRoute>} />
+        <Route path="/admin/advanced-analytics" element={<AdminRoute><AdvancedAnalytics /></AdminRoute>} />
+        <Route path="/admin/activity-log" element={<AdminRoute><ActivityLog /></AdminRoute>} />
         <Route path="/admin/notifications" element={<AdminRoute><NotificationsManagement /></AdminRoute>} />
+        <Route path="/admin/newsletter" element={<AdminRoute><NewsletterManagement /></AdminRoute>} />
         <Route path="/admin/security" element={<AdminRoute><SecurityManagement /></AdminRoute>} />
         <Route path="/admin/categories" element={<AdminRoute><CategoryManagement /></AdminRoute>} />
         <Route path="/admin/groups" element={<AdminRoute><GroupManagement /></AdminRoute>} />
         <Route path="/admin/support" element={<AdminRoute><SupportTickets /></AdminRoute>} />
         <Route path="/admin/promotion" element={<AdminRoute><AdminPromotion /></AdminRoute>} />
         <Route path="/admin/mentor-requests" element={<AdminRoute><AdminMentorRequests /></AdminRoute>} />
+        <Route path="/admin/user-helper" element={<AdminRoute><UserHelper /></AdminRoute>} />
         
         <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+            </Suspense>
       </Router>
       </AuthContext.Provider>
       </LanguageProvider>

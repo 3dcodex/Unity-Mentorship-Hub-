@@ -3,52 +3,111 @@ const admin = require('firebase-admin');
 
 admin.initializeApp();
 
-exports.setAdminClaim = functions.https.onCall(async (data, context) => {
-  if (!context.auth || !context.auth.token.super_admin) {
-    throw new functions.https.HttpsError('permission-denied', 'Only super admins can set admin claims');
+exports.adminResetPassword = functions.https.onCall(async (data, context) => {
+  // Check if user is authenticated
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
   }
 
-  const { uid, role } = data;
-  
+  const { uid, newPassword } = data;
+
+  // Verify admin role
+  const adminDoc = await admin.firestore().collection('users').doc(context.auth.uid).get();
+  const adminRole = adminDoc.data()?.role;
+
+  if (!['admin', 'super_admin'].includes(adminRole)) {
+    throw new functions.https.HttpsError('permission-denied', 'Only admins can reset passwords');
+  }
+
+  // Validate password
+  if (!newPassword || newPassword.length < 6) {
+    throw new functions.https.HttpsError('invalid-argument', 'Password must be at least 6 characters');
+  }
+
   try {
-    await admin.auth().setCustomUserClaims(uid, { 
-      admin: role === 'admin' || role === 'super_admin',
-      super_admin: role === 'super_admin',
-      moderator: role === 'moderator'
+    // Update user password
+    await admin.auth().updateUser(uid, {
+      password: newPassword
     });
 
-    await admin.firestore().collection('users').doc(uid).update({ role });
+    // Log admin action
+    await admin.firestore().collection('adminActions').add({
+      adminId: context.auth.uid,
+      adminEmail: context.auth.token.email,
+      action: 'reset_password',
+      targetUserId: uid,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
 
-    return { success: true };
+    return { success: true, message: 'Password reset successfully' };
   } catch (error) {
     throw new functions.https.HttpsError('internal', error.message);
   }
 });
 
-exports.initializeSuperAdmin = functions.https.onRequest(async (req, res) => {
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'GET, POST');
-  res.set('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') {
-    res.status(204).send('');
-    return;
+exports.adminChangeEmail = functions.https.onCall(async (data, context) => {
+  // Check if user is authenticated
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
   }
 
-  const email = req.body?.email || req.query.email;
-  const secret = req.body?.secretKey || req.query.secret;
+  const { uid, newEmail } = data;
 
-  if (secret !== 'unity_admin_secret_2024') {
-    res.status(403).send('Unauthorized');
-    return;
+  // Verify admin role
+  const adminDoc = await admin.firestore().collection('users').doc(context.auth.uid).get();
+  const adminRole = adminDoc.data()?.role;
+
+  if (!['admin', 'super_admin'].includes(adminRole)) {
+    throw new functions.https.HttpsError('permission-denied', 'Only admins can change user emails');
+  }
+
+  // Validate email
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!newEmail || !emailRegex.test(newEmail)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid email address');
   }
 
   try {
-    const user = await admin.auth().getUserByEmail(email);
-    await admin.auth().setCustomUserClaims(user.uid, { admin: true, super_admin: true });
-    await admin.firestore().collection('users').doc(user.uid).set({ role: 'super_admin', status: 'active' }, { merge: true });
-    res.send(`Super admin initialized for ${email}`);
+    // Get old email for logging
+    const userRecord = await admin.auth().getUser(uid);
+    const oldEmail = userRecord.email;
+
+    // Update user email in Firebase Auth
+    await admin.auth().updateUser(uid, {
+      email: newEmail,
+      emailVerified: false // Require re-verification
+    });
+
+    // Update email in Firestore
+    await admin.firestore().collection('users').doc(uid).update({
+      email: newEmail,
+      emailChangedBy: context.auth.uid,
+      emailChangedAt: admin.firestore.FieldValue.serverTimestamp(),
+      oldEmail: oldEmail
+    });
+
+    // Log admin action
+    await admin.firestore().collection('adminActions').add({
+      adminId: context.auth.uid,
+      adminEmail: context.auth.token.email,
+      action: 'change_email',
+      targetUserId: uid,
+      details: JSON.stringify({ oldEmail, newEmail }),
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Send notification to user
+    await admin.firestore().collection('notifications').add({
+      userId: uid,
+      title: 'Email Address Changed',
+      message: `Your email has been changed from ${oldEmail} to ${newEmail} by an administrator. Please verify your new email.`,
+      type: 'warning',
+      read: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return { success: true, message: 'Email changed successfully', oldEmail, newEmail };
   } catch (error) {
-    res.status(500).send(error.message);
+    throw new functions.https.HttpsError('internal', error.message);
   }
 });

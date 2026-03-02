@@ -5,68 +5,71 @@ import Footer from '../components/Footer';
 
 const About: React.FC = () => {
   return (
-    <div className="flex flex-col min-h-screen bg-white dark:bg-slate-900 font-sans text-gray-900 dark:text-gray-100">
+    <div className="min-h-screen bg-white dark:bg-slate-900">
       <PublicHeader />
-
-      <main className="flex-1">
-        {/* Hero Section */}
-        <section className="relative py-20 sm:py-32 md:py-40 px-4 sm:px-6 overflow-hidden">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1200px] h-[600px] bg-primary/5 blur-[120px] rounded-full -z-10"></div>
-          <div className="max-w-5xl mx-auto text-center space-y-6">
-            <div className="inline-flex px-4 py-2 rounded-full bg-primary/10 dark:bg-primary/20 text-primary dark:text-blue-400 text-xs font-black uppercase tracking-widest">Our Story</div>
-            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black leading-tight text-gray-900 dark:text-white">
-              About Unity<br/>Mentorship Hub
-            </h1>
-            <p className="text-xl sm:text-2xl text-gray-600 dark:text-gray-400 font-medium max-w-3xl mx-auto">
-              From Personal Journey to Purpose
-            </p>
+      {/* Hero Section */}
+      <section className="relative py-24 px-4 overflow-hidden bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-slate-900 dark:via-purple-950 dark:to-slate-900">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-20 left-10 w-96 h-96 bg-blue-400/20 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-20 right-10 w-96 h-96 bg-purple-400/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
+        </div>
+        <div className="max-w-5xl mx-auto text-center space-y-6 relative z-10">
+          <div className="inline-flex px-5 py-2 rounded-full bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border border-gray-200 dark:border-gray-700 shadow-lg">
+            <span className="text-sm font-black bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">Our Story</span>
           </div>
-        </section>
+          <h1 className="text-5xl md:text-7xl font-black bg-gradient-to-r from-gray-900 via-purple-900 to-gray-900 dark:from-white dark:via-purple-200 dark:to-white bg-clip-text text-transparent leading-tight">
+            About Unity<br/>Mentorship Hub
+          </h1>
+          <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
+            From Personal Journey to Purpose
+          </p>
+        </div>
+      </section>
 
-        {/* Story Section with Image */}
-        <section className="py-16 sm:py-24 px-4 sm:px-6 bg-gray-50 dark:bg-slate-800/50">
-          <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
+      {/* Story Section */}
+      <section className="py-20 px-4">
+        <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
             <div className="space-y-6">
-              <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-gray-900 dark:text-white">The Beginning</h2>
-              <div className="space-y-4 text-lg text-gray-600 dark:text-gray-400">
-                <p>At 19, co-founder <span className="font-bold text-primary">Kabi Clinton</span> relocated to Canada as an international student.</p>
-                <div className="pl-6 border-l-4 border-primary space-y-2 text-xl font-semibold text-gray-900 dark:text-white">
+              <h2 className="text-4xl md:text-5xl font-black text-gray-900 dark:text-white">The Beginning</h2>
+              <div className="space-y-4 text-lg text-gray-600 dark:text-gray-300">
+                <p>At 19, co-founder <span className="font-bold text-blue-600 dark:text-blue-400">Kabi Clinton</span> relocated to Canada as an international student.</p>
+                <div className="pl-6 border-l-4 border-blue-600 space-y-2 text-xl font-semibold text-gray-900 dark:text-white">
                   <p>New country.</p>
                   <p>New system.</p>
                   <p>New realities.</p>
                 </div>
                 <p>The challenge wasn't just academics. It was learning how to adapt, budget, navigate unfamiliar systems, and grow independently.</p>
                 <p>He reached out to seniors, classmates, and professionals ahead of him. Over time, students began reaching out to him too.</p>
-                <p className="text-xl font-bold text-primary">Mentorship was happening — but it wasn't structured.</p>
+                <p className="text-xl font-bold text-blue-600 dark:text-blue-400">Mentorship was happening — but it wasn't structured.</p>
               </div>
             </div>
             <div className="relative">
-              <div className="absolute -inset-4 bg-primary/5 rounded-[60px] blur-3xl"></div>
+              <div className="absolute -inset-4 bg-gradient-to-br from-blue-400/20 to-purple-400/20 rounded-3xl blur-3xl"></div>
               <img 
                 src="https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&q=80&w=800" 
-                className="relative w-full h-[400px] sm:h-[500px] object-cover rounded-3xl shadow-2xl"
+                className="relative w-full h-[500px] object-cover rounded-3xl shadow-2xl"
                 alt="International students collaborating"
               />
             </div>
           </div>
         </section>
 
-        {/* The Idea Section */}
-        <section className="py-16 sm:py-24 px-4 sm:px-6">
+      {/* The Idea Section */}
+      <section className="py-20 px-4 bg-gray-50 dark:bg-slate-800">
           <div className="max-w-5xl mx-auto">
-            <div className="bg-gradient-to-br from-primary/5 to-blue-50 dark:from-primary/10 dark:to-slate-800 rounded-[40px] p-8 sm:p-12 md:p-16 space-y-8">
+            <div className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 backdrop-blur-xl rounded-3xl p-12 md:p-16 space-y-8 border border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center text-white">
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center text-white">
                   <span className="material-symbols-outlined text-3xl">lightbulb</span>
                 </div>
-                <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-gray-900 dark:text-white">The Idea</h2>
+                <h2 className="text-4xl md:text-5xl font-black text-gray-900 dark:text-white">The Idea</h2>
               </div>
-              <div className="space-y-6 text-lg text-gray-600 dark:text-gray-400">
-                <p>What started as a classroom idea evolved into <span className="font-bold text-primary">Unity Mentorship Hub</span>.</p>
+              <div className="space-y-6 text-lg text-gray-600 dark:text-gray-300">
+                <p>What started as a classroom idea evolved into <span className="font-bold text-blue-600 dark:text-blue-400">Unity Mentorship Hub</span>.</p>
                 <p>We recognized a gap: Talented students needed more than motivation — they needed <span className="font-bold text-gray-900 dark:text-white">clarity, strategy, and access</span>.</p>
                 <p>As an IT professional trained to think in systems, Kabi realized:</p>
-                <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 border-l-4 border-primary">
-                  <p className="text-2xl sm:text-3xl font-black text-primary">Growth without structure creates gaps.</p>
+                <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl p-8 border-l-4 border-blue-600">
+                  <p className="text-3xl font-black bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Growth without structure creates gaps.</p>
                 </div>
                 <p className="text-xl font-bold text-gray-900 dark:text-white">So we built structure.</p>
               </div>
@@ -74,8 +77,8 @@ const About: React.FC = () => {
           </div>
         </section>
 
-        {/* Mission & Vision Grid */}
-        <section className="py-16 sm:py-24 px-4 sm:px-6 bg-gray-50 dark:bg-slate-800/50">
+      {/* Mission & Vision Grid */}
+      <section className="py-20 px-4">
           <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-8">
             {/* Mission Card */}
             <div className="bg-white dark:bg-slate-800 rounded-[40px] p-8 sm:p-12 shadow-xl border border-gray-100 dark:border-gray-700">
@@ -134,8 +137,8 @@ const About: React.FC = () => {
           </div>
         </section>
 
-        {/* Values Section */}
-        <section className="py-16 sm:py-24 px-4 sm:px-6">
+      {/* Values Section */}
+      <section className="py-20 px-4 bg-gray-50 dark:bg-slate-800">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-12">
               <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-gray-900 dark:text-white mb-4">Our Core Values</h2>
@@ -169,34 +172,36 @@ const About: React.FC = () => {
           </div>
         </section>
 
-        {/* CTA Section */}
-        <section className="py-16 sm:py-24 px-4 sm:px-6 bg-gradient-to-r from-primary to-blue-600 text-white">
-          <div className="max-w-4xl mx-auto text-center space-y-8">
-            <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black leading-tight">
-              Ready to be part of the journey?
-            </h2>
-            <p className="text-lg sm:text-xl opacity-90 font-medium max-w-2xl mx-auto">
-              Join Unity Mentorship Hub and start your intentional growth today.
-            </p>
-            <div className="flex flex-col sm:flex-row justify-center gap-4">
-              <Link 
-                to="/signup" 
-                className="px-10 py-5 bg-white dark:bg-slate-900 text-primary dark:text-blue-400 font-black rounded-2xl shadow-2xl hover:scale-105 transition-all"
-              >
-                Get Started
-              </Link>
-              <Link 
-                to="/ourimpact" 
-                className="px-10 py-5 border-2 border-white/40 text-white font-black rounded-2xl hover:bg-white/10 transition-all"
-              >
-                See Our Impact
-              </Link>
-            </div>
+      {/* CTA Section */}
+      <section className="py-20 px-4 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white relative overflow-hidden">
+        <div className="absolute inset-0 opacity-10">
+          <span className="material-symbols-outlined text-[500px] absolute -right-20 -top-20">diversity_1</span>
+        </div>
+        <div className="max-w-4xl mx-auto text-center space-y-8 relative z-10">
+          <h2 className="text-4xl md:text-5xl lg:text-6xl font-black">
+            Ready to be part of the journey?
+          </h2>
+          <p className="text-xl opacity-90 max-w-2xl mx-auto">
+            Join Unity Mentorship Hub and start your intentional growth today.
+          </p>
+          <div className="flex flex-col sm:flex-row justify-center gap-4">
+            <Link 
+              to="/signup" 
+              className="px-10 py-5 bg-white text-purple-600 font-black rounded-xl shadow-2xl hover:scale-105 transition-all"
+            >
+              Get Started
+            </Link>
+            <Link 
+              to="/ourimpact" 
+              className="px-10 py-5 border-2 border-white/40 text-white font-black rounded-xl hover:bg-white/10 transition-all"
+            >
+              See Our Impact
+            </Link>
           </div>
-        </section>
-      </main>
-      
-      <Footer variant="simple" />
+        </div>
+      </section>
+
+      <Footer />
     </div>
   );
 };

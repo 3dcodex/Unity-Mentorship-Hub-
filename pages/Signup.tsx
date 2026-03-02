@@ -5,7 +5,7 @@ import Footer from '../components/Footer';
 
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 import { auth } from '../src/firebase';
 
 const roles: { id: Role, title: string, desc: string, img: string }[] = [
@@ -88,6 +88,9 @@ const Signup: React.FC = () => {
       const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
       const user = userCredential.user;
       
+      // Send email verification
+      await sendEmailVerification(user);
+      
       const userName = `${firstName.trim()} ${lastName.trim()}`;
       
       // Save user profile to Firestore
@@ -98,20 +101,14 @@ const Signup: React.FC = () => {
         selectedOffer,
         selectedSeeking,
         userName,
-        phoneNumber.trim(),
-        selectedRole === 'Student' ? school.trim() : '',
-        selectedRole === 'Professional',
+        phoneNumber.trim() || undefined,
+        selectedRole === 'Student' ? school.trim() : undefined,
+        false,
         selectedRole === 'Professional' ? {
           companyName: companyName.trim(),
           jobTitle: jobTitle.trim(),
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-        } : selectedRole === 'Student' ? {
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          school: school.trim(),
-          programName: programName.trim(),
-          currentYear: currentYear.trim(),
+          industry: jobTitle.trim(),
+          yearsExperience: 0,
         } : undefined
       );
       
@@ -119,11 +116,11 @@ const Signup: React.FC = () => {
       localStorage.setItem('unity_user_name', userName);
       localStorage.setItem('unity_user_role', selectedRole);
       
-      if (selectedRole === 'Professional') {
-        navigate('/pending-approval');
-      } else {
-        navigate('/dashboard');
-      }
+      // Show verification message
+      alert('Account created! Please check your email to verify your account before logging in.');
+      
+      // All users go to dashboard
+      window.location.href = '/dashboard';
     } catch (err: any) {
       console.error('Signup error:', err);
       setError(err?.message ?? 'Sign-up failed');
@@ -131,52 +128,80 @@ const Signup: React.FC = () => {
     }
   };
 
+  // Show loading overlay during signup
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900">
+        <div className="text-center space-y-4">
+          <div className="size-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mx-auto"></div>
+          <p className="font-bold text-gray-600 dark:text-gray-400">Creating your account...</p>
+        </div>
+      </div>
+    );
+  }
+
   const toggleTag = (tag: string, list: string[], setter: React.Dispatch<React.SetStateAction<string[]>>) => {
     setter(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-slate-900 p-4 sm:p-6">
-      <PublicHeader />
-      <div className="flex items-center justify-center flex-1">
-      <div className="max-w-4xl w-full bg-white dark:bg-slate-800 rounded-2xl sm:rounded-3xl md:rounded-[40px] shadow-2xl shadow-gray-200/50 dark:shadow-black/30 border border-gray-100 dark:border-gray-700 overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-slate-900 dark:via-indigo-950 dark:to-purple-950 p-4 relative overflow-hidden">
+      {/* Animated Background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 left-10 w-72 h-72 bg-blue-400/20 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-purple-400/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
+      </div>
+      
+      <div className="flex items-center justify-center min-h-screen py-8 relative z-10">
+      <div className="max-w-4xl w-full bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/20 dark:border-slate-700/50 overflow-hidden">
         {/* Progress Bar */}
-        <div className="h-2 bg-gray-100 dark:bg-gray-700 w-full overflow-hidden">
+        <div className="h-2 bg-gray-200 dark:bg-gray-800 w-full overflow-hidden">
           <div 
-            className="h-full bg-primary dark:bg-blue-600 transition-all duration-700" 
+            className="h-full bg-gradient-to-r from-blue-600 to-purple-600 transition-all duration-700 shadow-lg" 
             style={{ width: `${(step / 3) * 100}%` }}
           />
         </div>
 
         <div className="p-6 sm:p-8 md:p-12 lg:p-16 space-y-6 sm:space-y-8 md:space-y-12">
           {step === 1 && (
-            <div className="space-y-6 sm:space-y-8 md:space-y-12 animate-in fade-in slide-in-from-right-8">
-              <div className="text-center space-y-2 sm:space-y-4">
-                <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 dark:text-white">Choose your role</h1>
-                <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 font-medium">Join our community in the capacity that fits your journey.</p>
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-8">
+              <div className="text-center space-y-3">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl mb-2">
+                  <span className="material-symbols-outlined text-white text-3xl">person_add</span>
+                </div>
+                <h1 className="text-3xl md:text-4xl font-black bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Choose your role</h1>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Join our community in the capacity that fits your journey</p>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {roles.map((r) => (
                   <button
                     key={r.id}
                     onClick={() => setSelectedRole(r.id)}
-                    className={`group relative text-left rounded-3xl border-2 transition-all p-2 ${
-                      selectedRole === r.id ? 'border-primary dark:border-blue-500 bg-primary/5 dark:bg-blue-900/20' : 'border-gray-50 dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600 bg-white dark:bg-slate-700'
+                    className={`group relative text-left rounded-2xl border-2 transition-all p-6 ${
+                      selectedRole === r.id 
+                        ? 'border-blue-500 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 shadow-xl' 
+                        : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700 bg-white dark:bg-slate-800'
                     }`}
                   >
-                    <div className="aspect-square rounded-2xl overflow-hidden mb-4 relative">
-                      <img src={r.img} alt={r.title} className="w-full h-full object-cover" />
+                    <div className="flex items-start gap-4">
+                      <div className={`w-16 h-16 rounded-xl flex items-center justify-center transition ${
+                        selectedRole === r.id 
+                          ? 'bg-gradient-to-br from-blue-600 to-purple-600' 
+                          : 'bg-gray-100 dark:bg-gray-700'
+                      }`}>
+                        <span className={`material-symbols-outlined text-3xl ${
+                          selectedRole === r.id ? 'text-white' : 'text-gray-400'
+                        }`}>{r.id === 'Student' ? 'school' : 'work'}</span>
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-black text-lg mb-1 dark:text-white">{r.title}</h4>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">{r.desc}</p>
+                      </div>
                       {selectedRole === r.id && (
-                        <div className="absolute inset-0 bg-primary/10 flex items-center justify-center">
-                          <div className="bg-primary text-white p-2 rounded-full shadow-lg">
-                            <span className="material-symbols-outlined font-black">check</span>
-                          </div>
+                        <div className="bg-gradient-to-br from-blue-600 to-purple-600 text-white p-1.5 rounded-full">
+                          <span className="material-symbols-outlined text-lg">check</span>
                         </div>
                       )}
-                    </div>
-                    <div className="px-4 pb-4">
-                      <h4 className="font-black text-sm mb-1 dark:text-white">{r.title}</h4>
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed font-medium">{r.desc}</p>
                     </div>
                   </button>
                 ))}
@@ -185,10 +210,13 @@ const Signup: React.FC = () => {
           )}
 
           {step === 2 && (
-            <div className="space-y-6 sm:space-y-8 md:space-y-12 animate-in fade-in slide-in-from-right-8">
-              <div className="text-center space-y-2 sm:space-y-4">
-                <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 dark:text-white leading-tight">Tailor your experience</h1>
-                <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 font-medium">This helps us match you with the right peers and mentors.</p>
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-8">
+              <div className="text-center space-y-3">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl mb-2">
+                  <span className="material-symbols-outlined text-white text-3xl">tune</span>
+                </div>
+                <h1 className="text-3xl md:text-4xl font-black bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Tailor your experience</h1>
+                <p className="text-sm text-gray-600 dark:text-gray-400">This helps us match you with the right peers and mentors</p>
               </div>
               <div className="grid md:grid-cols-2 gap-6 md:gap-12">
                 <div className="space-y-4">
@@ -201,8 +229,10 @@ const Signup: React.FC = () => {
                       <button
                         key={tag}
                         onClick={() => toggleTag(tag, selectedOffer, setSelectedOffer)}
-                        className={`px-5 py-2.5 rounded-full text-xs font-bold border-2 transition-all ${
-                          selectedOffer.includes(tag) ? 'bg-primary dark:bg-blue-600 border-primary dark:border-blue-600 text-white shadow-lg shadow-primary/10 dark:shadow-blue-600/10' : 'bg-white dark:bg-slate-700 border-gray-100 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-500'
+                        className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all ${
+                          selectedOffer.includes(tag) 
+                            ? 'bg-gradient-to-r from-blue-600 to-purple-600 border-transparent text-white shadow-lg' 
+                            : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-blue-300 dark:hover:border-blue-700'
                         }`}
                       >
                         {tag}
@@ -246,8 +276,10 @@ const Signup: React.FC = () => {
                       <button
                         key={tag}
                         onClick={() => toggleTag(tag, selectedSeeking, setSelectedSeeking)}
-                        className={`px-5 py-2.5 rounded-full text-xs font-bold border-2 transition-all ${
-                          selectedSeeking.includes(tag) ? 'bg-primary dark:bg-blue-600 border-primary dark:border-blue-600 text-white shadow-lg shadow-primary/10 dark:shadow-blue-600/10' : 'bg-white dark:bg-slate-700 border-gray-100 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-500'
+                        className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all ${
+                          selectedSeeking.includes(tag) 
+                            ? 'bg-gradient-to-r from-blue-600 to-purple-600 border-transparent text-white shadow-lg' 
+                            : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-blue-300 dark:hover:border-blue-700'
                         }`}
                       >
                         {tag}
@@ -286,10 +318,13 @@ const Signup: React.FC = () => {
           )}
 
           {step === 3 && (
-            <div className="space-y-6 sm:space-y-8 md:space-y-12 animate-in fade-in slide-in-from-right-8 max-w-sm mx-auto">
-              <div className="text-center space-y-2 sm:space-y-4">
-                <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 dark:text-white">Final Step</h1>
-                <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 font-medium">Complete your profile to begin.</p>
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-8 max-w-lg mx-auto">
+              <div className="text-center space-y-3">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl mb-2">
+                  <span className="material-symbols-outlined text-white text-3xl">badge</span>
+                </div>
+                <h1 className="text-3xl md:text-4xl font-black bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Final Step</h1>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Complete your profile to begin</p>
               </div>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -401,7 +436,7 @@ const Signup: React.FC = () => {
             <button 
               onClick={handleNext}
               disabled={(step === 1 && !selectedRole) || (step === 3 && isLoading)}
-              className="w-full sm:w-auto bg-primary dark:bg-blue-600 text-white font-black px-8 sm:px-12 py-3 sm:py-4 rounded-xl sm:rounded-2xl shadow-xl shadow-primary/20 dark:shadow-blue-600/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base"
+              className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold px-12 py-4 rounded-xl shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 transform hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isLoading ? (
                 <span className="material-symbols-outlined animate-spin">progress_activity</span>
@@ -416,7 +451,6 @@ const Signup: React.FC = () => {
         </div>
       </div>
       </div>
-      <Footer />
     </div>
   );
 };

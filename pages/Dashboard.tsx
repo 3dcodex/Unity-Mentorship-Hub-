@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { db } from '../src/firebase';
-import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../App';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -17,13 +17,78 @@ const Dashboard: React.FC = () => {
   const [stats, setStats] = useState({ totalSessions: 0, completedSessions: 0, activeMentors: 0 });
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
+    let unsubscribeListeners: (() => void) | undefined;
+    
     if (user) {
       loadDashboardData();
+      unsubscribeListeners = setupRealTimeListeners();
     }
+    
+    // Listen for profile photo updates
+    const handlePhotoUpdate = (event: any) => {
+      if (event.detail?.photoURL) {
+        setUserPhoto(event.detail.photoURL);
+      }
+    };
+    window.addEventListener('profilePhotoUpdated', handlePhotoUpdate);
+    
+    return () => {
+      window.removeEventListener('profilePhotoUpdated', handlePhotoUpdate);
+      if (unsubscribeListeners) {
+        unsubscribeListeners();
+      }
+    };
   }, [user]);
 
+  const setupRealTimeListeners = () => {
+    if (!user) return;
+
+    // Real-time listener for sessions
+    const sessionsQuery = query(
+      collection(db, 'bookings'),
+      where('menteeId', '==', user.uid),
+      where('status', '!=', 'cancelled'),
+      orderBy('status'),
+      limit(3)
+    );
+    
+    const unsubscribeSessions = onSnapshot(sessionsQuery, (snapshot) => {
+      const sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setUpcomingSessions(sessions);
+    });
+
+    // Real-time listener for unread messages
+    const messagesQuery = query(
+      collection(db, 'conversations'),
+      where('participants', 'array-contains', user.uid)
+    );
+    
+    const unsubscribeMessages = onSnapshot(messagesQuery, async (snapshot) => {
+      let totalUnread = 0;
+      for (const doc of snapshot.docs) {
+        const conversationData = doc.data();
+        const lastReadTimestamp = conversationData.lastRead?.[user.uid] || 0;
+        
+        // Count unread messages in this conversation
+        const messagesQuery = query(
+          collection(db, 'conversations', doc.id, 'messages'),
+          where('timestamp', '>', lastReadTimestamp),
+          where('senderId', '!=', user.uid)
+        );
+        const messagesSnapshot = await getDocs(messagesQuery);
+        totalUnread += messagesSnapshot.size;
+      }
+      setUnreadMessages(totalUnread);
+    });
+
+    return () => {
+      unsubscribeSessions();
+      unsubscribeMessages();
+    };
+  };
   const loadDashboardData = async () => {
     if (!user) return;
     setLoading(true);
@@ -34,21 +99,12 @@ const Dashboard: React.FC = () => {
         const userData = userDoc.docs[0].data();
         setUserName(userData.displayName || userData.name || 'User');
         setUserPhoto(userData.photoURL || null);
+        // Check if user is admin or super_admin
+        const role = userData.role || '';
+        setIsAdmin(role === 'admin' || role === 'super_admin' || role === 'moderator');
       }
 
-      // Load upcoming sessions
-      const sessionsQuery = query(
-        collection(db, 'bookings'),
-        where('menteeId', '==', user.uid),
-        where('status', '!=', 'cancelled'),
-        orderBy('status'),
-        limit(3)
-      );
-      const sessionsSnap = await getDocs(sessionsQuery);
-      const sessions = sessionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setUpcomingSessions(sessions);
-
-      // Load stats
+      // Load stats (total sessions)
       const allSessionsSnap = await getDocs(query(collection(db, 'bookings'), where('menteeId', '==', user.uid)));
       const totalSessions = allSessionsSnap.size;
       const completedSessions = allSessionsSnap.docs.filter(doc => doc.data().status === 'completed').length;
@@ -120,32 +176,32 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6">
+        {/* Stats Grid - Mobile Optimized */}
+        <div className="grid grid-cols-2 gap-2 sm:gap-4">
           <StatCard
             icon="event"
-            label="Total Sessions"
+            label="Sessions"
             value={stats.totalSessions}
             color="from-blue-600 to-indigo-600"
             isDark={isDark}
           />
           <StatCard
             icon="check_circle"
-            label="Completed"
+            label="Done"
             value={stats.completedSessions}
             color="from-green-600 to-emerald-600"
             isDark={isDark}
           />
           <StatCard
             icon="diversity_3"
-            label="Active Mentors"
+            label="Mentors"
             value={stats.activeMentors}
             color="from-purple-600 to-pink-600"
             isDark={isDark}
           />
           <StatCard
             icon="chat"
-            label="Unread Messages"
+            label="Messages"
             value={unreadMessages}
             color="from-orange-600 to-red-600"
             isDark={isDark}
@@ -185,26 +241,25 @@ const Dashboard: React.FC = () => {
             )}
           </div>
 
-          {/* Quick Actions */}
-          <div className="space-y-4 sm:space-y-6">
-            <div className={`rounded-2xl sm:rounded-3xl p-4 sm:p-6 backdrop-blur-sm border shadow-xl ${isDark ? 'bg-gradient-to-br from-blue-900 to-indigo-900' : 'bg-gradient-to-br from-blue-600 to-indigo-600'} text-white`}>
-              <h3 className="text-lg sm:text-xl font-black mb-3 sm:mb-4">Quick Actions</h3>
-              <div className="space-y-3">
-                <QuickActionButton icon="admin_panel_settings" label="Admin Dashboard" onClick={() => navigate('/admin')} />
+          {/* Quick Actions - Mobile Optimized */}
+          <div className="space-y-3 sm:space-y-4">
+            <div className={`rounded-xl sm:rounded-2xl p-3 sm:p-5 backdrop-blur-sm border shadow-xl ${isDark ? 'bg-gradient-to-br from-blue-900 to-indigo-900' : 'bg-gradient-to-br from-blue-600 to-indigo-600'} text-white`}>
+              <h3 className="text-base sm:text-lg font-black mb-2 sm:mb-3">Quick Actions</h3>
+              <div className="space-y-2">
+                {isAdmin && <QuickActionButton icon="admin_panel_settings" label="Admin" onClick={() => navigate('/admin')} />}
                 <QuickActionButton icon="event" label="Book Session" onClick={() => navigate('/mentorship/book')} />
-                <QuickActionButton icon="group_add" label="Create Group" onClick={() => navigate('/community/groups')} />
+                <QuickActionButton icon="group_add" label="Groups" onClick={() => navigate('/community/groups')} />
                 <QuickActionButton icon="chat" label="Messages" onClick={() => navigate('/quick-chat')} />
-                <QuickActionButton icon="description" label="Resume Builder" onClick={() => navigate('/career/resume')} />
-                <QuickActionButton icon="mic" label="Mock Interview" onClick={() => navigate('/career/mock-interview')} />
-                <QuickActionButton icon="school" label="Become a Mentor" onClick={() => navigate('/become-mentor')} />
+                <QuickActionButton icon="description" label="Resume" onClick={() => navigate('/career/resume')} />
+                <QuickActionButton icon="mic" label="Interview" onClick={() => navigate('/career/mock-interview')} />
               </div>
             </div>
 
-            <div className={`rounded-2xl sm:rounded-3xl p-4 sm:p-6 backdrop-blur-sm border shadow-xl ${isDark ? 'bg-slate-800/80 border-gray-700' : 'bg-white/80 border-white/50'}`}>
-              <h3 className={`text-base sm:text-lg font-black mb-3 sm:mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Resources</h3>
-              <div className="space-y-2">
+            <div className={`rounded-xl sm:rounded-2xl p-3 sm:p-5 backdrop-blur-sm border shadow-xl ${isDark ? 'bg-slate-800/80 border-gray-700' : 'bg-white/80 border-white/50'}`}>
+              <h3 className={`text-base sm:text-lg font-black mb-2 sm:mb-3 ${isDark ? 'text-white' : 'text-gray-900'}`}>Resources</h3>
+              <div className="space-y-1.5">
                 <ResourceLink icon="payments" label="Financial Aid" to="/resources/financial-aid" isDark={isDark} />
-                <ResourceLink icon="school" label="Academic Support" to="/resources/academics" isDark={isDark} />
+                <ResourceLink icon="school" label="Academic" to="/resources/academics" isDark={isDark} />
                 <ResourceLink icon="verified_user" label="DEI Guides" to="/resources/dei-guides" isDark={isDark} />
               </div>
             </div>
@@ -248,13 +303,13 @@ const Dashboard: React.FC = () => {
 const StatCard: React.FC<{ icon: string; label: string; value: number; color: string; isDark: boolean; onClick?: () => void }> = ({ icon, label, value, color, isDark, onClick }) => (
   <div
     onClick={onClick}
-    className={`rounded-2xl sm:rounded-3xl p-3 sm:p-6 backdrop-blur-sm border shadow-xl transition-all hover:scale-105 ${onClick ? 'cursor-pointer' : ''} ${isDark ? 'bg-slate-800/80 border-gray-700' : 'bg-white/80 border-white/50'}`}
+    className={`rounded-xl sm:rounded-2xl p-2.5 sm:p-5 backdrop-blur-sm border shadow-lg transition-all active:scale-95 ${onClick ? 'cursor-pointer' : ''} ${isDark ? 'bg-slate-800/80 border-gray-700' : 'bg-white/80 border-white/50'}`}
   >
-    <div className={`size-10 sm:size-14 bg-gradient-to-br ${color} rounded-xl sm:rounded-2xl flex items-center justify-center mb-2 sm:mb-4 shadow-lg`}>
-      <span className="material-symbols-outlined text-white text-lg sm:text-2xl">{icon}</span>
+    <div className={`size-8 sm:size-12 bg-gradient-to-br ${color} rounded-lg sm:rounded-xl flex items-center justify-center mb-1.5 sm:mb-3 shadow-lg`}>
+      <span className="material-symbols-outlined text-white text-base sm:text-xl">{icon}</span>
     </div>
-    <p className={`text-[10px] sm:text-xs font-black uppercase tracking-wider mb-1 sm:mb-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{label}</p>
-    <p className={`text-2xl sm:text-4xl font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>{value}</p>
+    <p className={`text-[9px] sm:text-xs font-black uppercase tracking-wider mb-0.5 sm:mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'} truncate`}>{label}</p>
+    <p className={`text-xl sm:text-3xl font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>{value}</p>
   </div>
 );
 
@@ -283,10 +338,10 @@ const SessionCard: React.FC<{ session: any; isDark: boolean; navigate: any }> = 
 const QuickActionButton: React.FC<{ icon: string; label: string; onClick: () => void }> = ({ icon, label, onClick }) => (
   <button
     onClick={onClick}
-    className="w-full flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 bg-white/10 hover:bg-white/20 rounded-lg sm:rounded-xl transition-all"
+    className="w-full flex items-center gap-2 p-2 sm:p-2.5 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-lg transition-all"
   >
-    <span className="material-symbols-outlined text-lg sm:text-xl">{icon}</span>
-    <span className="font-bold text-sm sm:text-base">{label}</span>
+    <span className="material-symbols-outlined text-base sm:text-lg">{icon}</span>
+    <span className="font-bold text-xs sm:text-sm truncate">{label}</span>
   </button>
 );
 
