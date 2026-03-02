@@ -110,6 +110,13 @@ const Login: React.FC = () => {
       return;
     }
 
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(resetEmail.trim())) {
+      setResetMessage({ type: 'error', text: 'Please enter a valid email address' });
+      return;
+    }
+
     // Rate limiting - client side (3 attempts per 15 minutes)
     const now = Date.now();
     const fifteenMinutes = 15 * 60 * 1000;
@@ -132,12 +139,7 @@ const Login: React.FC = () => {
     setResetMessage(null);
     
     try {
-      const actionCodeSettings = {
-        url: window.location.origin + '/login',
-        handleCodeInApp: false,
-      };
-      
-      await sendPasswordResetEmail(auth, resetEmail.trim(), actionCodeSettings);
+      await sendPasswordResetEmail(auth, resetEmail.trim());
       
       // Log attempt to Firestore for audit trail
       try {
@@ -146,17 +148,17 @@ const Login: React.FC = () => {
         await setDoc(doc(db, 'passwordResetLogs', `${Date.now()}_${resetEmail}`), {
           email: resetEmail.trim(),
           timestamp: serverTimestamp(),
-          ip: 'client', // In production, get from backend
+          ip: 'client',
           userAgent: navigator.userAgent,
+          success: true
         });
       } catch (logError) {
         console.error('Failed to log reset attempt:', logError);
       }
       
-      // Generic success message (prevents email enumeration)
       setResetMessage({ 
         type: 'success', 
-        text: 'If an account exists with this email, a reset link has been sent. Check spam folder.' 
+        text: 'Password reset email sent! Check your inbox and spam folder. The link expires in 1 hour.' 
       });
       
       setResetAttempts(prev => prev + 1);
@@ -166,20 +168,38 @@ const Login: React.FC = () => {
         setShowForgotModal(false);
         setResetEmail('');
         setResetMessage(null);
-      }, 5000);
+      }, 6000);
     } catch (err: any) {
-      // Generic error message (prevents email enumeration)
-      if (err.code === 'auth/too-many-requests') {
-        setResetMessage({ 
-          type: 'error', 
-          text: 'Too many attempts. Please try again later.' 
-        });
+      console.error('Password reset error:', err);
+      
+      let errorMessage = 'Failed to send reset email. ';
+      
+      if (err.code === 'auth/user-not-found') {
+        errorMessage = 'No account found with this email address.';
+      } else if (err.code === 'auth/invalid-email') {
+        errorMessage = 'Invalid email address format.';
+      } else if (err.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many attempts. Please try again in 15 minutes.';
+      } else if (err.code === 'auth/network-request-failed') {
+        errorMessage = 'Network error. Please check your connection and try again.';
       } else {
-        // Don't reveal if email exists or not
-        setResetMessage({ 
-          type: 'success', 
-          text: 'If an account exists with this email, a reset link has been sent.' 
+        errorMessage += 'Please try again or contact support.';
+      }
+      
+      setResetMessage({ type: 'error', text: errorMessage });
+      
+      // Log failed attempt
+      try {
+        const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+        const { db } = await import('../src/firebase');
+        await setDoc(doc(db, 'passwordResetLogs', `${Date.now()}_${resetEmail}_failed`), {
+          email: resetEmail.trim(),
+          timestamp: serverTimestamp(),
+          error: err.code || err.message,
+          success: false
         });
+      } catch (logError) {
+        console.error('Failed to log error:', logError);
       }
       
       setResetAttempts(prev => prev + 1);
@@ -354,7 +374,7 @@ const Login: React.FC = () => {
             </div>
             
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              Enter your email and we'll send you a password reset link.
+              Enter your email and we'll send you a password reset link. Check your spam folder if you don't see it within a few minutes.
             </p>
             
             <input
