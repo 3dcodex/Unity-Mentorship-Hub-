@@ -4,6 +4,7 @@ import { db } from '../src/firebase';
 import { doc, getDoc, setDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { useAuth } from '../App';
 import BookingModal from '../components/BookingModal';
+import { errorService } from '../services/errorService';
 
 const ProfileView: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
@@ -35,7 +36,7 @@ const ProfileView: React.FC = () => {
         }
         setLoading(false);
       }).catch(err => {
-        console.error('Error loading profile:', err);
+        errorService.handleError(err, 'Error loading profile');
         setLoading(false);
       });
     }
@@ -67,7 +68,7 @@ const ProfileView: React.FC = () => {
   }
 
   const isOwnProfile = user?.uid === userId;
-  const displayName = profile.name || profile.displayName || 'User';
+  const displayName = profile.displayName || profile.name || `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || 'User';
   const photoURL = profile.photoURL || null;
   const isMentorOrAdmin = currentUserRole === 'mentor' || currentUserRole === 'admin' || currentUserRole === 'super_admin';
 
@@ -97,7 +98,7 @@ const ProfileView: React.FC = () => {
       
       navigate(`/quick-chat?room=${chatRoomId}`);
     } catch (error) {
-      console.error('Error creating chat room:', error);
+      errorService.handleError(error, 'Error creating chat room');
       alert('Failed to create chat room');
     }
   };
@@ -121,7 +122,7 @@ const ProfileView: React.FC = () => {
       setComplaintText('');
       alert('Complaint submitted successfully');
     } catch (error) {
-      console.error('Error filing complaint:', error);
+      errorService.handleError(error, 'Error filing complaint');
       alert('Failed to submit complaint');
     }
   };
@@ -142,13 +143,9 @@ const ProfileView: React.FC = () => {
       }
       setShowBlockModal(false);
     } catch (error) {
-      console.error('Error blocking user:', error);
+      errorService.handleError(error, 'Error blocking user');
       alert('Failed to update block status');
     }
-  };
-
-  const handleRequestBilling = () => {
-    navigate(`/billing?mentor=${userId}`);
   };
 
   return (
@@ -172,15 +169,14 @@ const ProfileView: React.FC = () => {
 
         {/* Modern Header Card */}
         <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-3xl rounded-3xl shadow-2xl border border-white/30 dark:border-slate-700/30 overflow-hidden">
-          {/* Dynamic Cover with Mesh Gradient */}
-          <div className="h-56 bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 relative overflow-hidden">
-            <div className="absolute inset-0 opacity-30" style={{backgroundImage: "url('data:image/svg+xml,%3Csvg width=\"60\" height=\"60\" viewBox=\"0 0 60 60\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cg fill=\"none\" fill-rule=\"evenodd\"%3E%3Cg fill=\"%23ffffff\" fill-opacity=\"0.1\"%3E%3Ccircle cx=\"30\" cy=\"30\" r=\"2\"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')"}}></div>
-            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+          {/* Cleaner Cover Design */}
+          <div className="h-48 bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-500 relative">
+            <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent"></div>
           </div>
           
           {/* Enhanced Profile Info */}
-          <div className="px-8 pb-8">
-            <div className="flex flex-col lg:flex-row gap-8 items-start lg:items-end -mt-24">
+          <div className="px-6 lg:px-8 pb-8">
+            <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-end -mt-20">
               {/* Enhanced Profile Photo */}
               <div className="relative group">
                 {photoURL ? (
@@ -188,52 +184,51 @@ const ProfileView: React.FC = () => {
                     <img
                       src={photoURL}
                       alt={displayName}
-                      className="size-48 rounded-3xl object-cover border-4 border-white dark:border-slate-900 shadow-2xl group-hover:scale-105 transition-transform duration-300"
+                      className="size-40 lg:size-48 rounded-2xl object-cover border-4 border-white dark:border-slate-900 shadow-xl group-hover:scale-105 transition-transform duration-300"
                     />
-                    <div className="absolute inset-0 rounded-3xl bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                   </div>
                 ) : (
-                  <div className="size-48 rounded-3xl bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-600 border-4 border-white dark:border-slate-900 shadow-2xl flex items-center justify-center group-hover:scale-105 transition-transform duration-300 relative overflow-hidden">
-                    <div className="absolute inset-0 opacity-20" style={{backgroundImage: "url('data:image/svg+xml,%3Csvg width=\"40\" height=\"40\" viewBox=\"0 0 40 40\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cg fill=\"%23ffffff\" fill-opacity=\"0.1\"%3E%3Cpath d=\"M20 20c0-5.5-4.5-10-10-10s-10 4.5-10 10 4.5 10 10 10 10-4.5 10-10zm10 0c0-5.5-4.5-10-10-10s-10 4.5-10 10 4.5 10 10 10 10-4.5 10-10z\"/%3E%3C/g%3E%3C/svg%3E')"}}></div>
-                    <span className="text-7xl font-black text-white relative z-10">
+                  <div className="size-40 lg:size-48 rounded-2xl bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-600 border-4 border-white dark:border-slate-900 shadow-xl flex items-center justify-center group-hover:scale-105 transition-transform duration-300">
+                    <span className="text-6xl font-black text-white">
                       {displayName.charAt(0).toUpperCase()}
                     </span>
                   </div>
                 )}
                 {profile.isMentor && (
-                  <div className="absolute -bottom-4 -right-4 bg-gradient-to-r from-yellow-400 to-orange-500 size-16 rounded-2xl flex items-center justify-center border-4 border-white dark:border-slate-900 shadow-xl animate-bounce">
-                    <span className="material-symbols-outlined text-white text-2xl">workspace_premium</span>
+                  <div className="absolute -bottom-3 -right-3 bg-gradient-to-r from-yellow-400 to-orange-500 size-14 rounded-xl flex items-center justify-center border-4 border-white dark:border-slate-900 shadow-lg">
+                    <span className="material-symbols-outlined text-white text-xl">workspace_premium</span>
                   </div>
                 )}
               </div>
 
               {/* Enhanced Name and Role */}
-              <div className="flex-1 space-y-4">
-                <div className="flex items-center gap-4 flex-wrap">
-                  <h1 className="text-5xl font-black bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">{displayName}</h1>
+              <div className="flex-1 space-y-3">
+                <div className="flex items-start gap-3 flex-wrap">
+                  <h1 className="text-4xl lg:text-5xl font-black bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent leading-tight">{displayName}</h1>
                   {profile.isMentor && (
-                    <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-sm font-black rounded-full uppercase tracking-wider shadow-lg animate-pulse">
-                      <span className="material-symbols-outlined text-lg">star</span>
-                      Verified Mentor
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-xs font-bold rounded-full shadow-lg">
+                      <span className="material-symbols-outlined text-base">star</span>
+                      Mentor
                     </div>
                   )}
                 </div>
-                <div className="flex items-center gap-6 flex-wrap text-sm">
+                <div className="flex items-center gap-3 flex-wrap text-sm">
                   {profile.role && (
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full font-bold">
-                      <span className="material-symbols-outlined text-lg">school</span>
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full font-semibold">
+                      <span className="material-symbols-outlined text-base">badge</span>
                       <span>{profile.role}</span>
                     </div>
                   )}
-                  {profile.university && (
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 rounded-full font-bold">
-                      <span className="material-symbols-outlined text-lg">location_on</span>
-                      <span>{profile.university}</span>
+                  {(profile.university || profile.school) && (
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 rounded-full font-semibold">
+                      <span className="material-symbols-outlined text-base">school</span>
+                      <span>{profile.university || profile.school}</span>
                     </div>
                   )}
                   {profile.location && (
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-full font-bold">
-                      <span className="material-symbols-outlined text-lg">place</span>
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-full font-semibold">
+                      <span className="material-symbols-outlined text-base">place</span>
                       <span>{profile.location}</span>
                     </div>
                   )}
@@ -242,12 +237,11 @@ const ProfileView: React.FC = () => {
 
               {/* Enhanced Action Buttons */}
               {!isOwnProfile && (
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => {
                       if (!user || !userId) return;
                       const chatRoomId = [user.uid, userId].sort().join('_');
-                      // Create connection and navigate
                       setDoc(doc(db, 'connections', chatRoomId), {
                         participants: [user.uid, userId],
                         createdBy: user.uid,
@@ -257,57 +251,49 @@ const ProfileView: React.FC = () => {
                       }, { merge: true }).then(() => {
                         navigate(`/quick-chat`);
                       }).catch(err => {
-                        console.error('Error creating connection:', err);
+                        errorService.handleError(err, 'Error creating connection');
                         navigate(`/quick-chat`);
                       });
                     }}
-                    className="group px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center gap-2"
+                    className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center gap-2"
                   >
-                    <span className="material-symbols-outlined group-hover:animate-pulse">chat</span>
+                    <span className="material-symbols-outlined text-lg">chat</span>
                     Message
                   </button>
                   {(isMentorOrAdmin || profile.isMentor) && (
                     <>
                       <button
-                        onClick={handleCreateChatRoom}
-                        className="group px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-2xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2"
-                      >
-                        <span className="material-symbols-outlined text-lg group-hover:animate-bounce">group_add</span>
-                        Chat Room
-                      </button>
-                      <button
                         onClick={handleScheduleSession}
-                        className="group px-5 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-2xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2"
+                        className="px-5 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl font-semibold shadow-lg hover:scale-105 transition-all flex items-center gap-2"
                       >
-                        <span className="material-symbols-outlined text-lg group-hover:animate-pulse">calendar_month</span>
+                        <span className="material-symbols-outlined text-lg">calendar_month</span>
                         Schedule
                       </button>
-                      {/* More Actions Dropdown */}
                       <div className="relative group">
-                        <button className="px-4 py-3 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 rounded-2xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2">
+                        <button className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-semibold shadow-lg hover:scale-105 transition-all">
                           <span className="material-symbols-outlined">more_horiz</span>
                         </button>
-                        <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                        <div className="absolute right-0 top-full mt-2 w-44 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                          <button
+                            onClick={handleCreateChatRoom}
+                            className="w-full px-4 py-2.5 text-left text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-t-xl flex items-center gap-2 font-semibold text-sm"
+                          >
+                            <span className="material-symbols-outlined text-base">mail</span>
+                            Message
+                          </button>
                           <button
                             onClick={() => setShowComplaintModal(true)}
-                            className="w-full px-4 py-3 text-left text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-t-2xl flex items-center gap-2 font-bold"
+                            className="w-full px-4 py-2.5 text-left text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 flex items-center gap-2 font-semibold text-sm"
                           >
-                            <span className="material-symbols-outlined text-lg">report</span>
-                            Report Issue
+                            <span className="material-symbols-outlined text-base">report</span>
+                            Report
                           </button>
                           <button
                             onClick={() => setShowBlockModal(true)}
-                            className={`w-full px-4 py-3 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 font-bold ${isBlocked ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+                            className={`w-full px-4 py-2.5 text-left hover:bg-red-50 dark:hover:bg-red-900/20 rounded-b-xl flex items-center gap-2 font-semibold text-sm ${isBlocked ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
                           >
-                            <span className="material-symbols-outlined text-lg">{isBlocked ? 'check_circle' : 'block'}</span>
-                            {isBlocked ? 'Unblock User' : 'Block User'}
-                          </button>
-                          <button
-                            onClick={handleRequestBilling}
-                            className="w-full px-4 py-3 text-left text-yellow-600 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 rounded-b-2xl flex items-center gap-2 font-bold"
-                          >
-                            <span className="material-symbols-outlined text-lg">payments</span>
-                            Billing
+                            <span className="material-symbols-outlined text-base">{isBlocked ? 'check_circle' : 'block'}</span>
+                            {isBlocked ? 'Unblock' : 'Block'}
                           </button>
                         </div>
                       </div>
@@ -410,54 +396,87 @@ const ProfileView: React.FC = () => {
                   Skills & Expertise
                 </h2>
                 <div className="flex flex-wrap gap-2">
-                  {(profile.skills || profile.mentorExpertise || profile.expertise).split(',').map((skill: string, idx: number) => (
-                    <span
-                      key={idx}
-                      className="px-3 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded-full text-xs font-bold"
-                    >
-                      {skill.trim()}
-                    </span>
-                  ))}
+                  {(() => {
+                    const skillData = profile.skills || profile.mentorExpertise || profile.expertise;
+                    const skillArray = Array.isArray(skillData) ? skillData : skillData.split(',');
+                    return skillArray.map((skill: string, idx: number) => (
+                      <span
+                        key={idx}
+                        className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded-full text-xs font-semibold"
+                      >
+                        {typeof skill === 'string' ? skill.trim() : skill}
+                      </span>
+                    ));
+                  })()}
                 </div>
               </div>
             )}
 
             {/* Interests */}
             {profile.interests && (
-              <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl p-6 shadow-lg border border-white/20 dark:border-slate-700/50 space-y-4">
-                <h2 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
-                  <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">favorite</span>
+              <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl p-6 shadow-lg border border-white/30 dark:border-slate-700/30 space-y-4">
+                <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-3">
+                  <div className="p-2 bg-pink-100 dark:bg-pink-900/30 rounded-xl">
+                    <span className="material-symbols-outlined text-pink-600 dark:text-pink-400">favorite</span>
+                  </div>
                   Interests
                 </h2>
                 <div className="flex flex-wrap gap-2">
-                  {profile.interests.split(',').map((interest: string, idx: number) => (
-                    <span key={idx} className="px-3 py-1 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 rounded-full text-xs font-bold">
-                      {interest.trim()}
-                    </span>
-                  ))}
+                  {(() => {
+                    const interestArray = Array.isArray(profile.interests) ? profile.interests : profile.interests.split(',');
+                    return interestArray.map((interest: string, idx: number) => (
+                      <span key={idx} className="px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 rounded-full text-xs font-semibold">
+                        {typeof interest === 'string' ? interest.trim() : interest}
+                      </span>
+                    ));
+                  })()}
                 </div>
               </div>
             )}
 
             {/* Achievements */}
-            {profile.achievements && (
-              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 space-y-4">
-                <h2 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
-                  <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">emoji_events</span>
+            {profile.achievements && profile.achievements.length > 0 && (
+              <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl p-6 shadow-lg border border-white/30 dark:border-slate-700/30 space-y-4">
+                <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-3">
+                  <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-xl">
+                    <span className="material-symbols-outlined text-yellow-600 dark:text-yellow-400">emoji_events</span>
+                  </div>
                   Achievements
                 </h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400">{profile.achievements}</p>
+                <ul className="space-y-2">
+                  {(() => {
+                    const achievementArray = Array.isArray(profile.achievements) ? profile.achievements : [profile.achievements];
+                    return achievementArray.map((achievement: string, idx: number) => (
+                      <li key={idx} className="text-sm text-gray-600 dark:text-gray-400 flex items-start gap-2">
+                        <span className="text-yellow-500 mt-0.5">•</span>
+                        <span>{achievement}</span>
+                      </li>
+                    ));
+                  })()}
+                </ul>
               </div>
             )}
 
             {/* Certifications */}
-            {profile.certifications && (
-              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 space-y-4">
-                <h2 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
-                  <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">verified</span>
+            {profile.certifications && profile.certifications.length > 0 && (
+              <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl p-6 shadow-lg border border-white/30 dark:border-slate-700/30 space-y-4">
+                <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-3">
+                  <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl">
+                    <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400">verified</span>
+                  </div>
                   Certifications
                 </h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400">{profile.certifications}</p>
+                <ul className="space-y-2">
+                  {(() => {
+                    const certArray = Array.isArray(profile.certifications) ? profile.certifications : [profile.certifications];
+                    return certArray.map((cert: string, idx: number) => (
+                      <li key={idx} className="text-sm text-gray-600 dark:text-gray-400 flex items-start gap-2">
+                        <span className="text-emerald-500 mt-0.5">✓</span>
+                        <span>{cert}</span>
+                      </li>
+                    ));
+                  })()}
+                </ul>
               </div>
             )}
           </div>
@@ -465,78 +484,82 @@ const ProfileView: React.FC = () => {
           {/* Main Content - Enhanced */}
           <div className="lg:col-span-3 space-y-6">
             {/* Academic Info */}
-            {(profile.university || profile.major || profile.yearOfStudy) && (
-              <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl p-6 shadow-lg border border-white/20 dark:border-slate-700/50 space-y-4">
-                <h2 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
-                  <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">school</span>
+            {(profile.university || profile.school || profile.major || profile.year || profile.yearOfStudy) && (
+              <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl p-6 shadow-lg border border-white/30 dark:border-slate-700/30 space-y-4">
+                <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
+                    <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">school</span>
+                  </div>
                   Academic Information
                 </h2>
                 <div className="grid md:grid-cols-2 gap-4">
-                  {profile.university && (
+                  {(profile.university || profile.school) && (
                     <div className="space-y-1">
-                      <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">University</p>
-                      <p className="text-sm font-bold text-gray-900 dark:text-white">{profile.university}</p>
+                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">University</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{profile.university || profile.school}</p>
                     </div>
                   )}
                   {profile.major && (
                     <div className="space-y-1">
-                      <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Major</p>
-                      <p className="text-sm font-bold text-gray-900 dark:text-white">{profile.major}</p>
+                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Major</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{profile.major}</p>
                     </div>
                   )}
-                  {profile.yearOfStudy && (
+                  {(profile.year || profile.yearOfStudy) && (
                     <div className="space-y-1">
-                      <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Year of Study</p>
-                      <p className="text-sm font-bold text-gray-900 dark:text-white">{profile.yearOfStudy}</p>
+                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Year</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{profile.year || profile.yearOfStudy}</p>
                     </div>
                   )}
                   {profile.clubsSocieties && (
                     <div className="space-y-1">
-                      <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Clubs & Societies</p>
-                      <p className="text-sm font-bold text-gray-900 dark:text-white">{profile.clubsSocieties}</p>
+                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Clubs & Societies</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{profile.clubsSocieties}</p>
                     </div>
                   )}
                 </div>
               </div>
             )}
 
-            {/* Professional Info (Alumni/Professional) */}
-            {(profile.currentEmployer || profile.jobTitle || profile.companyName || profile.workExperience) && (
-              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 space-y-4">
-                <h2 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
-                  <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">work</span>
+            {/* Professional Info */}
+            {(profile.currentEmployer || profile.company || profile.jobTitle || profile.companyName || profile.workExperience) && (
+              <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl p-6 shadow-lg border border-white/30 dark:border-slate-700/30 space-y-4">
+                <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-3">
+                  <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl">
+                    <span className="material-symbols-outlined text-indigo-600 dark:text-indigo-400">work</span>
+                  </div>
                   Professional Experience
                 </h2>
                 <div className="grid md:grid-cols-2 gap-4">
-                  {(profile.currentEmployer || profile.companyName) && (
+                  {(profile.currentEmployer || profile.company || profile.companyName) && (
                     <div className="space-y-1">
-                      <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Company</p>
-                      <p className="text-sm font-bold text-gray-900 dark:text-white">{profile.currentEmployer || profile.companyName}</p>
+                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Company</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{profile.currentEmployer || profile.company || profile.companyName}</p>
                     </div>
                   )}
                   {profile.jobTitle && (
                     <div className="space-y-1">
-                      <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Position</p>
-                      <p className="text-sm font-bold text-gray-900 dark:text-white">{profile.jobTitle}</p>
+                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Position</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{profile.jobTitle}</p>
                     </div>
                   )}
                   {profile.industry && (
                     <div className="space-y-1">
-                      <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Industry</p>
-                      <p className="text-sm font-bold text-gray-900 dark:text-white">{profile.industry}</p>
+                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Industry</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{profile.industry}</p>
                     </div>
                   )}
                   {profile.yearsExperience && (
                     <div className="space-y-1">
-                      <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Experience</p>
-                      <p className="text-sm font-bold text-gray-900 dark:text-white">{profile.yearsExperience} years</p>
+                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Experience</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{profile.yearsExperience} years</p>
                     </div>
                   )}
                 </div>
                 {profile.workExperience && (
-                  <div className="space-y-1 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Details</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-line">{profile.workExperience}</p>
+                  <div className="space-y-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Details</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed whitespace-pre-line">{profile.workExperience}</p>
                   </div>
                 )}
               </div>
@@ -544,12 +567,14 @@ const ProfileView: React.FC = () => {
 
             {/* Education */}
             {profile.education && (
-              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700 space-y-4">
-                <h2 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
-                  <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">school</span>
+              <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl p-6 shadow-lg border border-white/30 dark:border-slate-700/30 space-y-4">
+                <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-3">
+                  <div className="p-2 bg-teal-100 dark:bg-teal-900/30 rounded-xl">
+                    <span className="material-symbols-outlined text-teal-600 dark:text-teal-400">school</span>
+                  </div>
                   Education
                 </h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-line">{profile.education}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed whitespace-pre-line">{profile.education}</p>
               </div>
             )}
 

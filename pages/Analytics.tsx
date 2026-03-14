@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { db } from '../src/firebase';
 import { useAuth } from '../App';
-import { doc, getDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
+import { errorService } from '../services/errorService';
 
 interface AnalyticsData {
   totalSessions: number;
@@ -22,7 +22,7 @@ interface AnalyticsData {
     id: string;
     type: string;
     description: string;
-    date: any;
+    date: Timestamp;
   }>;
   engagementByType: Array<{
     name: string;
@@ -51,33 +51,27 @@ const Analytics: React.FC = () => {
 
     const fetchAnalytics = async () => {
       try {
-        // Fetch user data
-        const userDocRef = doc(db, 'users', user.uid);
-        const userDoc = await getDoc(userDocRef);
-        
-        // Count conversations
-        const conversationsSnap = await getDocs(
-          query(collection(db, 'conversations'), where('participants', 'array-contains', user.uid))
+        // Count connections (chats)
+        const connectionsSnap = await getDocs(
+          query(collection(db, 'connections'), where('participants', 'array-contains', user.uid))
         );
-        
-        // Count mentorship requests
-        const requestsSnap = await getDocs(
-          query(collection(db, 'mentorshipRequests'), where('menteeId', '==', user.uid))
-        );
-        
+
+        // Count mentor applications (submitted by this user)
+        const mentorAppDoc = await getDoc(doc(db, 'mentorApplications', user.uid));
+        const hasMentorApp = mentorAppDoc.exists() ? 1 : 0;
+
         // Count session bookings
         const bookingsSnap = await getDocs(
-          query(collection(db, 'sessionBookings'), where('menteeId', '==', user.uid))
+          query(collection(db, 'bookings'), where('menteeId', '==', user.uid))
         );
-        
-        // Get all users for connections count
-        const usersSnap = await getDocs(collection(db, 'users'));
-        const totalUsers = usersSnap.size - 1; // Exclude self
+
+        // Approximate network size from connections
+        const totalUsers = Math.max(connectionsSnap.size, 1);
         
         // Calculate engagement metrics
-        const totalInteractions = conversationsSnap.size + requestsSnap.size + bookingsSnap.size;
-        const careerReadiness = Math.min(100, Math.round((bookingsSnap.size / Math.max(1, totalUsers)) * 100));
-        const deiEngagement = Math.min(100, Math.round((conversationsSnap.size / Math.max(1, totalUsers)) * 100));
+        const totalInteractions = connectionsSnap.size + hasMentorApp + bookingsSnap.size;
+        const careerReadiness = Math.min(100, bookingsSnap.size * 20);
+        const deiEngagement = Math.min(100, connectionsSnap.size * 15);
         const networkReach = Math.min(100, Math.round((totalInteractions / Math.max(1, totalUsers * 3)) * 100));
         
         // Generate monthly data (last 6 months)
@@ -88,38 +82,32 @@ const Analytics: React.FC = () => {
           const monthIndex = (currentMonth - i + 12) % 12;
           monthlyData.push({
             month: monthNames[monthIndex],
-            connections: Math.floor(Math.random() * (conversationsSnap.size + 1)),
-            sessions: Math.floor(Math.random() * (bookingsSnap.size + 1))
+            connections: Math.floor(connectionsSnap.size / 6 * (6 - i)),
+            sessions: Math.floor(bookingsSnap.size / 6 * (6 - i))
           });
         }
         
         // Engagement by type
         const engagementByType = [
-          { name: 'Conversations', value: conversationsSnap.size },
-          { name: 'Mentorship', value: requestsSnap.size },
+          { name: 'Connections', value: connectionsSnap.size },
+          { name: 'Mentor App', value: hasMentorApp },
           { name: 'Sessions', value: bookingsSnap.size }
         ];
         
-        // Recent activities
+        // Recent activities from bookings
         const recentActivities = [
-          ...requestsSnap.docs.slice(0, 2).map(doc => ({
-            id: doc.id,
-            type: 'mentorship',
-            description: 'Requested mentorship',
-            date: doc.data().requestedAt
-          })),
-          ...bookingsSnap.docs.slice(0, 2).map(doc => ({
-            id: doc.id,
+          ...bookingsSnap.docs.slice(0, 3).map(d => ({
+            id: d.id,
             type: 'session',
-            description: `Booked session for ${doc.data().slot}`,
-            date: doc.data().bookedAt
+            description: `Booked session${d.data().mentorName ? ' with ' + d.data().mentorName : ''}`,
+            date: d.data().bookedAt || d.data().createdAt
           }))
         ].slice(0, 5);
 
         setAnalyticsData({
-          totalSessions: conversationsSnap.size,
+          totalSessions: connectionsSnap.size,
           totalConnections: totalUsers,
-          mentorshipRequests: requestsSnap.size,
+          mentorshipRequests: hasMentorApp,
           sessionBookings: bookingsSnap.size,
           careerReadiness,
           deiEngagement,
@@ -129,7 +117,7 @@ const Analytics: React.FC = () => {
           engagementByType
         });
       } catch (err) {
-        console.error('Error fetching analytics:', err);
+        errorService.handleError(err, 'Error fetching analytics');
       } finally {
         setLoading(false);
       }

@@ -1,24 +1,31 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getMentorshipMatches } from '../services/geminiService';
 import { db } from '../src/firebase';
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, query, Timestamp, updateDoc, where } from 'firebase/firestore';
 import { useAuth } from '../App';
+import { errorService } from '../services/errorService';
+import { UserProfile } from '../types';
+import { FOCUS_AREA_LABELS, scoreMentorAgainstFocusAreas } from '../utils/mentorMatching';
+import { CURRENT_MENTOR_APPLICATION_VERSION } from '../utils/mentorMatching';
+
+interface MentorMatchResult extends Partial<UserProfile> {
+  id: string;
+  matchScore: number;
+  matchedFocusAreas: string[];
+  matchReasons: string[];
+  matchStrength: 'strong' | 'good' | 'potential';
+}
 
 const MentorMatching: React.FC = () => {
   const [step, setStep] = useState<'selection' | 'loading' | 'results'>('selection');
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
-  const [matches, setMatches] = useState<any[]>([]);
-  const [realMentors, setRealMentors] = useState<any[]>([]);
+  const [matchedMentors, setMatchedMentors] = useState<MentorMatchResult[]>([]);
+  const [fallbackMentors, setFallbackMentors] = useState<MentorMatchResult[]>([]);
+  const [approvedMentorCount, setApprovedMentorCount] = useState(0);
+  const [matchMessage, setMatchMessage] = useState('');
   const navigate = useNavigate();
   const { user } = useAuth();
-
-  const interests = [
-    'Academic Excellence', 'Career Transition', 'Mental Health', 
-    'First-Gen Experience', 'STEM Careers', 'Entrepreneurship',
-    'Cultural Exchange', 'Leadership Skills', 'Social Inclusion'
-  ];
 
   const toggleInterest = (interest: string) => {
     setSelectedInterests(prev => 
@@ -26,100 +33,67 @@ const MentorMatching: React.FC = () => {
     );
   };
 
+  const getMatchLabel = (strength: MentorMatchResult['matchStrength']) => {
+    if (strength === 'strong') return 'Strong match';
+    if (strength === 'good') return 'Good fit';
+    return 'Potential fit';
+  };
+
   const handleMatch = async () => {
     setStep('loading');
-    // Store selected focus areas in Firestore
+    setMatchMessage('');
+
     if (user) {
       await updateDoc(doc(db, 'users', user.uid), {
         seekingTags: selectedInterests,
-        updatedAt: new Date()
+        updatedAt: Timestamp.now()
       });
     }
-    
-    // Fetch mentors with intelligent matching
+
     try {
-      const { query, where, or } = await import('firebase/firestore');
-      const q = query(collection(db, 'users'), where('isMentor', '==', true));
+      const q = query(
+        collection(db, 'users'),
+        where('mentorStatus', '==', 'approved'),
+        where('mentorApplicationVersion', '==', CURRENT_MENTOR_APPLICATION_VERSION)
+      );
       const snapshot = await getDocs(q);
-      let mentors = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      
-      // Filter and score mentors based on selected interests
-      const scoredMentors = mentors.map(mentor => {
-        let score = 0;
-        const mentorData = {
-          expertise: (mentor.mentorExpertise || '').toLowerCase(),
-          bio: (mentor.mentorBio || mentor.bio || '').toLowerCase(),
-          interests: (mentor.interests || []).map((i: string) => i.toLowerCase()),
-          skills: (mentor.skills || []).map((s: string) => s.toLowerCase()),
-          tags: (mentor.mentorTags || []).map((t: string) => t.toLowerCase())
-        };
-        
-        // Score based on selected interests
-        selectedInterests.forEach(interest => {
-          const interestLower = interest.toLowerCase();
-          
-          // Direct expertise match (highest score)
-          if (mentorData.expertise.includes(interestLower)) score += 10;
-          
-          // Bio/description match
-          if (mentorData.bio.includes(interestLower)) score += 5;
-          
-          // Interest array match
-          if (mentorData.interests.some(i => i.includes(interestLower) || interestLower.includes(i))) score += 8;
-          
-          // Skills match
-          if (mentorData.skills.some(s => s.includes(interestLower) || interestLower.includes(s))) score += 6;
-          
-          // Tags match
-          if (mentorData.tags.some(t => t.includes(interestLower) || interestLower.includes(t))) score += 7;
-          
-          // Keyword matching for common terms
-          const keywords = {
-            'academic excellence': ['academic', 'education', 'study', 'research', 'university'],
-            'career transition': ['career', 'transition', 'job', 'professional', 'industry'],
-            'mental health': ['mental', 'health', 'wellness', 'stress', 'balance'],
-            'first-gen experience': ['first-gen', 'first generation', 'family', 'support'],
-            'stem careers': ['stem', 'technology', 'engineering', 'science', 'math', 'tech'],
-            'entrepreneurship': ['entrepreneur', 'startup', 'business', 'founder', 'innovation'],
-            'cultural exchange': ['cultural', 'diversity', 'international', 'global'],
-            'leadership skills': ['leadership', 'management', 'team', 'lead', 'director'],
-            'social inclusion': ['inclusion', 'diversity', 'equity', 'community']
-          };
-          
-          const relatedKeywords = keywords[interestLower as keyof typeof keywords] || [];
-          relatedKeywords.forEach(keyword => {
-            if (mentorData.expertise.includes(keyword) || mentorData.bio.includes(keyword)) {
-              score += 3;
-            }
-          });
-        });
-        
-        return { ...mentor, matchScore: score };
-      });
-      
-      // Sort by score (highest first) and take top matches
-      const sortedMentors = scoredMentors
-        .filter(mentor => mentor.matchScore > 0) // Only show mentors with some relevance
+      const mentors = snapshot.docs
+        .map(mentorDoc => ({ id: mentorDoc.id, ...mentorDoc.data() } as MentorMatchResult))
+        .filter(mentor => mentor.isMentor);
+
+      setApprovedMentorCount(mentors.length);
+
+      const scoredMentors = mentors
+        .map(mentor => ({
+          ...mentor,
+          ...scoreMentorAgainstFocusAreas(mentor, selectedInterests),
+        }))
+        .filter(mentor => mentor.matchScore > 0)
         .sort((a, b) => b.matchScore - a.matchScore)
-        .slice(0, 12); // Limit to top 12 matches
-      
-      // If no good matches, show all active mentors
-      const finalMentors = sortedMentors.length > 0 ? sortedMentors : mentors.slice(0, 12);
-      
-      setRealMentors(finalMentors);
-      
-      // Try to get AI suggestions as additional context
-      try {
-        const result = await getMentorshipMatches({ interests: selectedInterests });
-        setMatches(result.suggestions || []);
-      } catch (e) {
-        console.log('AI matching unavailable, using algorithmic matching');
+        .slice(0, 12);
+
+      setMatchedMentors(scoredMentors);
+
+      if (scoredMentors.length === 0) {
+        setFallbackMentors(mentors.slice(0, 6).map(mentor => ({
+          ...mentor,
+          matchScore: 0,
+          matchedFocusAreas: [],
+          matchReasons: ['Approved mentor profile available for broader exploration'],
+          matchStrength: 'potential',
+        })));
+        setMatchMessage('No direct matches found yet. Browse approved mentors while more mentor profiles are enriched.');
+      } else {
+        setFallbackMentors([]);
       }
-      
-      setTimeout(() => setStep('results'), 2000);
+
+      setStep('results');
     } catch (err) {
-      console.error('Error fetching mentors:', err);
-      setTimeout(() => setStep('results'), 2000);
+      errorService.handleError(err, 'Error fetching mentors');
+      setMatchedMentors([]);
+      setFallbackMentors([]);
+      setMatchMessage('Unable to load mentor matches right now. Please try again.');
+      setStep('results');
     }
   };
 
@@ -127,7 +101,7 @@ const MentorMatching: React.FC = () => {
     <div className="max-w-4xl mx-auto py-12 animate-in fade-in duration-500">
       <div className="text-center space-y-4 mb-12">
         <h1 className="text-2xl sm:text-xl sm:text-2xl md:text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-gray-900">Find Your Perfect Match</h1>
-        <p className="text-gray-500 font-medium">Our AI-powered algorithm analyzes your goals to connect you with the right mentor.</p>
+        <p className="text-gray-500 font-medium">Match with approved mentors based on structured focus areas, expertise, and profile quality.</p>
       </div>
 
       {step === 'selection' && (
@@ -135,7 +109,7 @@ const MentorMatching: React.FC = () => {
           <div className="space-y-6">
             <h2 className="text-base sm:text-base sm:text-lg md:text-xl font-black">What are your primary focus areas?</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {interests.map(interest => (
+              {FOCUS_AREA_LABELS.map(interest => (
                 <button
                   key={interest}
                   onClick={() => toggleInterest(interest)}
@@ -168,40 +142,56 @@ const MentorMatching: React.FC = () => {
           </div>
           <div className="text-center">
             <h2 className="text-base sm:text-lg sm:text-base sm:text-base sm:text-lg md:text-xl md:text-2xl font-black text-gray-900">AI is Analyzing...</h2>
-            <p className="text-gray-500 font-medium mt-2">Matching your interests with 500+ active mentors.</p>
+            <p className="text-gray-500 font-medium mt-2">Scoring your focus areas against approved mentor profiles.</p>
           </div>
         </div>
       )}
 
       {step === 'results' && (
         <div className="space-y-4 sm:space-y-6 md:space-y-8 animate-in slide-in-from-bottom-8 duration-700">
-          <h2 className="text-base sm:text-lg sm:text-base sm:text-base sm:text-lg md:text-xl md:text-2xl font-black text-gray-900">Available Mentors</h2>
-          {realMentors.length === 0 ? (
+          <div className="space-y-2">
+            <h2 className="text-base sm:text-lg sm:text-base sm:text-base sm:text-lg md:text-xl md:text-2xl font-black text-gray-900">Approved Mentor Matches</h2>
+            <p className="text-sm text-gray-500 font-medium">{approvedMentorCount} approved mentors evaluated against your selected focus areas.</p>
+            {matchMessage && <p className="text-sm text-amber-600 font-medium">{matchMessage}</p>}
+          </div>
+          {matchedMentors.length === 0 && fallbackMentors.length === 0 ? (
             <div className="bg-white p-12 rounded-3xl border border-gray-100 shadow-xl text-center">
               <span className="material-symbols-outlined text-6xl text-gray-300 mb-4">person_search</span>
-              <p className="text-gray-500 font-medium">No mentors available yet. Check back soon!</p>
+              <p className="text-gray-500 font-medium">No approved mentors are available right now. Check back soon.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {realMentors.map((mentor, i) => (
+              {(matchedMentors.length > 0 ? matchedMentors : fallbackMentors).map(mentor => (
                 <div key={mentor.id} className="bg-white p-4 sm:p-6 md:p-8 rounded-xl sm:rounded-2xl md:rounded-[32px] border border-gray-100 shadow-lg flex flex-col space-y-4 hover:-translate-y-2 transition-transform">
                   <div className="flex items-start justify-between">
                     <div className="size-16 rounded-full overflow-hidden bg-gray-100 border-2 border-primary/20">
                       <img src={mentor.photoURL || 'https://i.pravatar.cc/100'} alt={mentor.displayName} className="w-full h-full object-cover" />
                     </div>
-                    {mentor.matchScore > 0 && (
+                    {mentor.matchScore > 0 ? (
                       <div className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-bold">
-                        {Math.round((mentor.matchScore / 10) * 100)}% Match
+                        {getMatchLabel(mentor.matchStrength)}
+                      </div>
+                    ) : (
+                      <div className="bg-slate-100 text-slate-600 px-2 py-1 rounded-full text-xs font-bold">
+                        Approved mentor
                       </div>
                     )}
                   </div>
                   <div>
                     <h3 className="text-base sm:text-lg font-black text-gray-900 leading-tight">{mentor.displayName || mentor.name || 'Mentor'}</h3>
                     <p className="text-xs font-bold text-primary mt-1">{mentor.mentorExpertise || mentor.role || 'Expert Mentor'}</p>
-                    {mentor.mentorTags && mentor.mentorTags.length > 0 && (
+                    {mentor.matchedFocusAreas.length > 0 ? (
                       <div className="flex flex-wrap gap-1 mt-2">
-                        {mentor.mentorTags.slice(0, 3).map((tag: string, idx: number) => (
-                          <span key={idx} className="px-2 py-1 bg-blue-50 text-blue-600 text-xs font-medium rounded-full">
+                        {mentor.matchedFocusAreas.slice(0, 3).map(area => (
+                          <span key={area} className="px-2 py-1 bg-green-50 text-green-700 text-xs font-medium rounded-full">
+                            {area}
+                          </span>
+                        ))}
+                      </div>
+                    ) : mentor.mentorTags && mentor.mentorTags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {mentor.mentorTags.slice(0, 3).map(tag => (
+                          <span key={tag} className="px-2 py-1 bg-blue-50 text-blue-600 text-xs font-medium rounded-full">
                             {tag}
                           </span>
                         ))}
@@ -209,6 +199,11 @@ const MentorMatching: React.FC = () => {
                     )}
                   </div>
                   <p className="text-sm text-gray-500 leading-relaxed font-medium flex-1">{mentor.mentorBio || mentor.bio || 'Experienced mentor ready to help you succeed.'}</p>
+                  {mentor.matchReasons.length > 0 && (
+                    <div className="rounded-2xl bg-slate-50 px-4 py-3 text-xs font-medium text-slate-600">
+                      {mentor.matchReasons[0]}
+                    </div>
+                  )}
                   <button 
                     onClick={() => navigate(`/mentorship/book?mentor=${mentor.id}`)}
                     className="w-full py-3 bg-gray-50 text-primary font-bold rounded-xl text-sm hover:bg-primary hover:text-white transition-all"

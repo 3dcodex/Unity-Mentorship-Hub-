@@ -4,6 +4,9 @@ import { db } from '../src/firebase';
 import { doc, getDoc, addDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '../App';
 import { useTheme } from '../contexts/ThemeContext';
+import { errorService } from '../services/errorService';
+
+const SELECTED_MENTOR_STORAGE_KEY = 'unity_selected_mentor_id';
 
 const MentorshipBooking: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(25);
@@ -37,6 +40,12 @@ const MentorshipBooking: React.FC = () => {
     }
   }, [mentorId, hasAccess]);
 
+  useEffect(() => {
+    if (mentorId) {
+      sessionStorage.setItem(SELECTED_MENTOR_STORAGE_KEY, mentorId);
+    }
+  }, [mentorId]);
+
   const checkAccess = async () => {
     if (!user) return;
     setLoading(true);
@@ -65,7 +74,7 @@ const MentorshipBooking: React.FC = () => {
 
       setHasAccess(plan !== 'free' || hasPaidTransactions);
     } catch (err) {
-      console.error('Error checking access:', err);
+      errorService.handleError(err, 'Error checking access');
       setHasAccess(false);
     } finally {
       setLoading(false);
@@ -138,7 +147,7 @@ const MentorshipBooking: React.FC = () => {
           fromUserPhoto: mentor?.photoURL || '',
         });
       } catch (err) {
-        console.error('Error creating notifications:', err);
+        errorService.handleError(err, 'Error creating notifications');
       }
       
       setShowSuccess(true);
@@ -146,7 +155,7 @@ const MentorshipBooking: React.FC = () => {
         navigate(`/quick-chat?user=${mentorId}`);
       }, 2000);
     } catch (err) {
-      console.error('Booking error:', err);
+      errorService.handleError(err, 'Booking error');
       alert('Failed to book session. Please try again.');
     }
   };
@@ -198,7 +207,7 @@ const MentorshipBooking: React.FC = () => {
           </div>
           <div className="flex gap-4 justify-center">
             <button
-              onClick={() => navigate('/billing')}
+              onClick={() => navigate(mentorId ? `/billing?mentor=${mentorId}` : '/billing')}
               className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:via-indigo-700 hover:to-purple-700 text-white px-8 py-4 rounded-2xl font-black shadow-2xl shadow-blue-500/50 hover:scale-105 hover:shadow-blue-500/70 transition-all flex items-center gap-2 relative overflow-hidden group"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>

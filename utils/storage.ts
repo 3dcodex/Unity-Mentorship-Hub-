@@ -1,3 +1,5 @@
+import { errorService } from '../services/errorService';
+
 // Storage utility that respects cookie consent
 export const storage = {
   hasConsent: (): boolean => {
@@ -13,7 +15,7 @@ export const storage = {
       try {
         localStorage.setItem(key, value);
       } catch (e) {
-        console.warn('Storage not available:', e);
+        errorService.handleError(e, 'Storage not available');
       }
     }
   },
@@ -34,7 +36,7 @@ export const storage = {
       try {
         localStorage.removeItem(key);
       } catch (e) {
-        console.warn('Storage not available:', e);
+        errorService.handleError(e, 'Storage not available');
       }
     }
   },
@@ -46,7 +48,7 @@ export const storage = {
         localStorage.clear();
         if (consent) localStorage.setItem('cookieConsent', consent);
       } catch (e) {
-        console.warn('Storage not available:', e);
+        errorService.handleError(e, 'Storage not available');
       }
     }
   }

@@ -4,6 +4,7 @@ import { db } from '../src/firebase';
 import { useAuth } from '../App';
 import { useToast } from './AdminToast';
 import LoadingSpinner from './LoadingSpinner';
+import { errorService } from '../services/errorService';
 
 interface SuspensionModalProps {
   userId: string;
@@ -88,20 +89,18 @@ const SuspensionModal: React.FC<SuspensionModalProps> = ({
 
       // TODO: Implement IP/Device blocking if needed
       if (blockIP) {
-        // Add IP to blacklist
-        console.log('IP blocking would be implemented here');
+        // TODO: Add IP to blacklist - implement in future version
       }
 
       if (blockDevice) {
-        // Add device to blacklist
-        console.log('Device blocking would be implemented here');
+        // TODO: Add device to blacklist - implement in future version
       }
 
       showToast(`User suspended successfully${durationType === 'temporary' ? ` for ${duration} hours` : ''}`, 'success');
       onSuccess();
       onClose();
     } catch (error) {
-      console.error('Error suspending user:', error);
+      errorService.handleError(error, 'Error suspending user');
       showToast('Failed to suspend user', 'error');
     } finally {
       setLoading(false);

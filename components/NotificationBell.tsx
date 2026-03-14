@@ -10,7 +10,13 @@ const NotificationBell: React.FC<{ notifications: Notification[] }> = ({ notific
 
   return (
     <div className="relative">
-      <button className="relative" onClick={() => setOpen(!open)}>
+      <button
+        className="relative"
+        onClick={() => setOpen(!open)}
+        aria-label={notifications.length > 0 ? `${notifications.length} notifications` : 'Notifications'}
+        aria-expanded={open}
+        aria-haspopup="true"
+      >
         <span className="material-symbols-outlined text-2xl">notifications</span>
         {notifications.length > 0 && (
           <span className="absolute top-0 right-0 bg-red-500 text-white text-xs font-bold rounded-full px-1">{notifications.length}</span>

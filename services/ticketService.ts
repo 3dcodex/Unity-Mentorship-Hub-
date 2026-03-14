@@ -1,5 +1,6 @@
 import { db } from '../src/firebase';
 import { collection, doc, setDoc, updateDoc, getDocs, query, where, orderBy, Timestamp } from 'firebase/firestore';
+import { errorService } from './errorService';
 
 export interface Ticket {
   id: string;
@@ -15,8 +16,8 @@ export interface Ticket {
   assignedTo?: string;
   assignedToName?: string;
   responses: TicketResponse[];
-  createdAt: any;
-  updatedAt: any;
+  createdAt: Timestamp | Date;
+  updatedAt: Timestamp | Date;
 }
 
 export interface TicketResponse {
@@ -25,7 +26,7 @@ export interface TicketResponse {
   userName: string;
   isAdmin: boolean;
   message: string;
-  timestamp: any;
+  timestamp: Timestamp | Date;
 }
 
 export const createTicket = async (ticketData: Omit<Ticket, 'id' | 'responses' | 'createdAt' | 'updatedAt'>) => {
@@ -39,7 +40,7 @@ export const createTicket = async (ticketData: Omit<Ticket, 'id' | 'responses' |
     });
     return ticketRef.id;
   } catch (error) {
-    console.error('Error creating ticket:', error);
+    errorService.handleError(error, 'Error creating ticket');
     return null;
   }
 };
@@ -54,7 +55,7 @@ export const getUserTickets = async (userId: string) => {
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Ticket[];
   } catch (error) {
-    console.error('Error getting user tickets:', error);
+    errorService.handleError(error, 'Error getting user tickets');
     return [];
   }
 };
@@ -65,7 +66,7 @@ export const getAllTickets = async () => {
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Ticket[];
   } catch (error) {
-    console.error('Error getting all tickets:', error);
+    errorService.handleError(error, 'Error getting all tickets');
     return [];
   }
 };
@@ -91,7 +92,7 @@ export const addTicketResponse = async (ticketId: string, response: Omit<TicketR
     }
     return false;
   } catch (error) {
-    console.error('Error adding ticket response:', error);
+    errorService.handleError(error, 'Error adding ticket response');
     return false;
   }
 };
@@ -106,7 +107,7 @@ export const updateTicketStatus = async (ticketId: string, status: Ticket['statu
     });
     return true;
   } catch (error) {
-    console.error('Error updating ticket status:', error);
+    errorService.handleError(error, 'Error updating ticket status');
     return false;
   }
 };

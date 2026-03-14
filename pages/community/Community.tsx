@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { db } from '../../src/firebase';
 import { collection, getDocs, query, where, limit } from 'firebase/firestore';
+import { errorService } from '../../services/errorService';
 
 const Community: React.FC = () => {
   const navigate = useNavigate();
@@ -23,7 +24,7 @@ const Community: React.FC = () => {
       const groupsSnap = await getDocs(query(collection(db, 'groups'), limit(6)));
       setGroups(groupsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (error) {
-      console.error('Error loading community data:', error);
+      errorService.handleError(error, 'Error loading community data');
     } finally {
       setLoading(false);
     }

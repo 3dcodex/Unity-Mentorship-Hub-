@@ -9,6 +9,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import Breadcrumb from './Breadcrumb';
 import QuickActions from './QuickActions';
 import EnhancedSearch from './EnhancedSearch';
+import { errorService } from '../services/errorService';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -33,7 +34,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           if (docSnap.exists()) {
             setUserPhoto(docSnap.data().photoURL || null);
           }
-        }).catch(err => console.error('Error loading user photo:', err));
+        }).catch(err => errorService.handleError(err, 'Error loading user photo'));
       }
     };
     
@@ -43,9 +44,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     const interval = setInterval(loadUserPhoto, 5000);
     
     // Listen for profile photo update events
-    const handlePhotoUpdate = (event: any) => {
-      if (event.detail?.photoURL) {
-        setUserPhoto(event.detail.photoURL);
+    const handlePhotoUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<{ photoURL?: string }>;
+      if (customEvent.detail?.photoURL) {
+        setUserPhoto(customEvent.detail.photoURL);
       }
     };
     window.addEventListener('profilePhotoUpdated', handlePhotoUpdate);
@@ -70,7 +72,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         const snapshot = await getDocs(q);
         setNotificationCount(snapshot.size);
       } catch (err) {
-        console.error('Error loading notification count:', err);
+        errorService.handleError(err, 'Error loading notification count');
       }
     };
 
@@ -111,7 +113,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       setDropdownOpen(false);
       window.location.href = '/';
     } catch (err) {
-      console.error('Logout failed:', err);
+      errorService.handleError(err, 'Logout failed');
     }
   };
 
@@ -148,6 +150,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
           <button 
             onClick={() => navigate('/notifications')}
+            aria-label={notificationCount > 0 ? `${notificationCount} unread notifications` : 'Notifications'}
             className="size-8 sm:size-9 md:size-10 rounded-lg sm:rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors relative flex items-center justify-center"
           >
             <span className="material-symbols-outlined text-lg sm:text-xl">notifications</span>
@@ -160,18 +163,18 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               </>
             )}
           </button>
-          <button onClick={toggleTheme} className="size-8 sm:size-9 md:size-10 rounded-lg sm:rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center" title="Toggle dark mode">
+          <button onClick={toggleTheme} aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'} className="size-8 sm:size-9 md:size-10 rounded-lg sm:rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center" title="Toggle dark mode">
             {isDark ? (
               <span className="material-symbols-outlined text-lg sm:text-xl">light_mode</span>
             ) : (
               <span className="material-symbols-outlined text-lg sm:text-xl">dark_mode</span>
             )}
           </button>
-          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden size-8 sm:size-9 rounded-lg sm:rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center">
+          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'} aria-expanded={mobileMenuOpen} className="md:hidden size-8 sm:size-9 rounded-lg sm:rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center">
             <span className="material-symbols-outlined text-lg sm:text-xl">{mobileMenuOpen ? 'close' : 'menu'}</span>
           </button>
           <div className="relative profile-dropdown-container">
-            <button onClick={() => setDropdownOpen(!dropdownOpen)} className="size-8 sm:size-9 md:size-10 rounded-lg sm:rounded-xl bg-primary/10 dark:bg-blue-900/30 border-2 border-primary/20 dark:border-blue-500/30 flex items-center justify-center text-primary dark:text-blue-400 font-bold overflow-hidden cursor-pointer hover:scale-105 transition-transform text-xs sm:text-sm">
+            <button onClick={() => setDropdownOpen(!dropdownOpen)} aria-label="Open profile menu" aria-expanded={dropdownOpen} aria-haspopup="true" className="size-8 sm:size-9 md:size-10 rounded-lg sm:rounded-xl bg-primary/10 dark:bg-blue-900/30 border-2 border-primary/20 dark:border-blue-500/30 flex items-center justify-center text-primary dark:text-blue-400 font-bold overflow-hidden cursor-pointer hover:scale-105 transition-transform text-xs sm:text-sm">
               {userPhoto ? (
                 <img src={userPhoto} alt={userName} className="w-full h-full object-cover" />
               ) : (

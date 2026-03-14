@@ -3,6 +3,7 @@ import { generateInterviewQuestion } from '../../services/geminiService';
 import { useAuth } from '../../App';
 import { db } from '../../src/firebase';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
+import { errorService } from '../../services/errorService';
 
 interface Question {
   question: string;
@@ -74,7 +75,7 @@ const MockInterview: React.FC = () => {
         completedAt: Timestamp.now(),
       });
     } catch (err) {
-      console.error('Error saving session:', err);
+      errorService.handleError(err, 'Error saving session');
     }
   };
 

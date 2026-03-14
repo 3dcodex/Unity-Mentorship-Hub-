@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getAllGroups, deleteGroup, updateGroup, removeMember, type Group } from '../../services/groupService';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../src/firebase';
+import { errorService } from '../../services/errorService';
 
 const GroupManagement: React.FC = () => {
   const [groups, setGroups] = useState<Group[]>([]);
@@ -19,7 +20,7 @@ const GroupManagement: React.FC = () => {
       const data = await getAllGroups();
       setGroups(data);
     } catch (err) {
-      console.error('Error loading groups:', err);
+      errorService.handleError(err, 'Error loading groups');
     } finally {
       setLoading(false);
     }
@@ -40,7 +41,7 @@ const GroupManagement: React.FC = () => {
       loadGroups();
       setSelectedGroup(null);
     } catch (err) {
-      console.error('Error deleting group:', err);
+      errorService.handleError(err, 'Error deleting group');
     }
   };
 
@@ -51,7 +52,7 @@ const GroupManagement: React.FC = () => {
       loadGroups();
       if (selectedGroup) loadGroupMembers(selectedGroup);
     } catch (err) {
-      console.error('Error removing member:', err);
+      errorService.handleError(err, 'Error removing member');
     }
   };
 

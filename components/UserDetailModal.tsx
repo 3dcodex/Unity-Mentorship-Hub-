@@ -5,11 +5,37 @@ import { formatDate, formatDateTime, formatCurrency } from '../utils/formatters'
 import LoadingSpinner from './LoadingSpinner';
 import StatusBadge from './StatusBadge';
 import { useToast } from './AdminToast';
+import type { SessionData, UserNote } from '../types';
+import { errorService } from '../services/errorService';
 
 interface UserDetailModalProps {
   userId: string;
   onClose: () => void;
   onUpdate: () => void;
+}
+
+interface Transaction {
+  id: string;
+  amount: number;
+  type: string;
+  date: Timestamp;
+  status: string;
+}
+
+interface Report {
+  id: string;
+  reason: string;
+  reportedBy: string;
+  createdAt: Timestamp;
+  status: string;
+}
+
+interface Review {
+  id: string;
+  rating: number;
+  comment: string;
+  reviewer: string;
+  createdAt: Timestamp;
 }
 
 interface UserData {
@@ -19,8 +45,8 @@ interface UserData {
   role: string;
   status: string;
   accountStatus?: string;
-  createdAt: any;
-  lastActive: any;
+  createdAt: Timestamp;
+  lastActive: Timestamp;
   phone?: string;
   bio?: string;
   location?: string;
@@ -33,11 +59,11 @@ interface UserData {
 
 const UserDetailModal: React.FC<UserDetailModalProps> = ({ userId, onClose, onUpdate }) => {
   const [user, setUser] = useState<UserData | null>(null);
-  const [sessions, setSessions] = useState<any[]>([]);
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [reports, setReports] = useState<any[]>([]);
-  const [reviews, setReviews] = useState<any[]>([]);
-  const [notes, setNotes] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<SessionData[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [notes, setNotes] = useState<UserNote[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'sessions' | 'payments' | 'reports' | 'notes'>('overview');
   const [newNote, setNewNote] = useState('');
@@ -109,7 +135,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({ userId, onClose, onUp
       setNotes(notesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
     } catch (error) {
-      console.error('Error loading user data:', error);
+      errorService.handleError(error, 'Error loading user data');
       showToast('Failed to load user data', 'error');
     } finally {
       setLoading(false);

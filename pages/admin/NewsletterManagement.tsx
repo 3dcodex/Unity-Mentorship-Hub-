@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../src/firebase';
 import { collection, getDocs, addDoc, Timestamp, query, orderBy } from 'firebase/firestore';
+import { errorService } from '../../services/errorService';
 
 interface Subscriber {
   id: string;
@@ -28,7 +29,7 @@ const NewsletterManagement: React.FC = () => {
       const subs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Subscriber[];
       setSubscribers(subs);
     } catch (error) {
-      console.error('Error loading subscribers:', error);
+      errorService.handleError(error, 'Error loading subscribers');
     } finally {
       setLoading(false);
     }
@@ -54,7 +55,7 @@ const NewsletterManagement: React.FC = () => {
       setSubject('');
       setMessage('');
     } catch (error) {
-      console.error('Error sending newsletter:', error);
+      errorService.handleError(error, 'Error sending newsletter');
       setStatusMessage('Failed to send newsletter.');
     } finally {
       setSending(false);

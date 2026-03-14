@@ -4,6 +4,7 @@ import { db } from '../src/firebase';
 import { collection, getDocs, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../App';
 import { useTheme } from '../contexts/ThemeContext';
+import { CURRENT_MENTOR_APPLICATION_VERSION } from '../utils/mentorMatching';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -109,15 +110,23 @@ const Dashboard: React.FC = () => {
       const totalSessions = allSessionsSnap.size;
       const completedSessions = allSessionsSnap.docs.filter(doc => doc.data().status === 'completed').length;
 
-      // Load mentors
-      const mentorsQuery = query(collection(db, 'users'), where('isMentor', '==', true), limit(6));
+      // Load only approved mentors for featured listing
+      const mentorsQuery = query(
+        collection(db, 'users'),
+        where('mentorStatus', '==', 'approved'),
+        where('mentorApplicationVersion', '==', CURRENT_MENTOR_APPLICATION_VERSION),
+        limit(12)
+      );
       const mentorsSnap = await getDocs(mentorsQuery);
-      const mentorsList = mentorsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const mentorsList = mentorsSnap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((mentor: any) => mentor.isMentor)
+        .slice(0, 6);
       setMentors(mentorsList);
 
       setStats({ totalSessions, completedSessions, activeMentors: mentorsList.length });
     } catch (err) {
-      console.error('Error loading dashboard:', err);
+      errorService.handleError(err, 'Error loading dashboard');
     } finally {
       setLoading(false);
     }

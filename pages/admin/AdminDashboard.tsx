@@ -6,6 +6,7 @@ import { useAuth } from '../../App';
 import { usePermissions } from '../../src/hooks/usePermissions';
 import { formatRole, formatNumber } from '../../utils/formatters';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { errorService } from '../../services/errorService';
 
 interface DashboardStats {
   totalUsers: number;
@@ -91,7 +92,7 @@ const AdminDashboard: React.FC = () => {
       });
       setLastUpdated(new Date());
     } catch (error) {
-      console.error('Error loading stats:', error);
+      errorService.handleError(error, 'Error loading stats');
       setStats({
         totalUsers: 0,
         activeMentors: 0,

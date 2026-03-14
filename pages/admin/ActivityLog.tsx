@@ -4,6 +4,7 @@ import { db } from '../../src/firebase';
 import { formatDateTime } from '../../utils/formatters';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useToast } from '../../components/AdminToast';
+import { errorService } from '../../services/errorService';
 
 interface AdminAction {
   id: string;
@@ -49,7 +50,7 @@ const ActivityLog: React.FC = () => {
       const uniqueAdmins = [...new Set(actionsData.map(a => a.adminName))];
       setAdmins(uniqueAdmins);
     } catch (error) {
-      console.error('Error loading actions:', error);
+      errorService.handleError(error, 'Error loading actions');
       showToast('Failed to load activity log', 'error');
     } finally {
       setLoading(false);

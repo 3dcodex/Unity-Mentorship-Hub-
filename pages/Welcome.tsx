@@ -6,22 +6,10 @@ import Footer from '../components/Footer';
 
 const roles: { id: Role, title: string, desc: string, img: string }[] = [
   { 
-    id: 'International Student', 
-    title: 'International Student', 
-    desc: 'Seeking cultural and academic support in a new environment.',
+    id: 'Student', 
+    title: 'Student', 
+    desc: 'Seeking cultural, academic, and career support as you grow.',
     img: 'https://images.unsplash.com/photo-1523240693567-579c48b01bb0?auto=format&fit=crop&q=80&w=400'
-  },
-  { 
-    id: 'Domestic Student', 
-    title: 'Domestic Student', 
-    desc: 'Building local connections and community roots.',
-    img: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&q=80&w=400'
-  },
-  { 
-    id: 'Alumni', 
-    title: 'Alumni', 
-    desc: 'Sharing post-grad wisdom and career guidance.',
-    img: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=400'
   },
   { 
     id: 'Professional', 
@@ -37,7 +25,7 @@ const seekingTags = ['Industry Trends', 'Resume Review', 'DEI Advocacy', 'Resear
 const Welcome: React.FC = () => {
   const [isLogin, setIsLogin] = useState(false);
   const [step, setStep] = useState(1);
-  const [selectedRole, setSelectedRole] = useState<Role | ''>('Domestic Student');
+  const [selectedRole, setSelectedRole] = useState<Role>('Student');
   const [selectedOffer, setSelectedOffer] = useState<string[]>(['Local Events']);
   const [selectedSeeking, setSelectedSeeking] = useState<string[]>(['Industry Trends']);
   const navigate = useNavigate();
@@ -155,7 +143,7 @@ const Welcome: React.FC = () => {
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 text-left">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-left">
                       {roles.map((r) => (
                         <button
                           key={r.id}

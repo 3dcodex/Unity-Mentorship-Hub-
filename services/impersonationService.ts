@@ -1,5 +1,6 @@
 import { db } from '../src/firebase';
 import { collection, addDoc, doc, getDoc, updateDoc, Timestamp, query, where, getDocs } from 'firebase/firestore';
+import { errorService } from './errorService';
 
 export interface ImpersonationSession {
   id: string;
@@ -70,7 +71,7 @@ export const startImpersonation = async (
 
     return { success: true, sessionId: sessionRef.id };
   } catch (error) {
-    console.error('Error starting impersonation:', error);
+    errorService.handleError(error, 'Error starting impersonation');
     return { success: false, error: 'Failed to start impersonation session' };
   }
 };
@@ -111,7 +112,7 @@ export const endImpersonation = async (
 
     return { success: true };
   } catch (error) {
-    console.error('Error ending impersonation:', error);
+    errorService.handleError(error, 'Error ending impersonation');
     return { success: false, error: 'Failed to end impersonation session' };
   }
 };
@@ -158,7 +159,7 @@ export const getActiveImpersonationSession = async (
       status: data.status
     };
   } catch (error) {
-    console.error('Error getting active impersonation session:', error);
+    errorService.handleError(error, 'Error getting active impersonation session');
     return null;
   }
 };
@@ -188,7 +189,7 @@ export const logImpersonationAction = async (
       ]
     });
   } catch (error) {
-    console.error('Error logging impersonation action:', error);
+    errorService.handleError(error, 'Error logging impersonation action');
   }
 };
 

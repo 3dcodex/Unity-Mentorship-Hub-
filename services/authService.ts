@@ -26,32 +26,25 @@ export const checkUserRole = async (user: User): Promise<UserRole | null> => {
 
 export const checkAdminAccess = async (user: User): Promise<boolean> => {
   try {
-    console.log('Checking admin access for user:', user.uid);
-    
     // Check Firestore first (immediate access)
     const userRole = await checkUserRole(user);
-    console.log('User role from Firestore:', userRole);
     
     // Check if role has admin panel access
     if (userRole?.role === 'admin' || 
         userRole?.role === 'super_admin' || 
         userRole?.role === 'moderator') {
-      console.log('Admin access granted via Firestore role:', userRole.role);
       return true;
     }
     
     // Then check custom claims
     const tokenResult = await user.getIdTokenResult();
-    console.log('Custom claims:', tokenResult.claims);
     
     if (tokenResult.claims.admin || 
         tokenResult.claims.super_admin || 
         tokenResult.claims.moderator) {
-      console.log('Admin access granted via custom claims');
       return true;
     }
     
-    console.log('Admin access denied - role:', userRole?.role);
     return false;
   } catch (error) {
     errorService.handleError(error, 'checkAdminAccess');

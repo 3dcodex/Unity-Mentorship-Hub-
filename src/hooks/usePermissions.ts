@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Role, getPermissions, Permission } from '../types/roles';
+import { errorService } from '../../services/errorService';
 
 export const usePermissions = (userId: string | undefined) => {
   const [role, setRole] = useState<Role>(Role.STUDENT);
@@ -18,7 +19,6 @@ export const usePermissions = (userId: string | undefined) => {
       try {
         const userDoc = await getDoc(doc(db, 'users', userId));
         if (!userDoc.exists()) {
-          console.warn('User document not found:', userId);
           setLoading(false);
           return;
         }
@@ -47,11 +47,10 @@ export const usePermissions = (userId: string | undefined) => {
             userRole = Role.STUDENT;
         }
         
-        console.log('Loaded user role:', userRoleString, '→', userRole);
         setRole(userRole);
         setPermissions(getPermissions(userRole));
       } catch (error) {
-        console.error('Error loading user role:', error);
+        errorService.handleError(error, 'Error loading user role');
         // Set default role on error
         setRole(Role.STUDENT);
         setPermissions(getPermissions(Role.STUDENT));

@@ -1,5 +1,7 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
+import { UserProfile } from '../types';
+import { errorService } from './errorService';
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
@@ -21,7 +23,7 @@ export const getCareerAdvice = async (role: string, query: string) => {
   return response.text;
 };
 
-export const getMentorshipMatches = async (userData: any) => {
+export const getMentorshipMatches = async (userData: Partial<UserProfile>) => {
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `Based on this user profile: ${JSON.stringify(userData)}, suggest 3 types of mentors they should look for and why. Return as JSON.`,
@@ -106,7 +108,7 @@ export const generateInterviewQuestion = async (role: string, level: string) => 
     });
     return JSON.parse(response.text || '{}');
   } catch (error) {
-    console.error('Error generating interview question:', error);
+    errorService.handleError(error, 'Error generating interview question');
     // Return a fallback question
     return {
       question: `Tell me about a challenging project you worked on as a ${level} ${role}. What obstacles did you face and how did you overcome them?`,

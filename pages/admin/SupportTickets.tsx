@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, getDocs, doc, updateDoc, arrayUnion, serverTimestamp, setDoc, query, orderBy } from 'firebase/firestore';
 import { db } from '../../src/firebase';
 import { useAuth } from '../../App';
+import { errorService } from '../../services/errorService';
 
 interface SupportTicket {
   id: string;
@@ -87,7 +88,7 @@ const SupportTickets: React.FC = () => {
       loadTickets();
       alert('Response sent successfully!');
     } catch (error) {
-      console.error('Error sending response:', error);
+      errorService.handleError(error, 'Error sending response');
       alert('Failed to send response');
     } finally {
       setSending(false);
@@ -124,7 +125,7 @@ const SupportTickets: React.FC = () => {
       setShowBroadcast(false);
       alert(`Broadcast sent to ${usersSnap.size} users!`);
     } catch (error) {
-      console.error('Error broadcasting:', error);
+      errorService.handleError(error, 'Error broadcasting');
       alert('Failed to send broadcast');
     } finally {
       setSending(false);

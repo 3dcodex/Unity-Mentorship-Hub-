@@ -76,7 +76,6 @@ const AdminPromotion = lazy(() => import('./pages/admin/AdminPromotion'));
 const SupportTickets = lazy(() => import('./pages/admin/SupportTickets'));
 const GroupManagement = lazy(() => import('./pages/admin/GroupManagement'));
 const MyTickets = lazy(() => import('./pages/support/MyTickets'));
-const AdminMentorRequests = lazy(() => import('./pages/AdminMentorRequests'));
 const UserHelper = lazy(() => import('./pages/admin/UserHelper'));
 
 // Sub-pages - lazy loaded
@@ -89,6 +88,8 @@ const DiscussionGroups = lazy(() => import('./pages/community/DiscussionGroups')
 const GroupDetail = lazy(() => import('./pages/community/GroupDetail'));
 const JoinProfessionalTrack = lazy(() => import('./pages/JoinProfessionalTrack'));
 const JoinCulturalTrack = lazy(() => import('./pages/JoinCulturalTrack'));
+const PeerMentors = lazy(() => import('./pages/PeerMentors'));
+const AlumniNetwork = lazy(() => import('./pages/AlumniNetwork'));
 const PublicMentorship = lazy(() => import('./pages/PublicMentorship'));
 const Search = lazy(() => import('./pages/Search'));
 const BecomeMentor = lazy(() => import('./pages/BecomeMentor'));
@@ -136,19 +137,18 @@ const ProtectedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
     setCheckingStatus(false);
   }, [loading]);
 
-  // Keep onboarding redirect behavior but exclude login redirect
-  if (!onboardingComplete && !['/login', '/signup', '/', '/about', '/who-we-serve', '/mentorship-info', '/peer-mentorship', '/accessible-resources', '/safe-spaces', '/pending-approval'].includes(location.pathname)) {
-    // If user is logged in but onboarding not complete, set it complete and continue
-    if (user) {
-      localStorage.setItem('unity_onboarding_complete', 'true');
-    } else {
-      return <Navigate to="/signup" replace />;
-    }
+  if (loading || checkingStatus) {
+    return <LoadingFallback />;
   }
 
-  // If not loading and no user, redirect to login
-  if (!loading && !user) {
+  // Protected routes should always require authentication first.
+  if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Keep onboarding redirect behavior for authenticated users only.
+  if (!onboardingComplete && !['/login', '/signup', '/', '/about', '/who-we-serve', '/mentorship-info', '/peer-mentorship', '/accessible-resources', '/safe-spaces', '/pending-approval'].includes(location.pathname)) {
+    localStorage.setItem('unity_onboarding_complete', 'true');
   }
 
   return <Layout>{children}</Layout>;
@@ -215,6 +215,8 @@ const App: React.FC = () => {
         <Route path="/mentorship/book" element={<ProtectedLayout><MentorshipBooking /></ProtectedLayout>} />
         <Route path="/mentorship/history" element={<ProtectedLayout><SessionHistory /></ProtectedLayout>} />
         <Route path="/become-mentor" element={<ProtectedLayout><BecomeMentor /></ProtectedLayout>} />
+        <Route path="/mentorship/peer-mentors" element={<ProtectedLayout><PeerMentors /></ProtectedLayout>} />
+        <Route path="/mentorship/alumni-network" element={<ProtectedLayout><AlumniNetwork /></ProtectedLayout>} />
         <Route path="/mentorship/join-professional" element={<ProtectedLayout><JoinProfessionalTrack /></ProtectedLayout>} />
         <Route path="/mentorship/join-cultural" element={<ProtectedLayout><JoinCulturalTrack /></ProtectedLayout>} />
         
@@ -275,7 +277,7 @@ const App: React.FC = () => {
         <Route path="/admin/groups" element={<AdminRoute><GroupManagement /></AdminRoute>} />
         <Route path="/admin/support" element={<AdminRoute><SupportTickets /></AdminRoute>} />
         <Route path="/admin/promotion" element={<AdminRoute><AdminPromotion /></AdminRoute>} />
-        <Route path="/admin/mentor-requests" element={<AdminRoute><AdminMentorRequests /></AdminRoute>} />
+        <Route path="/admin/mentor-requests" element={<AdminRoute><MentorApprovals /></AdminRoute>} />
         <Route path="/admin/user-helper" element={<AdminRoute><UserHelper /></AdminRoute>} />
         
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { db } from '../src/firebase';
-import { collection, getDocs, query, where, doc, updateDoc, deleteDoc, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, updateDoc, addDoc, Timestamp, writeBatch } from 'firebase/firestore';
 import { useAuth } from '../App';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import { presenceService } from '../services/presenceService';
+import { errorService } from '../services/errorService';
 
 interface Session {
   id: string;
@@ -16,7 +17,10 @@ interface Session {
   status: 'upcoming' | 'completed' | 'cancelled';
   notes?: string;
   rating?: number;
-  createdAt: any;
+  createdAt: Timestamp | Date;
+  archivedBy?: Record<string, boolean>;
+  bookmarkedBy?: Record<string, boolean>;
+  hiddenBy?: Record<string, boolean>;
 }
 
 const SessionHistory: React.FC = () => {
@@ -26,7 +30,9 @@ const SessionHistory: React.FC = () => {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [mentors, setMentors] = useState<{[id: string]: any}>({});
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'upcoming' | 'completed'>('all');
+  const [filter, setFilter] = useState<'all' | 'upcoming' | 'completed' | 'cancelled' | 'bookmarked' | 'archived'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest'>('newest');
   const [userPlan, setUserPlan] = useState<'free' | 'basic' | 'premium'>('free');
   const [sessionCount, setSessionCount] = useState({ used: 0, total: 0 });
   const [showReschedule, setShowReschedule] = useState<string | null>(null);
@@ -39,7 +45,6 @@ const SessionHistory: React.FC = () => {
   const [showCallModal, setShowCallModal] = useState(false);
   const [callType, setCallType] = useState<'video' | 'voice'>('video');
   const [callMentorId, setCallMentorId] = useState<string | null>(null);
-  const [isInCall, setIsInCall] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<{[userId: string]: boolean}>({});
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -62,7 +67,7 @@ const SessionHistory: React.FC = () => {
         setUserPlan(plan);
       }
     } catch (err) {
-      console.error('Error loading plan:', err);
+      errorService.handleError(err, 'Error loading plan');
     }
   };
 
@@ -129,7 +134,7 @@ const SessionHistory: React.FC = () => {
       // Load mentor/student data and track their online status
       const userIds = [...new Set([
         ...uniqueSessions.map(s => s.mentorId),
-        ...uniqueSessions.map(s => s.menteeId || s.studentId)
+        ...uniqueSessions.map(s => s.menteeId)
       ].filter(Boolean))];
       
       if (userIds.length > 0) {
@@ -150,7 +155,7 @@ const SessionHistory: React.FC = () => {
         });
       }
     } catch (err) {
-      console.error('Error loading sessions:', err);
+      errorService.handleError(err, 'Error loading sessions');
     } finally {
       setLoading(false);
     }
@@ -176,20 +181,107 @@ const SessionHistory: React.FC = () => {
         });
       }
     } catch (err) {
-      console.error('Error cancelling session:', err);
+      errorService.handleError(err, 'Error cancelling session');
       alert('Failed to cancel session');
     }
   };
 
+  const isHiddenForUser = (session: Session) => {
+    if (!user) return false;
+    return Boolean(session.hiddenBy?.[user.uid]);
+  };
+
+  const isArchivedForUser = (session: Session) => {
+    if (!user) return false;
+    return Boolean(session.archivedBy?.[user.uid]);
+  };
+
+  const isBookmarkedForUser = (session: Session) => {
+    if (!user) return false;
+    return Boolean(session.bookmarkedBy?.[user.uid]);
+  };
+
   const handleDeleteSession = async (sessionId: string) => {
-    if (!confirm('Are you sure you want to delete this session? This action cannot be undone.')) return;
+    if (!user) return;
+    if (!confirm('Delete this session from your history view? You can only restore it from Firestore admin tools.')) return;
     try {
-      await deleteDoc(doc(db, 'bookings', sessionId));
-      setSessions(prev => prev.filter(s => s.id !== sessionId));
-      alert('Session deleted successfully');
+      await updateDoc(doc(db, 'bookings', sessionId), {
+        [`hiddenBy.${user.uid}`]: true,
+        updatedAt: Timestamp.now(),
+      });
+      setSessions(prev => prev.map(s => s.id === sessionId
+        ? { ...s, hiddenBy: { ...(s.hiddenBy || {}), [user.uid]: true } }
+        : s
+      ));
     } catch (err) {
-      console.error('Error deleting session:', err);
-      alert('Failed to delete session');
+      errorService.handleError(err, 'Error deleting session from history');
+      alert('Failed to remove session from your history');
+    }
+  };
+
+  const toggleBookmark = async (sessionId: string) => {
+    if (!user) return;
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+    const nextValue = !isBookmarkedForUser(session);
+    try {
+      await updateDoc(doc(db, 'bookings', sessionId), {
+        [`bookmarkedBy.${user.uid}`]: nextValue,
+        updatedAt: Timestamp.now(),
+      });
+      setSessions(prev => prev.map(s => s.id === sessionId
+        ? { ...s, bookmarkedBy: { ...(s.bookmarkedBy || {}), [user.uid]: nextValue } }
+        : s
+      ));
+    } catch (err) {
+      errorService.handleError(err, 'Error updating bookmark');
+      alert('Failed to update bookmark');
+    }
+  };
+
+  const toggleArchive = async (sessionId: string) => {
+    if (!user) return;
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+    const nextValue = !isArchivedForUser(session);
+    try {
+      await updateDoc(doc(db, 'bookings', sessionId), {
+        [`archivedBy.${user.uid}`]: nextValue,
+        updatedAt: Timestamp.now(),
+      });
+      setSessions(prev => prev.map(s => s.id === sessionId
+        ? { ...s, archivedBy: { ...(s.archivedBy || {}), [user.uid]: nextValue } }
+        : s
+      ));
+    } catch (err) {
+      errorService.handleError(err, 'Error updating archive');
+      alert('Failed to update archive status');
+    }
+  };
+
+  const handleClearHistory = async () => {
+    if (!user) return;
+    if (filteredSessions.length === 0) return;
+    if (!confirm(`Clear ${filteredSessions.length} session(s) from your current history view?`)) return;
+
+    try {
+      const batch = writeBatch(db);
+      filteredSessions.forEach((session) => {
+        batch.update(doc(db, 'bookings', session.id), {
+          [`hiddenBy.${user.uid}`]: true,
+          updatedAt: Timestamp.now(),
+        });
+      });
+      await batch.commit();
+
+      const ids = new Set(filteredSessions.map(s => s.id));
+      setSessions(prev => prev.map(s => ids.has(s.id)
+        ? { ...s, hiddenBy: { ...(s.hiddenBy || {}), [user.uid]: true } }
+        : s
+      ));
+    } catch (err) {
+      errorService.handleError(err, 'Error clearing history');
+      alert('Failed to clear history');
     }
   };
 
@@ -200,7 +292,6 @@ const SessionHistory: React.FC = () => {
     }
     
     try {
-      const newDateTime = `${rescheduleDate}T${rescheduleTime}`;
       await updateDoc(doc(db, 'bookings', sessionId), {
         scheduledDate: rescheduleDate,
         scheduledTime: rescheduleTime,
@@ -234,7 +325,7 @@ const SessionHistory: React.FC = () => {
       setRescheduleTime('');
       alert('Session rescheduled successfully');
     } catch (err) {
-      console.error('Error rescheduling session:', err);
+      errorService.handleError(err, 'Error rescheduling session');
       alert('Failed to reschedule session');
     }
   };
@@ -246,7 +337,7 @@ const SessionHistory: React.FC = () => {
       setShowNotes(null);
       setNoteText('');
     } catch (err) {
-      console.error('Error saving notes:', err);
+      errorService.handleError(err, 'Error saving notes');
     }
   };
 
@@ -257,7 +348,7 @@ const SessionHistory: React.FC = () => {
       setShowRating(null);
       setRating(0);
     } catch (err) {
-      console.error('Error saving rating:', err);
+      errorService.handleError(err, 'Error saving rating');
     }
   };
 
@@ -285,7 +376,6 @@ const SessionHistory: React.FC = () => {
     try {
       setCallType(type);
       setCallMentorId(mentorId);
-      setIsInCall(true);
       
       // Get user media
       const constraints = {
@@ -337,7 +427,7 @@ const SessionHistory: React.FC = () => {
       
       setShowCallModal(true);
     } catch (err) {
-      console.error('Error starting call:', err);
+      errorService.handleError(err, 'Error starting call');
       alert('Failed to start call. Please check your camera/microphone permissions.');
       endCall();
     }
@@ -354,23 +444,42 @@ const SessionHistory: React.FC = () => {
       peerConnectionRef.current = null;
     }
     
-    setIsInCall(false);
     setShowCallModal(false);
     setCallMentorId(null);
   };
 
   const now = new Date();
-  const filteredSessions = sessions.filter(s => {
+  const visibleSessions = sessions.filter(s => !isHiddenForUser(s));
+  const filteredSessions = visibleSessions.filter(s => {
     const sessionDate = new Date(s.slotDate || s.createdAt?.toDate?.() || now);
     const isUpcoming = sessionDate >= now && s.status !== 'cancelled';
     const isCompleted = sessionDate < now || s.status === 'completed';
-    
+    const isCancelled = s.status === 'cancelled';
+    const isArchived = isArchivedForUser(s);
+    const isBookmarked = isBookmarkedForUser(s);
+
     if (filter === 'upcoming') return isUpcoming;
     if (filter === 'completed') return isCompleted;
+    if (filter === 'cancelled') return isCancelled;
+    if (filter === 'bookmarked') return isBookmarked;
+    if (filter === 'archived') return isArchived;
     return true;
+  }).filter((s) => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return true;
+    const isUserMentor = user?.uid === s.mentorId;
+    const otherUser = isUserMentor ? mentors[s.menteeId] || {} : mentors[s.mentorId] || {};
+    const name = (otherUser.displayName || otherUser.name || '').toLowerCase();
+    const expertise = (otherUser.mentorExpertise || '').toLowerCase();
+    const status = (s.status || '').toLowerCase();
+    return name.includes(term) || expertise.includes(term) || status.includes(term);
+  }).sort((a, b) => {
+    const timeA = new Date(a.slotDate || a.createdAt?.toDate?.() || now).getTime();
+    const timeB = new Date(b.slotDate || b.createdAt?.toDate?.() || now).getTime();
+    return sortBy === 'newest' ? timeB - timeA : timeA - timeB;
   });
 
-  const upcomingCount = sessions.filter(s => {
+  const upcomingCount = visibleSessions.filter(s => {
     const sessionDate = new Date(s.slotDate || s.createdAt?.toDate?.() || now);
     return sessionDate >= now && s.status !== 'cancelled';
   }).length;
@@ -398,7 +507,7 @@ const SessionHistory: React.FC = () => {
               </div>
               <div>
                 <p className={`text-xs font-black uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Total Sessions</p>
-                <p className={`text-3xl font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>{sessions.length}</p>
+                <p className={`text-3xl font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>{visibleSessions.length}</p>
               </div>
             </div>
           </div>
@@ -443,22 +552,50 @@ const SessionHistory: React.FC = () => {
             </button>
           </div>
 
-          <div className="flex gap-2">
-            {['all', 'upcoming', 'completed'].map((f) => (
+          <div className="grid md:grid-cols-3 gap-3">
+            <div className="md:col-span-2 flex flex-wrap gap-2">
+              {['all', 'upcoming', 'completed', 'cancelled', 'bookmarked', 'archived'].map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f as any)}
+                  className={`px-4 py-2 rounded-xl font-bold text-sm capitalize transition-all ${
+                    filter === f
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : isDark
+                      ? 'bg-slate-700 text-gray-300 hover:bg-slate-600'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search by mentor, expertise, status"
+                className={`w-full px-4 py-2 rounded-xl text-sm font-medium outline-none ${
+                  isDark ? 'bg-slate-700 text-gray-200 border border-gray-600' : 'bg-gray-50 text-gray-700 border border-gray-200'
+                }`}
+              />
               <button
-                key={f}
-                onClick={() => setFilter(f as any)}
-                className={`px-4 py-2 rounded-xl font-bold text-sm capitalize transition-all ${
-                  filter === f
-                    ? 'bg-blue-600 text-white shadow-lg'
-                    : isDark
-                    ? 'bg-slate-700 text-gray-300 hover:bg-slate-600'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                onClick={() => setSortBy(prev => prev === 'newest' ? 'oldest' : 'newest')}
+                className={`px-4 py-2 rounded-xl font-bold text-sm ${
+                  isDark ? 'bg-slate-700 text-gray-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                {f}
+                {sortBy === 'newest' ? 'Newest First' : 'Oldest First'}
               </button>
-            ))}
+              <button
+                onClick={handleClearHistory}
+                disabled={filteredSessions.length === 0}
+                className="px-4 py-2 rounded-xl font-bold text-sm bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Clear View
+              </button>
+            </div>
           </div>
         </div>
 
@@ -473,11 +610,14 @@ const SessionHistory: React.FC = () => {
             filteredSessions.map((session) => {
               const isUserMentor = user?.uid === session.mentorId;
               const otherUser = isUserMentor 
-                ? mentors[session.menteeId || session.studentId] || {}
+                ? mentors[session.menteeId] || {}
                 : mentors[session.mentorId] || {};
-              const otherUserId = isUserMentor ? (session.menteeId || session.studentId) : session.mentorId;
+              const otherUserId = isUserMentor ? session.menteeId : session.mentorId;
               const sessionDate = new Date(session.slotDate || session.createdAt?.toDate?.() || now);
               const isUpcoming = sessionDate >= now && session.status !== 'cancelled';
+              const isArchived = isArchivedForUser(session);
+              const isBookmarked = isBookmarkedForUser(session);
+              const isActionableUpcoming = isUpcoming && !isArchived;
 
               return (
                 <div
@@ -518,13 +658,23 @@ const SessionHistory: React.FC = () => {
                               CANCELLED
                             </span>
                           )}
+                          {isArchived && (
+                            <span className="px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-black rounded-full">
+                              ARCHIVED
+                            </span>
+                          )}
+                          {isBookmarked && (
+                            <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs font-black rounded-full">
+                              BOOKMARKED
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
 
                     {/* Actions */}
                     <div className="flex flex-wrap gap-2">
-                      {isUpcoming ? (
+                      {isActionableUpcoming ? (
                         <>
                           <button
                             onClick={() => startCall('video', otherUserId)}
@@ -561,15 +711,6 @@ const SessionHistory: React.FC = () => {
                           >
                             Cancel
                           </button>
-                          {/* Show delete button for mentors or session creators */}
-                          {isUserMentor && (
-                            <button
-                              onClick={() => handleDeleteSession(session.id)}
-                              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold hover:scale-105 transition-all"
-                            >
-                              Delete
-                            </button>
-                          )}
                         </>
                       ) : (
                         <>
@@ -603,6 +744,39 @@ const SessionHistory: React.FC = () => {
                           )}
                         </>
                       )}
+
+                      <button
+                        onClick={() => toggleBookmark(session.id)}
+                        className={`px-4 py-2 rounded-xl font-bold transition-all ${
+                          isBookmarked
+                            ? 'bg-blue-600 text-white'
+                            : isDark
+                            ? 'bg-slate-700 text-gray-300 hover:bg-slate-600'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {isBookmarked ? 'Bookmarked' : 'Bookmark'}
+                      </button>
+
+                      <button
+                        onClick={() => toggleArchive(session.id)}
+                        className={`px-4 py-2 rounded-xl font-bold transition-all ${
+                          isArchived
+                            ? 'bg-amber-600 text-white'
+                            : isDark
+                            ? 'bg-slate-700 text-gray-300 hover:bg-slate-600'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {isArchived ? 'Unarchive' : 'Archive'}
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteSession(session.id)}
+                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-all"
+                      >
+                        Delete
+                      </button>
                     </div>
                   </div>
 

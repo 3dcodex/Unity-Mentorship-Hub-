@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { auth } from '../src/firebase';
+import { errorService } from '../services/errorService';
 
 const PendingApproval: React.FC = () => {
   const navigate = useNavigate();
@@ -14,7 +15,7 @@ const PendingApproval: React.FC = () => {
       localStorage.removeItem('unity_user_role');
       navigate('/login');
     } catch (err) {
-      console.error('Logout error:', err);
+      errorService.handleError(err, 'Logout error');
     }
   };
 

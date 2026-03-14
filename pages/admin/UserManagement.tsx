@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, doc, updateDoc, query, where, setDoc, getDoc } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../../src/firebase';
 import { useAuth } from '../../App';
 import { Role, ROLE_HIERARCHY, canChangeRole, getPermissions } from '../../src/types/roles';
@@ -28,10 +29,14 @@ const UserManagement: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showNotesModal, setShowNotesModal] = useState(false);
   const [newEmail, setNewEmail] = useState('');
   const [suspendReason, setSuspendReason] = useState('');
   const [adminRole, setAdminRole] = useState<Role>(Role.STUDENT);
   const [permissions, setPermissions] = useState(getPermissions(Role.STUDENT));
+  const [noteText, setNoteText] = useState('');
+  const [noteTags, setNoteTags] = useState('');
+  const [notesSavingId, setNotesSavingId] = useState<string | null>(null);
 
   const logAction = async (action: string, targetUserId: string, details: any) => {
     if (!currentAdmin) return;
@@ -173,9 +178,31 @@ const UserManagement: React.FC = () => {
     await logAction('suspend_user', selectedUser.id, { reason: suspendReason });
     
     await sendSystemNotification(selectedUser.id, 'Account Suspended', `Your account has been suspended. Reason: ${suspendReason}`, 'warning');
+
+    // Send email (best-effort)
+    try {
+      const sendEmail = httpsCallable(getFunctions(), 'sendNotificationEmail');
+      await sendEmail({ userId: selectedUser.id, templateName: 'account_suspended', reason: suspendReason });
+    } catch { /* non-critical */ }
     
     setShowModal(false);
     setSuspendReason('');
+    loadUsers();
+  };
+
+  const handleSaveNotes = async () => {
+    if (!selectedUser || !currentAdmin) return;
+    setNotesSavingId(selectedUser.id);
+    const tags = noteTags.split(',').map(t => t.trim()).filter(Boolean);
+    await updateDoc(doc(db, 'users', selectedUser.id), {
+      adminNotes: noteText.trim(),
+      adminTags: tags,
+      adminNotesUpdatedBy: currentAdmin.uid,
+      adminNotesUpdatedAt: new Date(),
+    });
+    await logAction('add_admin_notes', selectedUser.id, { tags });
+    setNotesSavingId(null);
+    setShowNotesModal(false);
     loadUsers();
   };
 
@@ -190,6 +217,12 @@ const UserManagement: React.FC = () => {
     await logAction('activate_user', userId, {});
     
     await sendSystemNotification(userId, 'Account Activated', 'Your account has been reactivated. You can now access all features.', 'success');
+
+    // Send email (best-effort)
+    try {
+      const sendEmail = httpsCallable(getFunctions(), 'sendNotificationEmail');
+      await sendEmail({ userId, templateName: 'account_reactivated' });
+    } catch { /* non-critical */ }
     
     loadUsers();
   };
@@ -378,6 +411,19 @@ const UserManagement: React.FC = () => {
                         <button
                           onClick={() => {
                             setSelectedUser(user);
+                            setNoteText((user as any).adminNotes || '');
+                            setNoteTags(((user as any).adminTags || []).join(', '));
+                            setShowNotesModal(true);
+                          }}
+                          className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg text-sm font-bold hover:bg-yellow-200"
+                        >
+                          Notes
+                        </button>
+                      )}
+                      {(adminRole === Role.ADMIN || adminRole === Role.SUPER_ADMIN) && (
+                        <button
+                          onClick={() => {
+                            setSelectedUser(user);
                             setNewEmail(user.email);
                             setShowEmailModal(true);
                           }}
@@ -490,6 +536,50 @@ const UserManagement: React.FC = () => {
                 className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700"
               >
                 Change Email
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showNotesModal && selectedUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full">
+            <h2 className="text-2xl font-black mb-2">Admin Notes</h2>
+            <p className="text-gray-600 mb-4">User: {selectedUser.name}</p>
+            <textarea
+              placeholder="Internal admin notes (not visible to user)..."
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl mb-4 outline-none focus:border-yellow-500"
+              rows={5}
+            />
+            <input
+              type="text"
+              placeholder="Tags (comma-separated): vip, at-risk, flagged..."
+              value={noteTags}
+              onChange={(e) => setNoteTags(e.target.value)}
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl mb-4 outline-none focus:border-yellow-500"
+            />
+            {noteTags && (
+              <div className="flex flex-wrap gap-2 mb-4">
+                {noteTags.split(',').map(t => t.trim()).filter(Boolean).map(tag => (
+                  <span key={tag} className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-bold">{tag}</span>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowNotesModal(false)}
+                className="flex-1 px-4 py-3 bg-gray-100 rounded-xl font-bold hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveNotes}
+                disabled={notesSavingId === selectedUser.id}
+                className="flex-1 px-4 py-3 bg-yellow-500 text-white rounded-xl font-bold hover:bg-yellow-600 disabled:opacity-50"
+              >
+                {notesSavingId === selectedUser.id ? 'Saving...' : 'Save Notes'}
               </button>
             </div>
           </div>

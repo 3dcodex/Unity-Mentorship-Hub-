@@ -37,7 +37,7 @@ const ContactSupport: React.FC = () => {
       alert('Support ticket submitted successfully! We will respond within 24 hours.');
       navigate('/help');
     } catch (error) {
-      console.error('Error submitting ticket:', error);
+      errorService.handleError(error, 'Error submitting ticket');
       alert('Failed to submit ticket. Please try again.');
     } finally {
       setSubmitting(false);

@@ -4,6 +4,7 @@ import { useAuth } from '../App';
 import { useTheme } from '../contexts/ThemeContext';
 import { db } from '../src/firebase';
 import { collection, query, where, orderBy, getDocs, doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { errorService } from '../services/errorService';
 
 interface Notification {
   id: string;
@@ -12,7 +13,7 @@ interface Notification {
   message: string;
   read: boolean;
   deleted?: boolean;
-  createdAt: any;
+  createdAt: Timestamp | Date;
   actionUrl?: string;
   fromUser?: string;
   fromUserName?: string;
@@ -45,10 +46,9 @@ const Notifications: React.FC = () => {
       );
       const snapshot = await getDocs(q);
       const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Notification[];
-      console.log('Loaded notifications:', notifs);
       setNotifications(notifs);
     } catch (err) {
-      console.error('Error loading notifications:', err);
+      errorService.handleError(err, 'Error loading notifications');
       // If orderBy fails due to missing index, try without orderBy
       try {
         const q = query(
@@ -64,10 +64,9 @@ const Notifications: React.FC = () => {
           const bTime = b.createdAt?.seconds || 0;
           return bTime - aTime;
         });
-        console.log('Loaded notifications (fallback):', notifs);
         setNotifications(notifs);
       } catch (fallbackErr) {
-        console.error('Fallback error:', fallbackErr);
+        errorService.handleError(fallbackErr, 'Fallback error');
         // Final fallback - load all and filter manually
         try {
           const q = query(
@@ -82,10 +81,9 @@ const Notifications: React.FC = () => {
             const bTime = b.createdAt?.seconds || 0;
             return bTime - aTime;
           });
-          console.log('Loaded notifications (final fallback):', notifs);
           setNotifications(notifs);
         } catch (finalErr) {
-          console.error('Final fallback error:', finalErr);
+          errorService.handleError(finalErr, 'Final fallback error');
         }
       }
     } finally {
@@ -100,7 +98,7 @@ const Notifications: React.FC = () => {
       // Trigger a storage event to update notification count in Layout
       window.dispatchEvent(new Event('notificationRead'));
     } catch (err) {
-      console.error('Error marking as read:', err);
+      errorService.handleError(err, 'Error marking as read');
     }
   };
 
@@ -111,7 +109,7 @@ const Notifications: React.FC = () => {
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
       window.dispatchEvent(new Event('notificationRead'));
     } catch (err) {
-      console.error('Error marking all as read:', err);
+      errorService.handleError(err, 'Error marking all as read');
     }
   };
 
@@ -121,7 +119,7 @@ const Notifications: React.FC = () => {
       setNotifications(prev => prev.filter(n => n.id !== notifId));
       window.dispatchEvent(new Event('notificationRead'));
     } catch (err) {
-      console.error('Error deleting notification:', err);
+      errorService.handleError(err, 'Error deleting notification');
     }
   };
 
@@ -131,7 +129,7 @@ const Notifications: React.FC = () => {
       setNotifications([]);
       window.dispatchEvent(new Event('notificationRead'));
     } catch (err) {
-      console.error('Error clearing notifications:', err);
+      errorService.handleError(err, 'Error clearing notifications');
     }
   };
 

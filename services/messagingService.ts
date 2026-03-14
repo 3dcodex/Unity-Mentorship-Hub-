@@ -1,11 +1,11 @@
-import { collection, doc, setDoc, getDoc, getDocs, query, where, orderBy, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, setDoc, getDoc, getDocs, query, where, orderBy, addDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../src/firebase';
 
 export interface Connection {
   id: string;
   connectedUserId: string;
   status: 'pending' | 'accepted' | 'blocked';
-  createdAt: any;
+  createdAt: Timestamp | Date;
   sessionId?: string;
 }
 
@@ -13,7 +13,7 @@ export interface Conversation {
   id: string;
   participants: string[];
   lastMessage: string;
-  lastUpdated: any;
+  lastUpdated: Timestamp | Date;
   sessionId?: string;
   isActive: boolean;
 }
@@ -22,7 +22,7 @@ export interface Message {
   id: string;
   senderId: string;
   text: string;
-  createdAt: any;
+  createdAt: Timestamp | Date;
   isRead: boolean;
   type: 'text' | 'file' | 'system';
 }

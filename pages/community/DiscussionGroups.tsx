@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../App';
 import { getAllGroups, createGroup, joinGroup, leaveGroup, getUserGroups, type Group } from '../../services/groupService';
+import { errorService } from '../../services/errorService';
 
 const DiscussionGroups: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const userRole = localStorage.getItem('unity_user_role') || 'Domestic Student';
+  const userRole = localStorage.getItem('unity_user_role') || 'Student';
   const [groups, setGroups] = useState<Group[]>([]);
   const [myGroups, setMyGroups] = useState<Group[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -40,7 +41,7 @@ const DiscussionGroups: React.FC = () => {
       setGroups(allData);
       setMyGroups(myData);
     } catch (error) {
-      console.error('Error loading groups:', error);
+      errorService.handleError(error, 'Error loading groups');
     } finally {
       setLoading(false);
     }
@@ -69,7 +70,7 @@ const DiscussionGroups: React.FC = () => {
       setFormData({ name: '', description: '', category: 'Cultural', visibility: 'Public', rules: '', tags: '', location: '' });
       loadGroups();
     } catch (error) {
-      console.error('Error creating group:', error);
+      errorService.handleError(error, 'Error creating group');
     }
   };
 
@@ -79,7 +80,7 @@ const DiscussionGroups: React.FC = () => {
       await joinGroup(groupId, user.uid);
       loadGroups();
     } catch (error) {
-      console.error('Error joining group:', error);
+      errorService.handleError(error, 'Error joining group');
     }
   };
 
@@ -89,7 +90,7 @@ const DiscussionGroups: React.FC = () => {
       await leaveGroup(groupId, user.uid);
       loadGroups();
     } catch (error) {
-      console.error('Error leaving group:', error);
+      errorService.handleError(error, 'Error leaving group');
     }
   };
 

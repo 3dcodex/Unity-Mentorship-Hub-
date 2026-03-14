@@ -2,7 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../App';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { db } from '../src/firebase';
-import { collection, getDocs, query, where, orderBy, limit, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, limit, addDoc, Timestamp, doc, setDoc, getDoc } from 'firebase/firestore';
+import { errorService } from '../services/errorService';
+import { stripeService } from '../services/stripeService';
+import { SubscriptionTier } from '../types';
+import Toast from '../components/Toast';
+
+const SELECTED_MENTOR_STORAGE_KEY = 'unity_selected_mentor_id';
 
 interface Transaction {
   id: string;
@@ -19,12 +25,28 @@ const Billing: React.FC = () => {
   const location = useLocation();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedPlan, setSelectedPlan] = useState<'free' | 'basic' | 'premium'>('free');
+  const [planLoading, setPlanLoading] = useState<SubscriptionTier | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<SubscriptionTier>('starter');
+  const [toastMessage, setToastMessage] = useState('');
   
   // Check if coming from mentorship booking
   const searchParams = new URLSearchParams(location.search);
-  const mentorId = searchParams.get('mentor');
+  const mentorIdFromQuery = searchParams.get('mentor');
+  const mentorId = mentorIdFromQuery || sessionStorage.getItem(SELECTED_MENTOR_STORAGE_KEY);
   const sessionCost = searchParams.get('cost') || '25';
+  const billingStatus = searchParams.get('status');
+
+  useEffect(() => {
+    if (mentorIdFromQuery) {
+      sessionStorage.setItem(SELECTED_MENTOR_STORAGE_KEY, mentorIdFromQuery);
+      return;
+    }
+
+    if (billingStatus === 'success' || billingStatus === 'cancelled') {
+      return;
+    }
+  }, [billingStatus, mentorIdFromQuery]);
 
   useEffect(() => {
     if (user) {
@@ -33,17 +55,47 @@ const Billing: React.FC = () => {
     }
   }, [user]);
 
+  useEffect(() => {
+    if (billingStatus === 'success') {
+      setToastMessage('Subscription checkout completed. Your plan will be activated shortly.');
+      loadUserPlan();
+      loadTransactions();
+      navigate('/billing', { replace: true });
+    }
+
+    if (billingStatus === 'cancelled') {
+      setToastMessage('Checkout was cancelled. You can try again any time.');
+      navigate('/billing', { replace: true });
+    }
+  }, [billingStatus, navigate]);
+
+  const normalizePlan = (rawPlan: unknown): SubscriptionTier => {
+    switch (rawPlan) {
+      case 'starter':
+      case 'free':
+        return 'starter';
+      case 'job-ready':
+      case 'basic':
+        return 'job-ready';
+      case 'career-accelerator':
+      case 'premium':
+        return 'career-accelerator';
+      default:
+        return 'starter';
+    }
+  };
+
   const loadUserPlan = async () => {
     if (!user) return;
     try {
-      const { doc: firestoreDoc, getDoc } = await import('firebase/firestore');
-      const userDoc = await getDoc(firestoreDoc(db, 'users', user.uid));
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
       if (userDoc.exists()) {
-        const plan = userDoc.data()?.subscriptionPlan || 'free';
+        const userData = userDoc.data();
+        const plan = normalizePlan(userData?.subscriptionTier || userData?.subscriptionPlan);
         setSelectedPlan(plan);
       }
     } catch (err) {
-      console.error('Error loading user plan:', err);
+      errorService.handleError(err, 'Error loading user plan');
     }
   };
 
@@ -51,17 +103,48 @@ const Billing: React.FC = () => {
     if (!user) return;
     setLoading(true);
     try {
-      const q = query(
+      // Primary source: payments collection from billing system
+      const paymentsQuery = query(
+        collection(db, 'payments'),
+        where('userId', '==', user.uid),
+        orderBy('createdAt', 'desc'),
+        limit(10)
+      );
+      const paymentsSnapshot = await getDocs(paymentsQuery);
+
+      if (!paymentsSnapshot.empty) {
+        const paymentTxns: Transaction[] = paymentsSnapshot.docs.map(paymentDoc => {
+          const payment = paymentDoc.data();
+          return {
+            id: paymentDoc.id,
+            date: payment.createdAt || null,
+            description: `${payment.tier || 'Subscription'} payment`,
+            amount: payment.totalAmount || 0,
+            status:
+              payment.status === 'succeeded'
+                ? 'paid'
+                : payment.status === 'pending'
+                ? 'pending'
+                : 'failed',
+            type: 'subscription',
+          };
+        });
+        setTransactions(paymentTxns);
+        return;
+      }
+
+      // Fallback: legacy transactions collection
+      const transactionsQuery = query(
         collection(db, 'transactions'),
         where('userId', '==', user.uid),
         orderBy('date', 'desc'),
         limit(10)
       );
-      const snapshot = await getDocs(q);
-      const txns = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[];
+      const transactionsSnapshot = await getDocs(transactionsQuery);
+      const txns = transactionsSnapshot.docs.map(txnDoc => ({ id: txnDoc.id, ...txnDoc.data() })) as Transaction[];
       setTransactions(txns);
     } catch (err) {
-      console.error('Error loading transactions:', err);
+      errorService.handleError(err, 'Error loading transactions');
     } finally {
       setLoading(false);
     }
@@ -90,37 +173,90 @@ const Billing: React.FC = () => {
         actionUrl: '/billing',
       });
       
-      alert('Payment successful!');
+      setToastMessage('Payment successful.');
       if (mentorId) {
         navigate(`/quick-chat?user=${mentorId}`);
       } else {
         loadTransactions();
       }
     } catch (err) {
-      console.error('Payment error:', err);
-      alert('Payment failed. Please try again.');
+      errorService.handleError(err, 'Payment error');
+      setToastMessage('Payment failed. Please try again.');
     }
   };
 
-  const handleSelectPlan = async (planId: 'free' | 'basic' | 'premium') => {
+  const handleSelectPlan = async (planId: SubscriptionTier) => {
     if (!user) return;
+
     try {
-      const { doc: firestoreDoc, setDoc } = await import('firebase/firestore');
-      await setDoc(firestoreDoc(db, 'users', user.uid), {
-        subscriptionPlan: planId,
-        subscriptionUpdatedAt: Timestamp.now(),
-      }, { merge: true });
-      setSelectedPlan(planId);
-      alert(`Successfully subscribed to ${planId.charAt(0).toUpperCase() + planId.slice(1)} plan!`);
+      setPlanLoading(planId);
+
+      if (planId === 'starter') {
+        await setDoc(
+          doc(db, 'users', user.uid),
+          {
+            subscriptionTier: 'starter',
+            subscriptionStatus: 'active',
+            subscriptionUpdatedAt: Timestamp.now(),
+          },
+          { merge: true }
+        );
+
+        setSelectedPlan('starter');
+        setToastMessage('You are now on the STARTER plan.');
+        return;
+      }
+
+      if (!mentorId) {
+        setToastMessage('Select a mentor first so your subscription can be linked to the right mentor.');
+        navigate('/mentorship/match');
+        return;
+      }
+
+      const checkout = await stripeService.createCheckoutSession({
+        tier: planId,
+        mentorId,
+      });
+
+      if (!checkout.checkoutUrl) {
+        throw new Error('Checkout URL was not returned.');
+      }
+
+      window.location.href = checkout.checkoutUrl;
     } catch (err) {
-      console.error('Plan selection error:', err);
-      alert('Failed to update plan. Please try again.');
+      errorService.handleError(err, 'Plan selection error');
+      setToastMessage('Unable to start checkout. Please try again.');
+    } finally {
+      setPlanLoading(null);
     }
+  };
+
+  const handleManageSubscription = async () => {
+    if (!user) return;
+
+    try {
+      setPortalLoading(true);
+      const portal = await stripeService.createBillingPortalSession();
+      window.location.href = portal.url;
+    } catch (err) {
+      errorService.handleError(err, 'Billing portal error');
+      setToastMessage('Unable to open billing portal right now.');
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
+  const formatTransactionDate = (date: Timestamp | Date | null): string => {
+    if (!date) return 'N/A';
+    if (date instanceof Date) return date.toLocaleDateString();
+    if (date instanceof Timestamp) return date.toDate().toLocaleDateString();
+    return 'N/A';
   };
 
   const plans: Array<{
-    id: 'free' | 'basic' | 'premium';
+    id: SubscriptionTier;
     name: string;
+    subtitle: string;
     price: number;
     period: string;
     features: string[];
@@ -128,29 +264,52 @@ const Billing: React.FC = () => {
     popular: boolean;
   }> = [
     {
-      id: 'free',
-      name: 'Free',
+      id: 'starter',
+      name: 'STARTER',
+      subtitle: 'Career Clarity Session',
       price: 0,
-      period: 'forever',
-      features: ['1 mentor session/month', 'Community access', 'Basic resources', 'Email support'],
+      period: 'month',
+      features: [
+        '1 Career Clarity Session',
+        'Industry pathway discussion',
+        'Skills gap identification',
+        'Job-readiness assessment',
+        'Mentor matching guidance',
+      ],
       color: 'from-gray-500 to-gray-600',
       popular: false,
     },
     {
-      id: 'basic',
-      name: 'Basic',
-      price: 29,
+      id: 'job-ready',
+      name: 'JOB-READY',
+      subtitle: 'Structured Employment Preparation',
+      price: 45,
       period: 'month',
-      features: ['5 mentor sessions/month', 'Priority matching', 'All resources', 'Chat support', 'Resume reviews'],
+      features: [
+        'Biweekly 1-on-1 Mentorship Sessions (2/month)',
+        'CV & LinkedIn optimization',
+        'Target job strategy planning',
+        'Interview preparation',
+        'Application review and feedback',
+        'Monthly networking event access',
+      ],
       color: 'from-blue-500 to-indigo-600',
       popular: true,
     },
     {
-      id: 'premium',
-      name: 'Premium',
-      price: 79,
+      id: 'career-accelerator',
+      name: 'CAREER ACCELERATOR',
+      subtitle: 'Fast-Track to Employment',
+      price: 95,
       period: 'month',
-      features: ['Unlimited sessions', 'Dedicated mentor', 'Career coaching', '24/7 support', 'Mock interviews', 'Job referrals'],
+      features: [
+        'Everything in Job-Ready',
+        'Weekly mentorship sessions (4/month)',
+        'Personalized career strategy plan',
+        'Advanced CV and portfolio review',
+        'Intensive mock interviews',
+        'Priority mentor access',
+      ],
       color: 'from-purple-500 to-pink-600',
       popular: false,
     },
@@ -158,6 +317,7 @@ const Billing: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 py-8 px-4">
+      {toastMessage && <Toast message={toastMessage} onClose={() => setToastMessage('')} />}
       <div className="max-w-7xl mx-auto space-y-8">
         {/* Header */}
         <div className="text-center space-y-3">
@@ -169,6 +329,20 @@ const Billing: React.FC = () => {
           <p className="text-gray-600 dark:text-gray-400 font-medium max-w-2xl mx-auto">
             {mentorId ? 'Complete your payment to book this mentorship session' : 'Choose the perfect plan for your mentorship journey'}
           </p>
+          {!mentorId && (
+            <p className="text-sm font-medium text-amber-600 dark:text-amber-400 max-w-2xl mx-auto">
+              Paid plans require a selected mentor so the subscription can be attached correctly.
+            </p>
+          )}
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <button
+              onClick={handleManageSubscription}
+              disabled={portalLoading}
+              className="px-5 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 text-sm font-black text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-60 transition"
+            >
+              {portalLoading ? 'Opening Portal...' : 'Manage Subscription'}
+            </button>
+          </div>
         </div>
 
         {/* Session Payment (if coming from booking) */}
@@ -235,6 +409,7 @@ const Billing: React.FC = () => {
               </div>
 
               <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">{plan.name}</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-3 font-medium">{plan.subtitle}</p>
               <div className="flex items-baseline gap-2 mb-6">
                 <span className="text-5xl font-black text-gray-900 dark:text-white">${plan.price}</span>
                 <span className="text-gray-500 dark:text-gray-400 font-bold">/{plan.period}</span>
@@ -251,13 +426,20 @@ const Billing: React.FC = () => {
 
               <button
                 onClick={() => handleSelectPlan(plan.id)}
+                disabled={planLoading !== null}
                 className={`w-full py-3 rounded-xl font-black transition-all ${
                   selectedPlan === plan.id
                     ? `bg-gradient-to-r ${plan.color} text-white shadow-lg`
                     : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
-                }`}
+                } disabled:opacity-60`}
               >
-                {selectedPlan === plan.id ? 'Current Plan' : 'Select Plan'}
+                {planLoading === plan.id
+                  ? 'Processing...'
+                  : selectedPlan === plan.id
+                  ? 'Current Plan'
+                  : plan.id === 'starter'
+                  ? 'Switch to Starter'
+                  : 'Checkout'}
               </button>
             </div>
           ))}
@@ -303,13 +485,7 @@ const Billing: React.FC = () => {
                   {transactions.map((txn) => (
                     <tr key={txn.id} className="border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
                       <td className="py-4 px-4 text-sm font-medium text-gray-600 dark:text-gray-400">
-                        {txn.date ? (
-                          txn.date instanceof Date 
-                            ? txn.date.toLocaleDateString()
-                            : typeof (txn.date as any).toDate === 'function'
-                            ? (txn.date as any).toDate().toLocaleDateString()
-                            : 'N/A'
-                        ) : 'N/A'}
+                        {formatTransactionDate(txn.date)}
                       </td>
                       <td className="py-4 px-4 text-sm font-bold text-gray-900 dark:text-white">{txn.description}</td>
                       <td className="py-4 px-4 text-sm font-black text-gray-900 dark:text-white">${txn.amount.toFixed(2)}</td>

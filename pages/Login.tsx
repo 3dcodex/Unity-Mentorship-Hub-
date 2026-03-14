@@ -1,9 +1,11 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import ReCAPTCHA from 'react-google-recaptcha';
 import { signInWithEmailAndPassword, sendPasswordResetEmail, signInWithPopup, GoogleAuthProvider, OAuthProvider } from 'firebase/auth';
 import { auth } from '../src/firebase';
 import { useAuth } from '../App';
+import { errorService } from '../services/errorService';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -19,6 +21,8 @@ const Login: React.FC = () => {
   const [resetMessage, setResetMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [resetAttempts, setResetAttempts] = useState(0);
   const [lastResetTime, setLastResetTime] = useState<number>(0);
+  const recaptchaRef = useRef<ReCAPTCHA>(null);
+  const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined;
 
   // If already signed in, go to dashboard
   React.useEffect(() => {
@@ -46,8 +50,18 @@ const Login: React.FC = () => {
       
       if (userDoc.exists()) {
         const userData = userDoc.data();
+
+        // Block suspended accounts
+        if (userData.status === 'suspended') {
+          await import('firebase/auth').then(({ signOut }) => signOut(auth));
+          const reason = userData.suspendReason || 'Policy violation';
+          setError(`Your account has been suspended. Reason: ${reason}. Please contact support.`);
+          setIsLoading(false);
+          return;
+        }
+
         localStorage.setItem('unity_user_name', userData.displayName || user.email || 'User');
-        localStorage.setItem('unity_user_role', userData.role || 'Domestic Student');
+        localStorage.setItem('unity_user_role', userData.role || 'Student');
       } else {
         localStorage.setItem('unity_user_name', user.email || 'User');
       }
@@ -57,7 +71,7 @@ const Login: React.FC = () => {
       // Keep loading state and use window.location for clean navigation
       window.location.href = '/dashboard';
     } catch (err: any) {
-      console.error('Login error:', err);
+      errorService.handleError(err, 'Login error');
       setError(err?.message ?? 'Sign-in failed');
       setIsLoading(false);
     }
@@ -84,20 +98,30 @@ const Login: React.FC = () => {
         await setDoc(doc(db, 'users', user.uid), {
           displayName: user.displayName || user.email?.split('@')[0] || 'User',
           email: user.email,
-          role: 'Domestic Student',
+          role: 'Student',
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
       }
       
-      const userData = userDoc.exists() ? userDoc.data() : { displayName: user.displayName, role: 'Domestic Student' };
+      const userData = userDoc.exists() ? userDoc.data() : { displayName: user.displayName, role: 'Student' };
+
+      // Block suspended accounts for OAuth too
+      if (userDoc.exists() && userData.status === 'suspended') {
+        await import('firebase/auth').then(({ signOut }) => signOut(auth));
+        const reason = userData.suspendReason || 'Policy violation';
+        setError(`Your account has been suspended. Reason: ${reason}. Please contact support.`);
+        setIsLoading(false);
+        return;
+      }
+
       localStorage.setItem('unity_user_name', userData.displayName || user.email || 'User');
-      localStorage.setItem('unity_user_role', userData.role || 'Domestic Student');
+      localStorage.setItem('unity_user_role', userData.role || 'Student');
       localStorage.setItem('unity_onboarding_complete', 'true');
       
       window.location.href = '/dashboard';
     } catch (err: any) {
-      console.error('OAuth login error:', err);
+      errorService.handleError(err, 'OAuth login error');
       setError(err?.message ?? `${provider} sign-in failed`);
       setIsLoading(false);
     }
@@ -137,6 +161,17 @@ const Login: React.FC = () => {
     
     setResetLoading(true);
     setResetMessage(null);
+
+    // reCAPTCHA verification (if configured)
+    if (RECAPTCHA_SITE_KEY && recaptchaRef.current) {
+      const token = await recaptchaRef.current.executeAsync();
+      recaptchaRef.current.reset();
+      if (!token) {
+        setResetMessage({ type: 'error', text: 'reCAPTCHA verification failed. Please try again.' });
+        setResetLoading(false);
+        return;
+      }
+    }
     
     try {
       await sendPasswordResetEmail(auth, resetEmail.trim());
@@ -153,7 +188,7 @@ const Login: React.FC = () => {
           success: true
         });
       } catch (logError) {
-        console.error('Failed to log reset attempt:', logError);
+        errorService.handleError(logError, 'Failed to log reset attempt');
       }
       
       setResetMessage({ 
@@ -170,7 +205,7 @@ const Login: React.FC = () => {
         setResetMessage(null);
       }, 6000);
     } catch (err: any) {
-      console.error('Password reset error:', err);
+      errorService.handleError(err, 'Password reset error');
       
       let errorMessage = 'Failed to send reset email. ';
       
@@ -199,7 +234,7 @@ const Login: React.FC = () => {
           success: false
         });
       } catch (logError) {
-        console.error('Failed to log error:', logError);
+        errorService.handleError(logError, 'Failed to log error');
       }
       
       setResetAttempts(prev => prev + 1);
@@ -251,7 +286,7 @@ const Login: React.FC = () => {
             </div>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-5">
+          <form onSubmit={handleLogin} className="space-y-5" aria-label="Sign in form">
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="text-xs font-bold text-gray-600 dark:text-gray-400">Email Address</label>
@@ -260,6 +295,8 @@ const Login: React.FC = () => {
                   required 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  aria-label="Email address"
+                  autoComplete="email"
                   className="w-full bg-gray-50 dark:bg-slate-800/50 border-2 border-gray-200 dark:border-slate-700 rounded-xl p-4 text-sm font-medium focus:border-blue-500 dark:focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all dark:text-white" 
                   placeholder="alex@university.edu" 
                 />
@@ -281,6 +318,8 @@ const Login: React.FC = () => {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    aria-label="Password"
+                    autoComplete="current-password"
                     className="w-full bg-gray-50 dark:bg-slate-800/50 border-2 border-gray-200 dark:border-slate-700 rounded-xl p-4 text-sm font-medium focus:border-blue-500 dark:focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all pr-12 dark:text-white"
                     placeholder="••••••••"
                   />
@@ -288,6 +327,7 @@ const Login: React.FC = () => {
                     type="button"
                     className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition"
                     onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                     tabIndex={-1}
                   >
                     <span className="material-symbols-outlined text-xl">{showPassword ? "visibility_off" : "visibility"}</span>
@@ -413,6 +453,15 @@ const Login: React.FC = () => {
                 'Send Reset Link'
               )}
             </button>
+
+            {RECAPTCHA_SITE_KEY && (
+              <ReCAPTCHA
+                ref={recaptchaRef}
+                sitekey={RECAPTCHA_SITE_KEY}
+                size="invisible"
+                badge="bottomright"
+              />
+            )}
           </div>
         </div>
       )}

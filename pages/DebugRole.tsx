@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../App';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../src/firebase';
+import { errorService } from '../services/errorService';
 import { checkAdminAccess } from '../services/authService';
 
 const DebugRole: React.FC = () => {
@@ -31,7 +32,7 @@ const DebugRole: React.FC = () => {
         const access = await checkAdminAccess(user);
         setHasAdminAccess(access);
       } catch (error) {
-        console.error('Error loading debug info:', error);
+        errorService.handleError(error, 'Error loading debug info');
       } finally {
         setLoading(false);
       }

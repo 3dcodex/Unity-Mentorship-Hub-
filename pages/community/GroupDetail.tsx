@@ -4,12 +4,13 @@ import { useAuth } from '../../App';
 import { db } from '../../src/firebase';
 import { doc, getDoc, collection, query, orderBy, onSnapshot, getDocs } from 'firebase/firestore';
 import { Group, GroupPost, createGroupPost, deletePost, removeMember, addModerator, removeModerator, updateGroup } from '../../services/groupService';
+import { errorService } from '../../services/errorService';
 
 const GroupDetail: React.FC = () => {
   const { groupId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const userRole = localStorage.getItem('unity_user_role') || 'Domestic Student';
+  const userRole = localStorage.getItem('unity_user_role') || 'Student';
   const [group, setGroup] = useState<Group | null>(null);
   const [posts, setPosts] = useState<GroupPost[]>([]);
   const [activeTab, setActiveTab] = useState<'discussion' | 'about' | 'members'>('discussion');
@@ -38,7 +39,7 @@ const GroupDetail: React.FC = () => {
         setEditForm({ name: groupData.name, description: groupData.description, rules: groupData.rules || '' });
       }
     } catch (err) {
-      console.error('Error loading group:', err);
+      errorService.handleError(err, 'Error loading group');
     } finally {
       setLoading(false);
     }
@@ -81,7 +82,7 @@ const GroupDetail: React.FC = () => {
       setPostText('');
       setIsAnonymous(false);
     } catch (err) {
-      console.error('Error creating post:', err);
+      errorService.handleError(err, 'Error creating post');
     }
   };
 
@@ -90,7 +91,7 @@ const GroupDetail: React.FC = () => {
     try {
       await deletePost(groupId, postId);
     } catch (err) {
-      console.error('Error deleting post:', err);
+      errorService.handleError(err, 'Error deleting post');
     }
   };
 
@@ -101,7 +102,7 @@ const GroupDetail: React.FC = () => {
       loadGroup();
       loadMembers();
     } catch (err) {
-      console.error('Error removing member:', err);
+      errorService.handleError(err, 'Error removing member');
       alert('Failed to remove member');
     }
   };
@@ -117,7 +118,7 @@ const GroupDetail: React.FC = () => {
       loadGroup();
       loadMembers();
     } catch (err) {
-      console.error('Error toggling moderator:', err);
+      errorService.handleError(err, 'Error toggling moderator');
     }
   };
 
@@ -128,7 +129,7 @@ const GroupDetail: React.FC = () => {
       setShowEditModal(false);
       loadGroup();
     } catch (err) {
-      console.error('Error updating group:', err);
+      errorService.handleError(err, 'Error updating group');
     }
   };
 

@@ -2,6 +2,7 @@ import { createUserProfile } from '../services/userService';
 import { Role } from '../types';
 import PublicHeader from '../components/PublicHeader';
 import Footer from '../components/Footer';
+import { errorService } from '../services/errorService';
 
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
@@ -122,7 +123,7 @@ const Signup: React.FC = () => {
       // All users go to dashboard
       window.location.href = '/dashboard';
     } catch (err: any) {
-      console.error('Signup error:', err);
+      errorService.handleError(err, 'Signup error');
       setError(err?.message ?? 'Sign-up failed');
       setIsLoading(false);
     }

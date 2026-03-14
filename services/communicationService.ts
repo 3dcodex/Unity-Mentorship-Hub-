@@ -1,5 +1,6 @@
 import { db } from '../src/firebase';
-import { collection, addDoc, getDocs, query, where, Timestamp, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, where, Timestamp } from 'firebase/firestore';
+import { errorService } from './errorService';
 
 export interface EmailTemplate {
   id: string;
@@ -52,7 +53,7 @@ export const sendEmailToUser = async (
 
     return true;
   } catch (error) {
-    console.error('Error sending email:', error);
+    errorService.handleError(error, 'sendEmailToUser');
     return false;
   }
 };
@@ -93,7 +94,7 @@ export const sendNotificationToUser = async (
     });
     return true;
   } catch (error) {
-    console.error('Error sending notification:', error);
+    errorService.handleError(error, 'sendNotificationToUser');
     return false;
   }
 };
@@ -105,10 +106,13 @@ export const broadcastNotification = async (
   userFilter?: { role?: string; status?: string }
 ): Promise<number> => {
   try {
-    let usersQuery = collection(db, 'users');
+    const usersCollection = collection(db, 'users');
+    let usersQuery;
     
     if (userFilter?.role) {
-      usersQuery = query(collection(db, 'users'), where('role', '==', userFilter.role)) as any;
+      usersQuery = query(usersCollection, where('role', '==', userFilter.role));
+    } else {
+      usersQuery = usersCollection;
     }
     
     const usersSnap = await getDocs(usersQuery);
@@ -136,7 +140,7 @@ export const broadcastNotification = async (
 
     return sentCount;
   } catch (error) {
-    console.error('Error broadcasting notification:', error);
+    errorService.handleError(error, 'Error broadcasting notification');
     return 0;
   }
 };
@@ -146,7 +150,7 @@ export const getEmailTemplates = async (): Promise<EmailTemplate[]> => {
     const templatesSnap = await getDocs(collection(db, 'emailTemplates'));
     return templatesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as EmailTemplate));
   } catch (error) {
-    console.error('Error getting email templates:', error);
+    errorService.handleError(error, 'Error getting email templates');
     return [];
   }
 };
@@ -167,7 +171,7 @@ export const createEmailTemplate = async (
     });
     return true;
   } catch (error) {
-    console.error('Error creating email template:', error);
+    errorService.handleError(error, 'Error creating email template');
     return false;
   }
 };
@@ -179,7 +183,7 @@ export const getEmailLogs = async (limit: number = 100): Promise<EmailLog[]> => 
       .map(doc => ({ id: doc.id, ...doc.data() } as EmailLog))
       .slice(0, limit);
   } catch (error) {
-    console.error('Error getting email logs:', error);
+    errorService.handleError(error, 'Error getting email logs');
     return [];
   }
 };

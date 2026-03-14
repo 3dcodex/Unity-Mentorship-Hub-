@@ -1,5 +1,6 @@
 import { db } from '../src/firebase';
 import { doc, getDoc, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { errorService } from './errorService';
 
 export interface UserProfile {
   uid: string;
@@ -100,7 +101,7 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
     }
     return null;
   } catch (error) {
-    console.error('Error getting user profile:', error);
+    errorService.handleError(error, 'Error getting user profile');
     return null;
   }
 };
@@ -114,7 +115,7 @@ export const updateUserProfile = async (uid: string, data: Partial<UserProfile>)
     });
     return true;
   } catch (error) {
-    console.error('Error updating user profile:', error);
+    errorService.handleError(error, 'Error updating user profile');
     return false;
   }
 };
@@ -130,7 +131,7 @@ export const createUserProfile = async (uid: string, data: Partial<UserProfile>)
     }, { merge: true });
     return true;
   } catch (error) {
-    console.error('Error creating user profile:', error);
+    errorService.handleError(error, 'Error creating user profile');
     return false;
   }
 };
@@ -144,7 +145,7 @@ export const updateProfilePhoto = async (uid: string, photoURL: string): Promise
     });
     return true;
   } catch (error) {
-    console.error('Error updating profile photo:', error);
+    errorService.handleError(error, 'Error updating profile photo');
     return false;
   }
 };
@@ -159,7 +160,7 @@ export const toggleMentorStatus = async (uid: string, isMentor: boolean, mentorD
     });
     return true;
   } catch (error) {
-    console.error('Error toggling mentor status:', error);
+    errorService.handleError(error, 'Error toggling mentor status');
     return false;
   }
 };

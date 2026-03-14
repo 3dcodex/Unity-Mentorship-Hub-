@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../src/firebase';
 import { useNavigate } from 'react-router-dom';
+import { errorService } from '../services/errorService';
 
 const INACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 minutes
 
@@ -17,7 +18,7 @@ export const useAutoLogout = () => {
       localStorage.removeItem('unity_user_role');
       navigate('/login');
     } catch (error) {
-      console.error('Auto-logout error:', error);
+      errorService.handleError(error, 'Auto-logout error');
     }
   };
 

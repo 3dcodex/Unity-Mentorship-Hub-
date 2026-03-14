@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../App';
 import { db } from '../src/firebase';
 import { doc, setDoc, Timestamp } from 'firebase/firestore';
+import { errorService } from '../services/errorService';
+import { FOCUS_AREA_LABELS } from '../utils/mentorMatching';
+import { CURRENT_MENTOR_APPLICATION_VERSION } from '../utils/mentorMatching';
 
 const BecomeMentor: React.FC = () => {
   const navigate = useNavigate();
@@ -16,12 +19,22 @@ const BecomeMentor: React.FC = () => {
     availability: '',
     maxMentees: 3,
     preferredTopics: '',
+    focusAreas: [] as string[],
     linkedIn: '',
     motivation: ''
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  const toggleFocusArea = (focusArea: string) => {
+    setFormData(current => ({
+      ...current,
+      focusAreas: current.focusAreas.includes(focusArea)
+        ? current.focusAreas.filter(item => item !== focusArea)
+        : [...current.focusAreas, focusArea],
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,24 +43,43 @@ const BecomeMentor: React.FC = () => {
     setIsSubmitting(true);
     try {
       await setDoc(doc(db, 'users', user.uid), {
-        isMentor: true,
+        isMentor: false,
         mentorExpertise: formData.expertise,
         mentorBio: formData.bio,
         mentorYearsExperience: formData.yearsExperience,
         mentorAvailability: formData.availability,
         mentorMaxMentees: formData.maxMentees,
         mentorPreferredTopics: formData.preferredTopics,
+        mentorTags: formData.focusAreas,
         mentorLinkedIn: formData.linkedIn,
         mentorMotivation: formData.motivation,
         mentorApplicationDate: Timestamp.now(),
+        mentorApplicationVersion: CURRENT_MENTOR_APPLICATION_VERSION,
         mentorStatus: 'pending',
         updatedAt: Timestamp.now()
       }, { merge: true });
+
+      // Create or update admin-review record so approvals appear in admin queue.
+      await setDoc(doc(db, 'mentorApplications', user.uid), {
+        userId: user.uid,
+        name: user.displayName || 'Unknown',
+        email: user.email || '',
+        expertise: formData.focusAreas.length > 0
+          ? formData.focusAreas
+          : formData.expertise.split(',').map(item => item.trim()).filter(Boolean),
+        credentials: formData.linkedIn || 'Credentials not provided',
+        experience: formData.bio || 'Experience not provided',
+        applicationVersion: CURRENT_MENTOR_APPLICATION_VERSION,
+        status: 'pending',
+        appliedAt: Timestamp.now(),
+        documents: [],
+        adminNotes: '',
+      }, { merge: true });
       
       setSuccess(true);
-      setTimeout(() => navigate('/profile-settings'), 2000);
+      setTimeout(() => navigate('/profile'), 2000);
     } catch (err) {
-      console.error('Error submitting mentor application:', err);
+      errorService.handleError(err, 'Error submitting mentor application');
     } finally {
       setIsSubmitting(false);
     }
@@ -165,6 +197,29 @@ const BecomeMentor: React.FC = () => {
             </div>
 
             <div className="md:col-span-2">
+              <label className="block font-black text-sm text-gray-700 dark:text-gray-300 mb-3">
+                Best-fit Focus Areas
+              </label>
+              <div className="flex flex-wrap gap-3">
+                {FOCUS_AREA_LABELS.map(focusArea => (
+                  <button
+                    key={focusArea}
+                    type="button"
+                    onClick={() => toggleFocusArea(focusArea)}
+                    className={`rounded-full border px-4 py-2 text-sm font-bold transition-all ${
+                      formData.focusAreas.includes(focusArea)
+                        ? 'border-green-600 bg-green-600 text-white'
+                        : 'border-gray-300 bg-white text-gray-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200'
+                    }`}
+                  >
+                    {focusArea}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">These structured tags power mentor matching and improve recommendation quality.</p>
+            </div>
+
+            <div className="md:col-span-2">
               <label className="block font-black text-sm text-gray-700 dark:text-gray-300 mb-2">
                 LinkedIn Profile
               </label>
@@ -194,7 +249,7 @@ const BecomeMentor: React.FC = () => {
           <div className="flex gap-4 pt-6 border-t border-gray-200 dark:border-slate-700">
             <button
               type="button"
-              onClick={() => navigate('/profile-settings')}
+              onClick={() => navigate('/profile')}
               className="flex-1 px-6 py-4 bg-gray-200 dark:bg-slate-700 text-gray-900 dark:text-white rounded-xl font-bold hover:scale-105 transition-all"
             >
               Cancel

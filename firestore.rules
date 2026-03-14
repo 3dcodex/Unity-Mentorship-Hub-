@@ -27,18 +27,6 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.auth.uid == userId;
       allow update: if isOwner(userId) || isAdmin();
       allow delete: if isSuperAdmin();
-      
-      // Validate user updates
-      function validUserUpdate() {
-        let allowedFields = ['firstName', 'lastName', 'name', 'displayName', 'email', 'phone', 'photoURL', 
-                             'bio', 'location', 'linkedin', 'github', 'website', 'school', 'major', 'year', 
-                             'currentYear', 'company', 'companyName', 'jobTitle', 'isMentor', 'mentorStatus', 
-                             'mentorExpertise', 'mentorBio', 'availability', 'campusInvolvement', 'languagesSpoken', 
-                             'notifyCampusEvents', 'notifyMentorshipRequests', 'notifyCommunityUpdates', 
-                             'resumeAutoSave', 'darkMode', 'skills', 'certifications', 'achievements', 'interests',
-                             'updatedAt', 'lastActive', 'isDeleted', 'deletedAt', 'role'];
-        return request.resource.data.keys().hasAll(['updatedAt']);
-      }
     }
     
     // Bookings/Sessions
@@ -183,6 +171,27 @@ service cloud.firestore {
       allow update, delete: if false;
     }
     
+    // Public platform stats (readable without auth for landing page)
+    match /publicStats/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // WebRTC call signaling
+    match /calls/{callId} {
+      allow read: if isAuthenticated() && (resource.data.callerId == request.auth.uid || resource.data.calleeId == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.callerId == request.auth.uid;
+      allow update: if isAuthenticated() && (resource.data.callerId == request.auth.uid || resource.data.calleeId == request.auth.uid);
+      allow delete: if isAuthenticated() && (resource.data.callerId == request.auth.uid || resource.data.calleeId == request.auth.uid);
+
+      match /callerCandidates/{candidateId} {
+        allow read, create: if isAuthenticated();
+      }
+      match /calleeCandidates/{candidateId} {
+        allow read, create: if isAuthenticated();
+      }
+    }
+
     // Default deny
     match /{document=**} {
       allow read, write: if false;

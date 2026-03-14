@@ -10,6 +10,17 @@ export default defineConfig(({ mode }) => {
         host: '0.0.0.0',
       },
       plugins: [react()],
+      test: {
+        globals: true,
+        environment: 'jsdom',
+        setupFiles: ['./tests/setup.ts'],
+        include: ['tests/**/*.{test,spec}.{ts,tsx}'],
+        coverage: {
+          provider: 'v8',
+          reporter: ['text', 'json', 'html'],
+          include: ['pages/**', 'components/**', 'utils/**', 'services/**'],
+        },
+      },
       build: {
         chunkSizeWarningLimit: 1000,
         rollupOptions: {

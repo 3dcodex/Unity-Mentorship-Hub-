@@ -1,3 +1,5 @@
+import { Timestamp } from 'firebase/firestore';
+
 export const formatRole = (role: string): string => {
   if (!role) return 'Unknown';
   return role
@@ -6,10 +8,10 @@ export const formatRole = (role: string): string => {
     .join(' ');
 };
 
-export const formatDate = (date: any): string => {
+export const formatDate = (date: Timestamp | Date | string | null | undefined): string => {
   if (!date) return 'N/A';
   try {
-    const d = date.toDate ? date.toDate() : new Date(date);
+    const d = date instanceof Timestamp ? date.toDate() : new Date(date);
     return d.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -20,10 +22,10 @@ export const formatDate = (date: any): string => {
   }
 };
 
-export const formatDateTime = (date: any): string => {
+export const formatDateTime = (date: Timestamp | Date | string | null | undefined): string => {
   if (!date) return 'N/A';
   try {
-    const d = date.toDate ? date.toDate() : new Date(date);
+    const d = date instanceof Timestamp ? date.toDate() : new Date(date);
     return d.toLocaleString('en-US', {
       year: 'numeric',
       month: 'short',

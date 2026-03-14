@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { db } from '../src/firebase';
 import { useAuth } from '../App';
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
+import { errorService } from '../services/errorService';
 
 interface SearchResult {
   id: string;
@@ -74,7 +75,7 @@ const Search: React.FC = () => {
             }
           });
         } catch (err) {
-          console.error('Error searching mentors:', err);
+          errorService.handleError(err, 'Error searching mentors');
         }
       }
 
@@ -136,7 +137,7 @@ const Search: React.FC = () => {
       localStorage.setItem('unity_recent_searches', JSON.stringify(updated));
 
     } catch (err) {
-      console.error('Error performing search:', err);
+      errorService.handleError(err, 'Error performing search');
     } finally {
       setLoading(false);
     }

@@ -1,15 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signOut, updatePassword, updateEmail, deleteUser, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
-import { auth, db, storage } from '../src/firebase';
+import { auth, db } from '../src/firebase';
 import { doc, getDoc, updateDoc, Timestamp, setDoc, writeBatch, onSnapshot } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../App';
 import { Role } from '../types';
+import { errorService } from '../services/errorService';
+import { FOCUS_AREA_LABELS } from '../utils/mentorMatching';
+import { CURRENT_MENTOR_APPLICATION_VERSION } from '../utils/mentorMatching';
+import { useTheme } from '../contexts/ThemeContext';
 
 const ProfileSettings: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { setIsDark } = useTheme();
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   
   const [userRole, setUserRole] = useState<Role>('Student');
   const [activeTab, setActiveTab] = useState('account');
@@ -38,6 +44,7 @@ const ProfileSettings: React.FC = () => {
   // Mentor fields
   const [isMentor, setIsMentor] = useState(false);
   const [mentorStatus, setMentorStatus] = useState<'none' | 'pending' | 'approved'>('none');
+  const [mentorApplicationVersion, setMentorApplicationVersion] = useState<number>(0);
   const [mentorExpertise, setMentorExpertise] = useState('');
   const [mentorBio, setMentorBio] = useState('');
   const [availability, setAvailability] = useState('');
@@ -56,6 +63,9 @@ const ProfileSettings: React.FC = () => {
   const [skills, setSkills] = useState<string[]>([]);
   const [certifications, setCertifications] = useState<string[]>([]);
   const [achievements, setAchievements] = useState<string[]>([]);
+  const [workExperience, setWorkExperience] = useState('');
+  const [education, setEducation] = useState('');
+  const [twitter, setTwitter] = useState('');
   
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -68,7 +78,6 @@ const ProfileSettings: React.FC = () => {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showAdminBadge, setShowAdminBadge] = useState(false);
-  const [tabLoading, setTabLoading] = useState(false);
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
@@ -92,6 +101,7 @@ const ProfileSettings: React.FC = () => {
       if (docSnap.exists()) {
         const d = docSnap.data();
         setMentorStatus(d.mentorStatus || 'none');
+        setMentorApplicationVersion(d.mentorApplicationVersion || 0);
         setIsMentor(d.isMentor || false);
         
         // Update other fields that might change
@@ -109,6 +119,14 @@ const ProfileSettings: React.FC = () => {
   useEffect(() => {
     setShowAdminBadge(['admin', 'super_admin', 'moderator'].includes(userRole));
   }, [userRole]);
+
+  const toggleMentorTag = (tag: string) => {
+    setMentorTags(currentTags =>
+      currentTags.includes(tag)
+        ? currentTags.filter(currentTag => currentTag !== tag)
+        : [...currentTags, tag]
+    );
+  };
 
   const loadProfile = async () => {
     if (!user) return;
@@ -134,6 +152,7 @@ const ProfileSettings: React.FC = () => {
         setJobTitle(d.jobTitle || '');
         setIsMentor(d.isMentor || false);
         setMentorStatus(d.mentorStatus || 'none');
+        setMentorApplicationVersion(d.mentorApplicationVersion || 0);
         setMentorExpertise(d.mentorExpertise || '');
         setMentorBio(d.mentorBio || '');
         setAvailability(d.availability || '');
@@ -144,16 +163,46 @@ const ProfileSettings: React.FC = () => {
         setNotifyMentorshipRequests(d.notifyMentorshipRequests ?? true);
         setNotifyCommunityUpdates(d.notifyCommunityUpdates ?? true);
         setResumeAutoSave(d.resumeAutoSave || false);
-        setDarkMode(d.darkMode || false);
+        const savedDarkMode = d.darkMode || false;
+        setDarkMode(savedDarkMode);
+        setIsDark(savedDarkMode);
         setSkills(d.skills || []);
         setCertifications(d.certifications || []);
         setAchievements(d.achievements || []);
         setInterests(d.interests || []);
+        setWorkExperience(d.workExperience || '');
+        setEducation(d.education || '');
+        setTwitter(d.twitter || '');
       }
     } catch (err) {
-      console.error('Error loading profile:', err);
+      errorService.handleError(err, 'Error loading profile');
     }
   };
+
+  const performAutoSave = useCallback(async (fields: Partial<{
+    firstName: string; lastName: string; bio: string; location: string;
+  }>) => {
+    if (!user) return;
+    try {
+      setAutoSaveStatus('saving');
+      await setDoc(doc(db, 'users', user.uid), {
+        ...fields,
+        updatedAt: Timestamp.now(),
+      }, { merge: true });
+      setAutoSaveStatus('saved');
+      setTimeout(() => setAutoSaveStatus('idle'), 2500);
+    } catch {
+      setAutoSaveStatus('idle');
+    }
+  }, [user]);
+
+  const triggerAutoSave = useCallback((fields: Partial<{
+    firstName: string; lastName: string; bio: string; location: string;
+  }>) => {
+    if (!resumeAutoSave) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => performAutoSave(fields), 1500);
+  }, [resumeAutoSave, performAutoSave]);
 
   const handleSave = async () => {
     if (!user) return;
@@ -170,7 +219,7 @@ const ProfileSettings: React.FC = () => {
       const batch = writeBatch(db);
       const userRef = doc(db, 'users', user.uid);
       
-      const updateData: any = {
+      const updateData: Record<string, unknown> = {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         name: `${firstName} ${lastName}`.trim(),
@@ -187,7 +236,9 @@ const ProfileSettings: React.FC = () => {
 
       if (userRole === 'Student') {
         updateData.school = school.trim();
+        updateData.university = school.trim();
         updateData.major = major.trim();
+        updateData.programName = major.trim();
         updateData.year = year;
         updateData.currentYear = year;
       } else if (userRole === 'Professional') {
@@ -201,8 +252,8 @@ const ProfileSettings: React.FC = () => {
       
       setSuccess('Profile updated successfully!');
       setTimeout(() => setSuccess(''), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to save profile');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save profile');
     } finally {
       setIsLoading(false);
     }
@@ -242,8 +293,8 @@ const ProfileSettings: React.FC = () => {
       };
       
       reader.readAsDataURL(file);
-    } catch (err: any) {
-      console.error('Upload error:', err);
+    } catch (err) {
+      errorService.handleError(err, 'Photo upload error');
       setError('Failed to upload photo.');
       setIsLoading(false);
     }
@@ -276,8 +327,9 @@ const ProfileSettings: React.FC = () => {
       setNewPassword('');
       setConfirmPassword('');
       setTimeout(() => setSuccess(''), 3000);
-    } catch (err: any) {
-      setError(err.code === 'auth/wrong-password' ? 'Incorrect current password' : 'Failed to change password');
+    } catch (err) {
+      const errorCode = err && typeof err === 'object' && 'code' in err ? err.code : null;
+      setError(errorCode === 'auth/wrong-password' ? 'Incorrect current password' : 'Failed to change password');
     } finally {
       setIsLoading(false);
     }
@@ -311,10 +363,11 @@ const ProfileSettings: React.FC = () => {
       setCurrentPassword('');
       setNewEmail('');
       setTimeout(() => setSuccess(''), 3000);
-    } catch (err: any) {
-      if (err.code === 'auth/wrong-password') setError('Incorrect password');
-      else if (err.code === 'auth/email-already-in-use') setError('Email already in use');
-      else if (err.code === 'auth/requires-recent-login') setError('Please log out and log in again');
+    } catch (err) {
+      const errorCode = err && typeof err === 'object' && 'code' in err ? err.code : null;
+      if (errorCode === 'auth/wrong-password') setError('Incorrect password');
+      else if (errorCode === 'auth/email-already-in-use') setError('Email already in use');
+      else if (errorCode === 'auth/requires-recent-login') setError('Please log out and log in again');
       else setError('Failed to change email');
     } finally {
       setIsLoading(false);
@@ -341,8 +394,9 @@ const ProfileSettings: React.FC = () => {
       await deleteUser(user);
       localStorage.clear();
       navigate('/login');
-    } catch (err: any) {
-      setError(err.code === 'auth/wrong-password' ? 'Incorrect password' : 'Failed to delete account');
+    } catch (err) {
+      const errorCode = err && typeof err === 'object' && 'code' in err ? err.code : null;
+      setError(errorCode === 'auth/wrong-password' ? 'Incorrect password' : 'Failed to delete account');
       setIsLoading(false);
     }
   };
@@ -352,14 +406,14 @@ const ProfileSettings: React.FC = () => {
       await signOut(auth);
       localStorage.clear();
       navigate('/login');
-    } catch (err: any) {
+    } catch (err) {
       setError('Failed to logout');
     }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-2 py-4 sm:px-4 sm:py-8">
         
         {/* Header */}
         <div className="mb-8">
@@ -381,11 +435,11 @@ const ProfileSettings: React.FC = () => {
           </div>
         )}
 
-        <div className="grid lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
           
           {/* Sidebar */}
           <div className="lg:col-span-1">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl p-6 sticky top-8">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl p-4 sm:p-6 sticky top-2 sm:top-8 w-full">
               <div className="flex flex-col items-center mb-6">
                 <div className="relative group">
                   {profilePhoto ? (
@@ -416,8 +470,8 @@ const ProfileSettings: React.FC = () => {
                       
                       // Trigger event to refresh photo across all components
                       window.dispatchEvent(new CustomEvent('profilePhotoUpdated', { detail: { photoURL: aiPhotoURL } }));
-                    } catch (err: any) {
-                      setError(err.message);
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : 'Failed to generate AI photo');
                     } finally {
                       setIsLoading(false);
                     }
@@ -438,7 +492,7 @@ const ProfileSettings: React.FC = () => {
                 </div>
               </div>
               
-              <nav className="space-y-2">
+              <nav className="space-y-2 w-full">
                 {['account', 'profile', 'mentor', 'preferences', 'complete', 'security'].map(tab => (
                   <button
                     key={tab}
@@ -454,7 +508,7 @@ const ProfileSettings: React.FC = () => {
                 ))}
               </nav>
 
-              <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700 space-y-2">
+              <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-slate-200 dark:border-slate-700 space-y-2 w-full">
                 <button onClick={handleLogout} className="w-full px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition">
                   Logout
                 </button>
@@ -467,7 +521,7 @@ const ProfileSettings: React.FC = () => {
 
           {/* Main Content */}
           <div className="lg:col-span-3">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl p-8">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl p-4 sm:p-8 w-full">
               
               {activeTab === 'account' && (
                 <div className="space-y-6">
@@ -479,7 +533,7 @@ const ProfileSettings: React.FC = () => {
                       <input
                         type="text"
                         value={firstName}
-                        onChange={e => setFirstName(e.target.value)}
+                        onChange={e => { setFirstName(e.target.value); triggerAutoSave({ firstName: e.target.value, lastName, bio, location }); }}
                         className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                       />
                     </div>
@@ -489,7 +543,7 @@ const ProfileSettings: React.FC = () => {
                       <input
                         type="text"
                         value={lastName}
-                        onChange={e => setLastName(e.target.value)}
+                        onChange={e => { setLastName(e.target.value); triggerAutoSave({ firstName, lastName: e.target.value, bio, location }); }}
                         className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                       />
                     </div>
@@ -584,13 +638,21 @@ const ProfileSettings: React.FC = () => {
                     </div>
                   )}
 
-                  <button
-                    onClick={handleSave}
-                    disabled={isLoading}
-                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-medium transition disabled:opacity-50"
-                  >
-                    {isLoading ? 'Saving...' : 'Save Changes'}
-                  </button>
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={handleSave}
+                      disabled={isLoading}
+                      className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-medium transition disabled:opacity-50"
+                    >
+                      {isLoading ? 'Saving...' : 'Save Changes'}
+                    </button>
+                    {autoSaveStatus === 'saving' && (
+                      <span className="text-sm text-slate-500 dark:text-slate-400 animate-pulse">Auto-saving...</span>
+                    )}
+                    {autoSaveStatus === 'saved' && (
+                      <span className="text-sm text-green-600 dark:text-green-400">Saved automatically</span>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -602,7 +664,7 @@ const ProfileSettings: React.FC = () => {
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Bio</label>
                     <textarea
                       value={bio}
-                      onChange={e => setBio(e.target.value)}
+                      onChange={e => { setBio(e.target.value); triggerAutoSave({ firstName, lastName, bio: e.target.value, location }); }}
                       rows={4}
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                     />
@@ -613,7 +675,7 @@ const ProfileSettings: React.FC = () => {
                     <input
                       type="text"
                       value={location}
-                      onChange={e => setLocation(e.target.value)}
+                      onChange={e => { setLocation(e.target.value); triggerAutoSave({ firstName, lastName, bio, location: e.target.value }); }}
                       className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>
@@ -680,12 +742,13 @@ const ProfileSettings: React.FC = () => {
                           linkedin: linkedin.trim(),
                           github: github.trim(),
                           website: website.trim(),
+                          twitter: twitter.trim(),
                           updatedAt: Timestamp.now()
                         }, { merge: true });
                         setSuccess('Profile updated!');
                         setTimeout(() => setSuccess(''), 3000);
-                      } catch (err: any) {
-                        setError(err.message);
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : 'Failed to update profile');
                       } finally {
                         setIsLoading(false);
                       }
@@ -705,15 +768,83 @@ const ProfileSettings: React.FC = () => {
                   {mentorStatus === 'none' && (
                     <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
                       <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">Become a Mentor</h3>
-                      <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">Share your knowledge and help others grow</p>
+                      <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">Share your knowledge and help others grow. Add your mentoring criteria so matching stays focused and accurate.</p>
+
+                      <div className="space-y-4 mb-5">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Areas of Expertise</label>
+                          <input
+                            type="text"
+                            value={mentorExpertise}
+                            onChange={e => setMentorExpertise(e.target.value)}
+                            placeholder="e.g., Data Science, Interview Prep, Study Strategy"
+                            className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Mentor Bio / Experience</label>
+                          <textarea
+                            value={mentorBio}
+                            onChange={e => setMentorBio(e.target.value)}
+                            rows={4}
+                            placeholder="Briefly describe your background and how you can support mentees."
+                            className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Mentor Focus Areas</label>
+                          <div className="mb-3 flex flex-wrap gap-2">
+                            {FOCUS_AREA_LABELS.map(tag => (
+                              <button
+                                key={tag}
+                                type="button"
+                                onClick={() => toggleMentorTag(tag)}
+                                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                                  mentorTags.includes(tag)
+                                    ? 'border-blue-600 bg-blue-600 text-white'
+                                    : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
+                                }`}
+                              >
+                                {tag}
+                              </button>
+                            ))}
+                          </div>
+                          <input
+                            type="text"
+                            value={mentorTags?.join(', ') || ''}
+                            onChange={e => setMentorTags(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+                            placeholder="Optional: add custom focus areas as comma-separated text"
+                            className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                          />
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Select one or more focus areas so mentees can find you more precisely.</p>
+                        </div>
+                      </div>
+
                       <button
                         onClick={async () => {
                           if (!user) return;
+                          if (!mentorExpertise.trim()) {
+                            setError('Please add your expertise before applying.');
+                            return;
+                          }
+
+                          if (mentorTags.length === 0) {
+                            setError('Please select at least one mentor focus area.');
+                            return;
+                          }
+
                           setIsLoading(true);
                           try {
                             // Update user status
                             await setDoc(doc(db, 'users', user.uid), { 
+                              isMentor: false,
                               mentorStatus: 'pending', 
+                              mentorExpertise: mentorExpertise.trim(),
+                              mentorBio: mentorBio.trim(),
+                              mentorTags,
+                              mentorApplicationVersion: CURRENT_MENTOR_APPLICATION_VERSION,
                               updatedAt: Timestamp.now() 
                             }, { merge: true });
                             
@@ -722,9 +853,10 @@ const ProfileSettings: React.FC = () => {
                               userId: user.uid,
                               name: `${firstName} ${lastName}`.trim() || user.displayName || 'Unknown',
                               email: user.email,
-                              expertise: mentorExpertise ? [mentorExpertise] : [],
-                              credentials: bio || 'No credentials provided',
-                              experience: mentorBio || 'No experience provided',
+                              expertise: mentorTags.length > 0 ? mentorTags : [mentorExpertise.trim()],
+                              credentials: linkedin || website || 'Credentials not provided',
+                              experience: mentorBio.trim() || bio || 'No experience provided',
+                              applicationVersion: CURRENT_MENTOR_APPLICATION_VERSION,
                               status: 'pending',
                               appliedAt: Timestamp.now(),
                               documents: [],
@@ -734,8 +866,8 @@ const ProfileSettings: React.FC = () => {
                             setMentorStatus('pending');
                             setSuccess('Application submitted!');
                             setTimeout(() => setSuccess(''), 3000);
-                          } catch (err: any) {
-                            setError(err.message);
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : 'Failed to submit application');
                           } finally {
                             setIsLoading(false);
                           }
@@ -752,11 +884,70 @@ const ProfileSettings: React.FC = () => {
                     <div className="p-6 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl border border-yellow-200 dark:border-yellow-800">
                       <h3 className="text-lg font-semibold text-yellow-900 dark:text-yellow-300 mb-2">⏳ Application Pending</h3>
                       <p className="text-sm text-yellow-700 dark:text-yellow-400">Your mentor application is under review</p>
+                      <button
+                        onClick={async () => {
+                          if (!user) return;
+                          setIsLoading(true);
+                          try {
+                            await setDoc(doc(db, 'users', user.uid), {
+                              mentorStatus: 'none',
+                              isMentor: false,
+                              mentorApplicationStatus: 'reset_required',
+                              updatedAt: Timestamp.now(),
+                            }, { merge: true });
+                            setMentorStatus('none');
+                            setSuccess('You can now reapply with updated mentor criteria.');
+                            setTimeout(() => setSuccess(''), 3000);
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : 'Failed to reset application status');
+                          } finally {
+                            setIsLoading(false);
+                          }
+                        }}
+                        disabled={isLoading}
+                        className="mt-4 px-5 py-2.5 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-semibold text-sm disabled:opacity-60"
+                      >
+                        Reapply Now
+                      </button>
                     </div>
                   )}
 
                   {mentorStatus === 'approved' && (
                     <div className="space-y-6">
+                      {mentorApplicationVersion < CURRENT_MENTOR_APPLICATION_VERSION && (
+                        <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800">
+                          <p className="text-sm text-amber-700 dark:text-amber-300 font-medium">
+                            Mentor criteria were updated. Please reapply so your profile uses the latest focused matching model.
+                          </p>
+                          <button
+                            onClick={async () => {
+                              if (!user) return;
+                              setIsLoading(true);
+                              try {
+                                await setDoc(doc(db, 'users', user.uid), {
+                                  mentorStatus: 'none',
+                                  isMentor: false,
+                                  mentorApplicationStatus: 'reset_required',
+                                  updatedAt: Timestamp.now(),
+                                }, { merge: true });
+                                setMentorStatus('none');
+                                setIsMentor(false);
+                                setSuccess('Mentor status reset. Please submit a new application.');
+                                setTimeout(() => setSuccess(''), 3000);
+                              } catch (err) {
+                                setError(err instanceof Error ? err.message : 'Failed to reset mentor status');
+                              } finally {
+                                setIsLoading(false);
+                              }
+                            }}
+                            disabled={isLoading}
+                            className="mt-3 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold text-sm disabled:opacity-60"
+                          >
+                            Reset and Reapply
+                          </button>
+                        </div>
+                      )}
+
                       <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
                         <p className="text-sm text-green-700 dark:text-green-300">✓ Approved Mentor</p>
                       </div>
@@ -775,8 +966,8 @@ const ProfileSettings: React.FC = () => {
                               await setDoc(doc(db, 'users', user.uid), { isMentor: newStatus, updatedAt: Timestamp.now() }, { merge: true });
                               setSuccess(newStatus ? 'Mentor mode enabled' : 'Mentor mode disabled');
                               setTimeout(() => setSuccess(''), 3000);
-                            } catch (err: any) {
-                              setError(err.message);
+                            } catch (err) {
+                              setError(err instanceof Error ? err.message : 'Failed to update mentor status');
                               setIsMentor(!newStatus);
                             }
                           }}
@@ -800,14 +991,30 @@ const ProfileSettings: React.FC = () => {
 
                       <div>
                         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Mentor Tags</label>
+                        <div className="mb-3 flex flex-wrap gap-2">
+                          {FOCUS_AREA_LABELS.map(tag => (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={() => toggleMentorTag(tag)}
+                              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                                mentorTags.includes(tag)
+                                  ? 'border-blue-600 bg-blue-600 text-white'
+                                  : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
+                              }`}
+                            >
+                              {tag}
+                            </button>
+                          ))}
+                        </div>
                         <input
                           type="text"
                           value={mentorTags?.join(', ') || ''}
                           onChange={e => setMentorTags(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-                          placeholder="Academic Excellence, Career Transition, STEM Careers (comma-separated)"
+                          placeholder="Add any extra mentor tags as comma-separated text"
                           className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                         />
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Tags help match you with students seeking specific guidance</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Use the structured focus areas above first. Extra tags are optional and secondary.</p>
                       </div>
 
                       <div>
@@ -846,8 +1053,8 @@ const ProfileSettings: React.FC = () => {
                             }, { merge: true });
                             setSuccess('Mentor profile updated!');
                             setTimeout(() => setSuccess(''), 3000);
-                          } catch (err: any) {
-                            setError(err.message);
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : 'Failed to update mentor profile');
                           } finally {
                             setIsLoading(false);
                           }
@@ -900,6 +1107,9 @@ const ProfileSettings: React.FC = () => {
                         <span className="text-slate-700 dark:text-slate-300">{label}</span>
                         <button
                           onClick={() => setState(!state)}
+                          role="switch"
+                          aria-checked={state}
+                          aria-label={`Toggle ${label} notifications`}
                           className={`relative w-14 h-7 rounded-full transition ${state ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'}`}
                         >
                           <span className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${state ? 'translate-x-7' : ''}`} />
@@ -930,7 +1140,14 @@ const ProfileSettings: React.FC = () => {
                         <p className="text-sm text-slate-500 dark:text-slate-400">Toggle dark theme</p>
                       </div>
                       <button
-                        onClick={() => setDarkMode(!darkMode)}
+                        onClick={() => {
+                          const next = !darkMode;
+                          setDarkMode(next);
+                          setIsDark(next);
+                          if (user) {
+                            setDoc(doc(db, 'users', user.uid), { darkMode: next, updatedAt: Timestamp.now() }, { merge: true });
+                          }
+                        }}
                         className={`relative w-14 h-7 rounded-full transition ${darkMode ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'}`}
                       >
                         <span className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${darkMode ? 'translate-x-7' : ''}`} />
@@ -955,8 +1172,8 @@ const ProfileSettings: React.FC = () => {
                         }, { merge: true });
                         setSuccess('Preferences saved!');
                         setTimeout(() => setSuccess(''), 3000);
-                      } catch (err: any) {
-                        setError(err.message);
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : 'Failed to save preferences');
                       } finally {
                         setIsLoading(false);
                       }
@@ -1006,6 +1223,30 @@ const ProfileSettings: React.FC = () => {
                     />
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Work Experience</label>
+                    <textarea
+                      value={workExperience}
+                      onChange={e => setWorkExperience(e.target.value)}
+                      rows={6}
+                      placeholder="Describe your work experience, internships, and professional roles..."
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>workExperience: workExperience.trim(),
+                          education: education.trim(),
+                          
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Education</label>
+                    <textarea
+                      value={education}
+                      onChange={e => setEducation(e.target.value)}
+                      rows={6}
+                      placeholder="Describe your educational background, degrees, and relevant coursework..."
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
+
                   <button
                     onClick={async () => {
                       if (!user) return;
@@ -1019,8 +1260,8 @@ const ProfileSettings: React.FC = () => {
                         }, { merge: true });
                         setSuccess('Profile updated!');
                         setTimeout(() => setSuccess(''), 3000);
-                      } catch (err: any) {
-                        setError(err.message);
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : 'Failed to save complete profile');
                       } finally {
                         setIsLoading(false);
                       }
@@ -1211,3 +1452,4 @@ const ProfileSettings: React.FC = () => {
 };
 
 export default ProfileSettings;
+

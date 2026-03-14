@@ -6,6 +6,7 @@ import Footer from '../components/Footer';
 import { Users, Briefcase, Award, TrendingUp, Heart, Globe, Target, BookOpen } from 'lucide-react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../src/firebase';
+import { errorService } from '../services/errorService';
 
 const impactStats = [
   { value: '2,500+', label: 'Students Mentored', icon: Users, color: 'text-blue-600 dark:text-blue-400' },
@@ -96,7 +97,7 @@ const OurImpact: React.FC = () => {
           sessions: studentsSnap.size + mentorsSnap.size,
         });
       } catch (error) {
-        console.error('Error fetching stats:', error);
+        errorService.handleError(error, 'Error fetching stats');
       }
     };
 

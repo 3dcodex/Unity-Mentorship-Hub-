@@ -1,3 +1,5 @@
+import { Timestamp } from 'firebase/firestore';
+
 export interface UserStory {
   id: string;
   userId: string;
@@ -11,8 +13,8 @@ export interface UserStory {
   likedBy: string[];
   comments: StoryComment[];
   status: 'pending' | 'approved' | 'featured';
-  createdAt: any;
-  updatedAt: any;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export interface StoryComment {
@@ -21,5 +23,5 @@ export interface StoryComment {
   userName: string;
   userPhoto?: string;
   text: string;
-  createdAt: any;
+  createdAt: Timestamp;
 }

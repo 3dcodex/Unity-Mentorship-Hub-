@@ -3,6 +3,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../src/firebase';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { formatNumber } from '../../utils/formatters';
+import { errorService } from '../../services/errorService';
 
 interface AnalyticsData {
   userGrowth: { date: string; count: number }[];
@@ -83,7 +84,7 @@ const AdvancedAnalytics: React.FC = () => {
         retentionData
       });
     } catch (error) {
-      console.error('Error loading analytics:', error);
+      errorService.handleError(error, 'Error loading analytics');
     } finally {
       setLoading(false);
     }

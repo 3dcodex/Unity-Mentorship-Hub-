@@ -3,6 +3,7 @@ import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore
 import { db } from '../../src/firebase';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { formatNumber } from '../../utils/formatters';
+import { errorService } from '../../services/errorService';
 
 interface SystemMetrics {
   totalUsers: number;
@@ -63,7 +64,7 @@ const SystemHealth: React.FC = () => {
         bandwidthUsed: 0
       });
     } catch (error) {
-      console.error('Error loading system metrics:', error);
+      errorService.handleError(error, 'Error loading system metrics');
     } finally {
       setLoading(false);
     }
@@ -78,7 +79,7 @@ const SystemHealth: React.FC = () => {
       const errorsSnap = await getDocs(errorsQuery);
       setErrors(errorsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })).slice(0, 10));
     } catch (error) {
-      console.error('Error loading errors:', error);
+      errorService.handleError(error, 'Error loading errors');
     }
   };
 

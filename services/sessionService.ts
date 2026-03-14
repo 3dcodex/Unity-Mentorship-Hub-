@@ -1,5 +1,6 @@
 import { db } from '../src/firebase';
 import { collection, doc, setDoc, updateDoc, getDocs, query, where, orderBy, Timestamp } from 'firebase/firestore';
+import { errorService } from './errorService';
 
 export interface Session {
   id: string;
@@ -7,7 +8,7 @@ export interface Session {
   mentorName: string;
   menteeId: string;
   menteeName: string;
-  date: any;
+  date: Timestamp | Date;
   duration: number;
   topic: string;
   status: 'scheduled' | 'completed' | 'cancelled' | 'no-show';
@@ -15,8 +16,8 @@ export interface Session {
   notes?: string;
   rating?: number;
   feedback?: string;
-  createdAt: any;
-  updatedAt: any;
+  createdAt: Timestamp | Date;
+  updatedAt: Timestamp | Date;
 }
 
 export interface Booking {
@@ -25,11 +26,11 @@ export interface Booking {
   userName: string;
   mentorId: string;
   mentorName: string;
-  requestedDate: any;
+  requestedDate: Timestamp | Date;
   topic: string;
   message: string;
   status: 'pending' | 'approved' | 'rejected';
-  createdAt: any;
+  createdAt: Timestamp | Date;
 }
 
 export const createSession = async (sessionData: Omit<Session, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -42,7 +43,7 @@ export const createSession = async (sessionData: Omit<Session, 'id' | 'createdAt
     });
     return sessionRef.id;
   } catch (error) {
-    console.error('Error creating session:', error);
+    errorService.handleError(error, 'Error creating session');
     return null;
   }
 };
@@ -56,7 +57,7 @@ export const createBooking = async (bookingData: Omit<Booking, 'id' | 'createdAt
     });
     return bookingRef.id;
   } catch (error) {
-    console.error('Error creating booking:', error);
+    errorService.handleError(error, 'Error creating booking');
     return null;
   }
 };
@@ -71,7 +72,7 @@ export const getUserSessions = async (userId: string) => {
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
-    console.error('Error getting user sessions:', error);
+    errorService.handleError(error, 'Error getting user sessions');
     return [];
   }
 };
@@ -86,7 +87,7 @@ export const getMentorSessions = async (mentorId: string) => {
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
-    console.error('Error getting mentor sessions:', error);
+    errorService.handleError(error, 'Error getting mentor sessions');
     return [];
   }
 };
@@ -100,7 +101,7 @@ export const updateSessionStatus = async (sessionId: string, status: Session['st
     });
     return true;
   } catch (error) {
-    console.error('Error updating session status:', error);
+    errorService.handleError(error, 'Error updating session status');
     return false;
   }
 };
@@ -114,7 +115,7 @@ export const rateSession = async (sessionId: string, rating: number, feedback: s
     });
     return true;
   } catch (error) {
-    console.error('Error rating session:', error);
+    errorService.handleError(error, 'Error rating session');
     return false;
   }
 };

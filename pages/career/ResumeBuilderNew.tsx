@@ -6,6 +6,7 @@ import { useAuth } from '../../App';
 import { useTheme } from '../../contexts/ThemeContext';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { errorService } from '../../services/errorService';
 
 interface ResumeData {
   fullName: string;
@@ -95,7 +96,7 @@ const ResumeBuilderNew: React.FC = () => {
           }
         }
       } catch (err) {
-        console.error('Error loading resume:', err);
+        errorService.handleError(err, 'Error loading resume');
       }
     };
     loadResume();
@@ -133,7 +134,7 @@ const ResumeBuilderNew: React.FC = () => {
           { merge: true }
         );
       } catch (err) {
-        console.error('Auto-save error:', err);
+        errorService.handleError(err, 'Auto-save error');
       }
     };
     save();

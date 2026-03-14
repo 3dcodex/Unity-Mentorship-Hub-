@@ -1,5 +1,6 @@
 import { db } from '../src/firebase';
 import { collection, doc, setDoc, Timestamp } from 'firebase/firestore';
+import { errorService } from './errorService';
 
 export const initializeDatabase = async () => {
   try {
@@ -28,10 +29,9 @@ export const initializeDatabase = async () => {
       }, { merge: true });
     }
 
-    console.log('Database initialized successfully');
     return true;
   } catch (error) {
-    console.error('Error initializing database:', error);
+    errorService.handleError(error, 'Error initializing database');
     return false;
   }
 };
@@ -58,7 +58,7 @@ export const createDefaultAdminSettings = async () => {
 
     return true;
   } catch (error) {
-    console.error('Error creating default settings:', error);
+    errorService.handleError(error, 'Error creating default settings');
     return false;
   }
 };

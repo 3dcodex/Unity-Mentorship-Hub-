@@ -5,6 +5,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { SESSION_TYPES, createBooking, getMentorAvailability, type TimeSlot } from '../services/bookingService';
 import { addDoc, collection, Timestamp } from 'firebase/firestore';
 import { db } from '../src/firebase';
+import { errorService } from '../services/errorService';
 
 interface BookingModalProps {
   mentor: {
@@ -94,7 +95,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ mentor, onClose }) => {
       onClose();
       navigate('/mentorship/history');
     } catch (err) {
-      console.error('Booking error:', err);
+      errorService.handleError(err, 'Booking error');
       alert(`Failed to book session: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setLoading(false);

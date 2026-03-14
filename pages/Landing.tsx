@@ -1,34 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../src/firebase';
 import { getFeaturedStories } from '../services/storyService';
 import { UserStory } from '../types/stories';
 import PublicHeader from '../components/PublicHeader';
 import Footer from '../components/Footer';
+import { errorService } from '../services/errorService';
 
 const Landing: React.FC = () => {
-  const [stats, setStats] = useState({ students: 0, mentors: 0, sessions: 0 });
+  const [stats, setStats] = useState({ students: 0, mentors: 0, sessions: 0, partners: 15 });
   const [stories, setStories] = useState<UserStory[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [studentsSnap, mentorsSnap, featuredStories] = await Promise.all([
-          getDocs(query(collection(db, 'users'), where('role', '==', 'Student'))),
-          getDocs(query(collection(db, 'users'), where('isMentor', '==', true))),
+        const [statsSnap, featuredStories] = await Promise.all([
+          getDoc(doc(db, 'publicStats', 'platform')),
           getFeaturedStories(),
         ]);
 
-        setStats({
-          students: studentsSnap.size,
-          mentors: mentorsSnap.size,
-          sessions: studentsSnap.size + mentorsSnap.size,
-        });
+        if (statsSnap.exists()) {
+          const data = statsSnap.data();
+          setStats({
+            students: data.activeStudents || 0,
+            mentors: data.mentors || 0,
+            sessions: data.totalSessions || 0,
+            partners: data.partners || 15,
+          });
+        }
         setStories(featuredStories);
       } catch (error) {
-        console.error('Error fetching data:', error);
+        errorService.handleError(error, 'Error fetching data');
       } finally {
         setLoading(false);
       }
@@ -75,7 +79,7 @@ const Landing: React.FC = () => {
             <StatCard value={`${stats.students}+`} label="Active Students" color="blue" />
             <StatCard value={`${stats.mentors}+`} label="Mentors" color="green" />
             <StatCard value={`${stats.sessions}+`} label="Sessions" color="purple" />
-            <StatCard value="15+" label="Partners" color="amber" />
+            <StatCard value={`${stats.partners}+`} label="Partners" color="amber" />
           </div>
         </div>
       </section>

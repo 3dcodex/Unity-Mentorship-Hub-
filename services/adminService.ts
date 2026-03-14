@@ -1,5 +1,6 @@
 import { db } from '../src/firebase';
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, Timestamp } from 'firebase/firestore';
+import { errorService } from './errorService';
 
 export interface AdminAction {
   id: string;
@@ -9,7 +10,7 @@ export interface AdminAction {
   targetUserId?: string;
   targetUserName?: string;
   details: string;
-  timestamp: any;
+  timestamp: Timestamp;
 }
 
 export const logAdminAction = async (adminId: string, adminName: string, action: string, details: string, targetUserId?: string, targetUserName?: string) => {
@@ -26,7 +27,7 @@ export const logAdminAction = async (adminId: string, adminName: string, action:
     });
     return true;
   } catch (error) {
-    console.error('Error logging admin action:', error);
+    errorService.handleError(error, 'logAdminAction');
     return false;
   }
 };
@@ -40,7 +41,7 @@ export const updateUserRole = async (userId: string, newRole: string, adminId: s
     await logAdminAction(adminId, adminName, 'UPDATE_ROLE', `Changed user role to ${newRole}`, userId);
     return true;
   } catch (error) {
-    console.error('Error updating user role:', error);
+    errorService.handleError(error, 'updateUserRole');
     return false;
   }
 };
@@ -57,7 +58,7 @@ export const suspendUser = async (userId: string, reason: string, adminId: strin
     await logAdminAction(adminId, adminName, 'SUSPEND_USER', `Suspended user: ${reason}`, userId);
     return true;
   } catch (error) {
-    console.error('Error suspending user:', error);
+    errorService.handleError(error, 'suspendUser');
     return false;
   }
 };
@@ -74,7 +75,7 @@ export const unsuspendUser = async (userId: string, adminId: string, adminName: 
     await logAdminAction(adminId, adminName, 'UNSUSPEND_USER', 'Unsuspended user', userId);
     return true;
   } catch (error) {
-    console.error('Error unsuspending user:', error);
+    errorService.handleError(error, 'unsuspendUser');
     return false;
   }
 };
@@ -91,7 +92,7 @@ export const approveMentor = async (userId: string, adminId: string, adminName: 
     await logAdminAction(adminId, adminName, 'APPROVE_MENTOR', 'Approved mentor application', userId);
     return true;
   } catch (error) {
-    console.error('Error approving mentor:', error);
+    errorService.handleError(error, 'Error approving mentor');
     return false;
   }
 };
@@ -109,7 +110,7 @@ export const rejectMentor = async (userId: string, reason: string, adminId: stri
     await logAdminAction(adminId, adminName, 'REJECT_MENTOR', `Rejected mentor application: ${reason}`, userId);
     return true;
   } catch (error) {
-    console.error('Error rejecting mentor:', error);
+    errorService.handleError(error, 'Error rejecting mentor');
     return false;
   }
 };
@@ -120,7 +121,7 @@ export const getAdminActions = async (limit: number = 50) => {
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
-    console.error('Error getting admin actions:', error);
+    errorService.handleError(error, 'Error getting admin actions');
     return [];
   }
 };
@@ -138,7 +139,7 @@ export const sendSystemNotification = async (userId: string, title: string, mess
     });
     return true;
   } catch (error) {
-    console.error('Error sending notification:', error);
+    errorService.handleError(error, 'Error sending notification');
     return false;
   }
 };
@@ -152,7 +153,7 @@ export const broadcastNotification = async (title: string, message: string, type
     await Promise.all(promises);
     return true;
   } catch (error) {
-    console.error('Error broadcasting notification:', error);
+    errorService.handleError(error, 'Error broadcasting notification');
     return false;
   }
 };
@@ -163,7 +164,7 @@ export const deleteUser = async (userId: string, adminId: string, adminName: str
     await logAdminAction(adminId, adminName, 'DELETE_USER', 'Permanently deleted user account', userId);
     return true;
   } catch (error) {
-    console.error('Error deleting user:', error);
+    errorService.handleError(error, 'Error deleting user');
     return false;
   }
 };

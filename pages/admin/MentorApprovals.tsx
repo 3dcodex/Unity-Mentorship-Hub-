@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, doc, updateDoc, query, where, setDoc, onSnapshot } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../../src/firebase';
 import { useAuth } from '../../App';
+import { errorService } from '../../services/errorService';
+import { CURRENT_MENTOR_APPLICATION_VERSION } from '../../utils/mentorMatching';
 
 interface MentorApplication {
   id: string;
@@ -33,7 +36,7 @@ const MentorApprovals: React.FC = () => {
         setApplications(appsData);
       },
       (error) => {
-        console.error('Error listening to mentor applications:', error);
+        errorService.handleError(error, 'Error listening to mentor applications');
         // Fallback to manual loading
         loadApplications();
       }
@@ -60,6 +63,7 @@ const MentorApprovals: React.FC = () => {
       role: 'mentor',
       mentorStatus: 'approved',
       isMentor: true,
+      mentorApplicationVersion: CURRENT_MENTOR_APPLICATION_VERSION,
       mentorApprovedBy: currentAdmin?.uid,
       mentorApprovedAt: new Date(),
       updatedAt: new Date()
@@ -85,6 +89,12 @@ const MentorApprovals: React.FC = () => {
       createdAt: new Date(),
       link: '/profile'
     });
+
+    // Send email notification (best-effort)
+    try {
+      const sendEmail = httpsCallable(getFunctions(), 'sendNotificationEmail');
+      await sendEmail({ userId, templateName: 'mentor_approved' });
+    } catch { /* email is non-critical */ }
     
     setShowModal(false);
     setAdminNotes('');
@@ -124,6 +134,12 @@ const MentorApprovals: React.FC = () => {
       read: false,
       createdAt: new Date()
     });
+
+    // Send email notification (best-effort)
+    try {
+      const sendEmail = httpsCallable(getFunctions(), 'sendNotificationEmail');
+      await sendEmail({ userId: selectedApp.userId, templateName: 'mentor_rejected' });
+    } catch { /* email is non-critical */ }
     
     setShowModal(false);
     setAdminNotes('');

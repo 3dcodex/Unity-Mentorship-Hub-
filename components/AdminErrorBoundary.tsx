@@ -1,5 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { logAdminAction } from '../services/adminService';
+import { errorService } from '../services/errorService';
 
 interface Props {
   children: ReactNode;
@@ -21,7 +22,7 @@ class AdminErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Admin panel error:', error, errorInfo);
+    errorService.handleError(error, 'Admin panel error');
     
     // Log error to Firestore
     try {
@@ -36,7 +37,7 @@ class AdminErrorBoundary extends Component<Props, State> {
         })
       );
     } catch (e) {
-      console.error('Failed to log error:', e);
+      errorService.handleError(e, 'Failed to log error');
     }
   }
 
