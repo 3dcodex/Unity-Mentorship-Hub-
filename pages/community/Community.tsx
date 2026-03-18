@@ -1,8 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { db } from '../../src/firebase';
-import { collection, getDocs, query, where, limit } from 'firebase/firestore';
+import { collection, getDocs, query, where, limit, orderBy, Timestamp } from 'firebase/firestore';
 import { errorService } from '../../services/errorService';
+
+interface CommunityStats {
+  totalMembers: number;
+  activeGroups: number;
+  weeklyGrowth: number;
+}
+
+interface CommunityActivity {
+  id: string;
+  icon: string;
+  title: string;
+  desc: string;
+  time: string;
+}
 
 const Community: React.FC = () => {
   const navigate = useNavigate();
@@ -10,6 +24,12 @@ const Community: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [members, setMembers] = useState<any[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
+  const [stats, setStats] = useState<CommunityStats>({
+    totalMembers: 0,
+    activeGroups: 0,
+    weeklyGrowth: 0,
+  });
+  const [recentActivity, setRecentActivity] = useState<CommunityActivity[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -18,13 +38,86 @@ const Community: React.FC = () => {
 
   const loadCommunityData = async () => {
     try {
-      const usersSnap = await getDocs(query(collection(db, 'users'), limit(6)));
-      setMembers(usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const usersSnap = await getDocs(query(collection(db, 'users'), limit(1000)));
+      const groupsSnap = await getDocs(query(collection(db, 'groups'), limit(1000)));
 
-      const groupsSnap = await getDocs(query(collection(db, 'groups'), limit(6)));
-      setGroups(groupsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const allUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const allGroups = groupsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      setMembers(allUsers.slice(0, 6));
+      setGroups(allGroups.slice(0, 6));
+
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      const weeklyGrowth = allUsers.filter((u: any) => {
+        const createdAt = u.createdAt?.toDate ? u.createdAt.toDate() : null;
+        return createdAt ? createdAt >= sevenDaysAgo : false;
+      }).length;
+
+      setStats({
+        totalMembers: allUsers.length,
+        activeGroups: allGroups.length,
+        weeklyGrowth,
+      });
+
+      // Build recent activity from real collections accessible to authenticated users.
+      const [recentUsersSnap, recentGroupsSnap, recentPostsSnap] = await Promise.all([
+        getDocs(query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(3))),
+        getDocs(query(collection(db, 'groups'), orderBy('createdAt', 'desc'), limit(3))),
+        getDocs(query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(3))),
+      ]);
+
+      const formatRelative = (value: any) => {
+        const date = value?.toDate ? value.toDate() : null;
+        if (!date) return 'recently';
+        const diffMs = Date.now() - date.getTime();
+        const diffHours = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60)));
+        if (diffHours < 24) return `${diffHours}h ago`;
+        const diffDays = Math.floor(diffHours / 24);
+        return `${diffDays}d ago`;
+      };
+
+      const userActivities: CommunityActivity[] = recentUsersSnap.docs.map((snap) => {
+        const userData = snap.data() as any;
+        const name = userData.displayName || userData.name || 'A member';
+        return {
+          id: `user-${snap.id}`,
+          icon: 'group_add',
+          title: 'New Member',
+          desc: `${name} joined the community`,
+          time: formatRelative(userData.createdAt),
+        };
+      });
+
+      const groupActivities: CommunityActivity[] = recentGroupsSnap.docs.map((snap) => {
+        const groupData = snap.data() as any;
+        return {
+          id: `group-${snap.id}`,
+          icon: 'forum',
+          title: 'New Group',
+          desc: `${groupData.name || 'A group'} is now active`,
+          time: formatRelative(groupData.createdAt),
+        };
+      });
+
+      const postActivities: CommunityActivity[] = recentPostsSnap.docs.map((snap) => {
+        const postData = snap.data() as any;
+        const title = postData.title || postData.content?.slice(0, 40) || 'New community post';
+        return {
+          id: `post-${snap.id}`,
+          icon: 'celebration',
+          title: 'New Discussion',
+          desc: title,
+          time: formatRelative(postData.createdAt),
+        };
+      });
+
+      setRecentActivity([...userActivities, ...groupActivities, ...postActivities].slice(0, 3));
     } catch (error) {
       errorService.handleError(error, 'Error loading community data');
+      setStats({ totalMembers: 0, activeGroups: 0, weeklyGrowth: 0 });
+      setRecentActivity([]);
     } finally {
       setLoading(false);
     }
@@ -150,9 +243,9 @@ const Community: React.FC = () => {
             <div className={`${darkMode ? 'bg-gradient-to-br from-slate-900 to-slate-800 border-slate-700' : 'bg-gradient-to-br from-primary to-purple-600'} rounded-3xl p-8 border shadow-xl text-white`}>
               <h3 className="text-xl font-black mb-6">Community Stats</h3>
               <div className="space-y-4">
-                <StatItem label="Total Members" value="1,247" icon="group" />
-                <StatItem label="Active Groups" value="89" icon="forum" />
-                <StatItem label="This Week" value="+124" icon="trending_up" />
+                <StatItem label="Total Members" value={stats.totalMembers.toLocaleString()} icon="group" />
+                <StatItem label="Active Groups" value={stats.activeGroups.toLocaleString()} icon="forum" />
+                <StatItem label="This Week" value={`+${stats.weeklyGrowth.toLocaleString()}`} icon="trending_up" />
               </div>
             </div>
 
@@ -160,27 +253,18 @@ const Community: React.FC = () => {
             <div className={`${darkMode ? 'bg-slate-900/50 border-slate-700' : 'bg-white border-gray-200'} backdrop-blur-xl rounded-3xl p-8 border shadow-xl`}>
               <h3 className={`text-xl font-black mb-6 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Recent Activity</h3>
               <div className="space-y-4">
-                <ActivityItem
-                  icon="celebration"
-                  title="New Achievement"
-                  desc="Sarah completed her first mentorship session"
-                  time="2h ago"
-                  darkMode={darkMode}
-                />
-                <ActivityItem
-                  icon="group_add"
-                  title="New Member"
-                  desc="John joined the Tech Career group"
-                  time="5h ago"
-                  darkMode={darkMode}
-                />
-                <ActivityItem
-                  icon="event"
-                  title="Upcoming Event"
-                  desc="Community meetup tomorrow at 6 PM"
-                  time="1d ago"
-                  darkMode={darkMode}
-                />
+                {recentActivity.length > 0 ? recentActivity.map((item) => (
+                  <ActivityItem
+                    key={item.id}
+                    icon={item.icon}
+                    title={item.title}
+                    desc={item.desc}
+                    time={item.time}
+                    darkMode={darkMode}
+                  />
+                )) : (
+                  <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>No recent activity found.</p>
+                )}
               </div>
             </div>
 

@@ -2,7 +2,12 @@ import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../src/firebase';
 
-export const useAdminTimeout = (timeoutMinutes: number = 30) => {
+type AdminTimeoutOptions = {
+  onWarning?: () => void;
+  onExpired?: () => void;
+};
+
+export const useAdminTimeout = (timeoutMinutes: number = 30, options?: AdminTimeoutOptions) => {
   const navigate = useNavigate();
   const timeoutRef = useRef<NodeJS.Timeout>();
   const warningRef = useRef<NodeJS.Timeout>();
@@ -15,21 +20,18 @@ export const useAdminTimeout = (timeoutMinutes: number = 30) => {
       clearTimeout(warningRef.current);
     }
 
-    // Show warning 2 minutes before timeout
+    // Emit warning 2 minutes before timeout so UI can render custom modal/toast.
     warningRef.current = setTimeout(() => {
-      const shouldContinue = confirm(
-        'Your session will expire in 2 minutes due to inactivity. Click OK to continue.'
-      );
-      if (shouldContinue) {
-        resetTimeout();
-      }
+      options?.onWarning?.();
+      window.dispatchEvent(new CustomEvent('admin-timeout-warning'));
     }, (timeoutMinutes - 2) * 60 * 1000);
 
     // Auto-logout after timeout
     timeoutRef.current = setTimeout(() => {
       auth.signOut();
       navigate('/login');
-      alert('Session expired due to inactivity. Please log in again.');
+      options?.onExpired?.();
+      window.dispatchEvent(new CustomEvent('admin-timeout-expired'));
     }, timeoutMinutes * 60 * 1000);
   };
 
@@ -53,5 +55,5 @@ export const useAdminTimeout = (timeoutMinutes: number = 30) => {
         clearTimeout(warningRef.current);
       }
     };
-  }, [timeoutMinutes]);
+  }, [timeoutMinutes, options]);
 };

@@ -257,6 +257,8 @@ const Dashboard: React.FC = () => {
               <div className="space-y-2">
                 {isAdmin && <QuickActionButton icon="admin_panel_settings" label="Admin" onClick={() => navigate('/admin')} />}
                 <QuickActionButton icon="event" label="Book Session" onClick={() => navigate('/mentorship/book')} />
+                <QuickActionButton icon="payments" label="Billing" onClick={() => navigate('/billing')} />
+                <QuickActionButton icon="credit_card" label="Manage Plan" onClick={() => navigate('/billing/manage')} />
                 <QuickActionButton icon="group_add" label="Groups" onClick={() => navigate('/community/groups')} />
                 <QuickActionButton icon="chat" label="Messages" onClick={() => navigate('/quick-chat')} />
                 <QuickActionButton icon="description" label="Resume" onClick={() => navigate('/career/resume')} />

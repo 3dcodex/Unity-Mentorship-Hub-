@@ -2,7 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import ReCAPTCHA from 'react-google-recaptcha';
-import { signInWithEmailAndPassword, sendPasswordResetEmail, signInWithPopup, GoogleAuthProvider, OAuthProvider } from 'firebase/auth';
+import { signInWithEmailAndPassword, sendPasswordResetEmail, signInWithPopup, GoogleAuthProvider, OAuthProvider, sendEmailVerification } from 'firebase/auth';
 import { auth } from '../src/firebase';
 import { useAuth } from '../App';
 import { errorService } from '../services/errorService';
@@ -21,13 +21,25 @@ const Login: React.FC = () => {
   const [resetMessage, setResetMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [resetAttempts, setResetAttempts] = useState(0);
   const [lastResetTime, setLastResetTime] = useState<number>(0);
+  const [verificationMessage, setVerificationMessage] = useState<string | null>(null);
+  const [resendingVerification, setResendingVerification] = useState(false);
   const recaptchaRef = useRef<ReCAPTCHA>(null);
   const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined;
 
-  // If already signed in, go to dashboard
+  // Check for verification pending from signup redirect
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('verified') === 'pending') {
+      setVerificationMessage('Account created! Please check your email (including spam) and verify before logging in.');
+    }
+  }, []);
+
+  // If already signed in and verified, go to dashboard
   React.useEffect(() => {
     if (!loading && user) {
-      navigate('/dashboard', { replace: true });
+      if (user.emailVerified) {
+        navigate('/dashboard', { replace: true });
+      }
     }
   }, [loading, user, navigate]);
 
@@ -41,12 +53,19 @@ const Login: React.FC = () => {
     setIsLoading(true);
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
-      const user = userCredential.user;
+      const loggedInUser = userCredential.user;
+      
+      // Block unverified email accounts
+      if (!loggedInUser.emailVerified) {
+        setVerificationMessage('Please verify your email before logging in. Check your inbox and spam folder.');
+        setIsLoading(false);
+        return;
+      }
       
       // Fetch user data from Firestore
       const { doc, getDoc } = await import('firebase/firestore');
       const { db } = await import('../src/firebase');
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      const userDoc = await getDoc(doc(db, 'users', loggedInUser.uid));
       
       if (userDoc.exists()) {
         const userData = userDoc.data();
@@ -60,10 +79,10 @@ const Login: React.FC = () => {
           return;
         }
 
-        localStorage.setItem('unity_user_name', userData.displayName || user.email || 'User');
+        localStorage.setItem('unity_user_name', userData.displayName || loggedInUser.email || 'User');
         localStorage.setItem('unity_user_role', userData.role || 'Student');
       } else {
-        localStorage.setItem('unity_user_name', user.email || 'User');
+        localStorage.setItem('unity_user_name', loggedInUser.email || 'User');
       }
       
       localStorage.setItem('unity_onboarding_complete', 'true');
@@ -244,6 +263,44 @@ const Login: React.FC = () => {
     }
   };
 
+  const handleResendVerification = async () => {
+    setResendingVerification(true);
+    setError(null);
+
+    try {
+      // If an unverified user just attempted login, Firebase keeps them signed in.
+      // Reuse that session so we can resend without forcing another credential entry.
+      const currentUser = auth.currentUser;
+      if (currentUser && !currentUser.emailVerified) {
+        await sendEmailVerification(currentUser);
+        setVerificationMessage('Verification email resent! Check your inbox and spam folder.');
+        return;
+      }
+
+      if (!email.trim() || !password) {
+        setVerificationMessage('Enter your email and password above, then click resend.');
+        return;
+      }
+
+      const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+      if (cred.user.emailVerified) {
+        setVerificationMessage('This email is already verified. Please sign in.');
+        return;
+      }
+
+      await sendEmailVerification(cred.user);
+      setVerificationMessage('Verification email resent! Check your inbox and spam folder.');
+    } catch (err: any) {
+      if (err?.code === 'auth/too-many-requests') {
+        setVerificationMessage('Too many resend attempts. Please wait a few minutes and try again.');
+      } else {
+        setVerificationMessage('Unable to resend now. Enter your email/password and try again.');
+      }
+    } finally {
+      setResendingVerification(false);
+    }
+  };
+
   // Show loading overlay during login
   if (isLoading) {
     return (
@@ -351,6 +408,19 @@ const Login: React.FC = () => {
               )}
             </button>
           </form>
+
+          {verificationMessage && (
+            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl space-y-3">
+              <p className="text-sm text-amber-700 dark:text-amber-300 text-center font-medium">{verificationMessage}</p>
+              <button
+                onClick={handleResendVerification}
+                disabled={resendingVerification}
+                className="w-full py-2 text-sm font-bold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-900/50 transition disabled:opacity-50"
+              >
+                {resendingVerification ? 'Sending...' : 'Resend Verification Email'}
+              </button>
+            </div>
+          )}
 
           {error && (
             <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">

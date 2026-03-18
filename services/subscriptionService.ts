@@ -183,7 +183,8 @@ export const subscriptionService = {
   },
 
   /**
-   * Upgrade or downgrade subscription tier
+   * Upgrade or downgrade subscription tier.
+   * Prorates remaining sessions instead of resetting to prevent mid-cycle exploit.
    */
   async changeSubscriptionTier(
     subscriptionId: string,
@@ -203,17 +204,19 @@ export const subscriptionService = {
         throw new Error(`Invalid tier: ${newTier}`);
       }
 
-      // Update subscription with new tier
+      const oldMax = subscription.sessionsPerMonth;
+      const used = oldMax - subscription.sessionsRemaining;
+      const newRemaining = Math.max(newPlan.sessionsPerMonth - used, 0);
+
       await updateDoc(doc(db, 'subscriptions', subscriptionId), {
         tier: newTier,
         priceMonthly: newPlan.priceMonthly,
         sessionsPerMonth: newPlan.sessionsPerMonth,
-        sessionsRemaining: newPlan.sessionsPerMonth, // Reset quota
+        sessionsRemaining: newRemaining,
         stripePriceId: newPlan.stripePriceId,
         updatedAt: Timestamp.now(),
       });
 
-      // Update user profile
       await updateDoc(doc(db, 'users', subscription.userId), {
         subscriptionTier: newTier,
         updatedAt: Timestamp.now(),
@@ -332,16 +335,17 @@ export const subscriptionService = {
   },
 
   /**
-   * Get subscription statistics
+   * Get subscription statistics (only fetches active subscriptions)
    */
   async getSubscriptionStats() {
     try {
-      const allSubs = await getDocs(collection(db, 'subscriptions'));
-      const activeSubs = allSubs.docs.filter(
-        doc => doc.data().status === 'active'
+      const activeQuery = query(
+        collection(db, 'subscriptions'),
+        where('status', '==', 'active')
       );
+      const activeSubs = await getDocs(activeQuery);
 
-      const tierCounts = {
+      const tierCounts: Record<SubscriptionTier, number> = {
         starter: 0,
         'job-ready': 0,
         'career-accelerator': 0,
@@ -349,17 +353,17 @@ export const subscriptionService = {
 
       let totalRevenue = 0;
 
-      activeSubs.forEach(doc => {
-        const sub = doc.data() as Subscription;
-        tierCounts[sub.tier]++;
+      activeSubs.docs.forEach(d => {
+        const sub = d.data() as Subscription;
+        if (sub.tier in tierCounts) tierCounts[sub.tier]++;
         totalRevenue += sub.priceMonthly;
       });
 
       return {
-        totalSubscriptions: activeSubs.length,
+        totalSubscriptions: activeSubs.size,
         tierCounts,
         monthlyRecurringRevenue: totalRevenue,
-        averageRevenuePerUser: activeSubs.length > 0 ? totalRevenue / activeSubs.length : 0,
+        averageRevenuePerUser: activeSubs.size > 0 ? totalRevenue / activeSubs.size : 0,
       };
     } catch (error) {
       errorService.handleError(error, 'Error fetching subscription stats');

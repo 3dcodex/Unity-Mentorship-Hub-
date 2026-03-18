@@ -113,15 +113,12 @@ const Signup: React.FC = () => {
         } : undefined
       );
       
-      localStorage.setItem('unity_onboarding_complete', 'true');
-      localStorage.setItem('unity_user_name', userName);
-      localStorage.setItem('unity_user_role', selectedRole);
+      // Sign out immediately — user must verify email before accessing the app
+      const { signOut } = await import('firebase/auth');
+      await signOut(auth);
       
-      // Show verification message
-      alert('Account created! Please check your email to verify your account before logging in.');
-      
-      // All users go to dashboard
-      window.location.href = '/dashboard';
+      // Redirect to login with verification message
+      navigate('/login?verified=pending');
     } catch (err: any) {
       errorService.handleError(err, 'Signup error');
       setError(err?.message ?? 'Sign-up failed');

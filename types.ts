@@ -91,6 +91,15 @@ export interface UserProfile {
   stripeConnectedAccountId?: string; // For mentors receiving payouts
   subscriptionTier?: 'starter' | 'job-ready' | 'career-accelerator';
   subscriptionStatus?: 'active' | 'cancelled' | 'past_due' | 'paused';
+  subscriptionMentorId?: string | null;
+  pendingSubscriptionTier?: 'starter' | 'job-ready' | 'career-accelerator' | null;
+  pendingSubscriptionMentorId?: string | null;
+  sessionsPerMonth?: number;
+  sessionsUsedThisMonth?: number;
+  billingSetupComplete?: boolean;
+  paymentMethodOnFile?: boolean;
+  subscriptionUpdatedAt?: Timestamp;
+  subscriptionLastBookedAt?: Timestamp;
   
   // System fields
   accountStatus?: AccountStatus;

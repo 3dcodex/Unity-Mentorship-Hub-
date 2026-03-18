@@ -29,23 +29,21 @@ export interface Message {
 
 export const createConnection = async (userId: string, connectedUserId: string, sessionId?: string) => {
   const connectionId = [userId, connectedUserId].sort().join('_');
-  await setDoc(doc(db, `users/${userId}/connections`, connectionId), {
-    connectedUserId,
+  await setDoc(doc(db, 'connections', connectionId), {
+    participants: [userId, connectedUserId],
+    createdBy: userId,
     status: 'accepted',
+    isActive: true,
+    lastMessage: '',
+    lastMessageTime: serverTimestamp(),
     createdAt: serverTimestamp(),
     sessionId
-  });
-  await setDoc(doc(db, `users/${connectedUserId}/connections`, connectionId), {
-    connectedUserId: userId,
-    status: 'accepted',
-    createdAt: serverTimestamp(),
-    sessionId
-  });
+  }, { merge: true });
 };
 
 export const checkConnection = async (userId: string, otherUserId: string): Promise<boolean> => {
   const connectionId = [userId, otherUserId].sort().join('_');
-  const connectionDoc = await getDoc(doc(db, `users/${userId}/connections`, connectionId));
+  const connectionDoc = await getDoc(doc(db, 'connections', connectionId));
   return connectionDoc.exists() && connectionDoc.data()?.status === 'accepted';
 };
 

@@ -8,8 +8,24 @@ export const STRIPE_PRICE_IDS: Record<SubscriptionTier, string> = {
 
 export const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
 
+const resolveAppUrl = () => {
+  const configured = import.meta.env.VITE_APP_URL;
+  if (!configured) {
+    return window.location.origin;
+  }
+
+  const isLocalConfigured = configured.includes('localhost') || configured.includes('127.0.0.1');
+  const isCurrentLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+  if (isLocalConfigured && !isCurrentLocalhost) {
+    return window.location.origin;
+  }
+
+  return configured;
+};
+
 export const STRIPE_ENV_CONFIG = {
-  appUrl: import.meta.env.VITE_APP_URL || window.location.origin,
+  appUrl: resolveAppUrl(),
   functionsRegion: import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || 'us-central1',
 };
 

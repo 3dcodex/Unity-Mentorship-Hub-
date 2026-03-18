@@ -207,6 +207,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <MobileNavItem to="/mentorship" label="Mentorship" onClick={closeMobileMenu} />
             <MobileNavItem to="/resources" label="Resources" onClick={closeMobileMenu} />
             <MobileNavItem to="/community" label="Community" onClick={closeMobileMenu} />
+            <MobileNavItem to="/billing/manage" label="Manage Billing" onClick={closeMobileMenu} />
             <Link to="/profile" className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors flex items-center gap-2">
               <span className="material-symbols-outlined text-sm">person</span> Profile
             </Link>
@@ -223,6 +224,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <SidebarItem to="/quick-chat" icon="chat" label="Quick Chat" />
               <SidebarItem to="/mentorship/history" icon="calendar_today" label="My Sessions" />
               <SidebarItem to="/mentorship/book" icon="person_search" label="Book a Mentor" />
+              <SidebarItem to="/billing/manage" icon="payments" label="Manage Billing" />
               <SidebarItem to="/analytics" icon="insights" label="Analytics" />
             </div>
           </div>

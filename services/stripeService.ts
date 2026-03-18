@@ -7,6 +7,13 @@ import { errorService } from './errorService';
 interface CreateCheckoutSessionPayload {
   tier: SubscriptionTier;
   mentorId: string;
+  priceId?: string;
+  successUrl?: string;
+  cancelUrl?: string;
+}
+
+interface CreateSetupSessionPayload {
+  mentorId: string;
   successUrl?: string;
   cancelUrl?: string;
 }
@@ -36,14 +43,21 @@ export const stripeService = {
         throw new Error('Checkout is only required for paid tiers');
       }
 
-      const callable = httpsCallable<CreateCheckoutSessionPayload & { priceId: string }, CheckoutSessionResponse>(
+      let fallbackPriceId: string | undefined;
+      try {
+        fallbackPriceId = getPriceIdForTier(payload.tier);
+      } catch {
+        fallbackPriceId = undefined;
+      }
+
+      const callable = httpsCallable<CreateCheckoutSessionPayload, CheckoutSessionResponse>(
         functions,
         'createStripeCheckoutSession'
       );
 
       const result = await callable({
         ...payload,
-        priceId: getPriceIdForTier(payload.tier),
+        priceId: fallbackPriceId,
         successUrl: payload.successUrl || `${STRIPE_ENV_CONFIG.appUrl}/billing?status=success`,
         cancelUrl: payload.cancelUrl || `${STRIPE_ENV_CONFIG.appUrl}/billing?status=cancelled`,
       });
@@ -51,6 +65,29 @@ export const stripeService = {
       return result.data;
     } catch (error) {
       errorService.handleError(error, 'createStripeCheckoutSession');
+      throw error;
+    }
+  },
+
+  /**
+   * Creates Stripe Setup Checkout to collect card details for starter tier.
+   */
+  async createSetupSession(payload: CreateSetupSessionPayload): Promise<CheckoutSessionResponse> {
+    try {
+      const callable = httpsCallable<CreateSetupSessionPayload, CheckoutSessionResponse>(
+        functions,
+        'createStripeSetupSession'
+      );
+
+      const result = await callable({
+        ...payload,
+        successUrl: payload.successUrl || `${STRIPE_ENV_CONFIG.appUrl}/billing?status=success&tier=starter`,
+        cancelUrl: payload.cancelUrl || `${STRIPE_ENV_CONFIG.appUrl}/billing?status=cancelled&tier=starter`,
+      });
+
+      return result.data;
+    } catch (error) {
+      errorService.handleError(error, 'createStripeSetupSession');
       throw error;
     }
   },

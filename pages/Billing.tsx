@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../App';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { db } from '../src/firebase';
-import { collection, getDocs, query, where, orderBy, limit, addDoc, Timestamp, doc, setDoc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, limit, Timestamp, doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { errorService } from '../services/errorService';
 import { stripeService } from '../services/stripeService';
 import { SubscriptionTier } from '../types';
+import { SUBSCRIPTION_PLANS } from '../src/config/subscriptionPlans';
 import Toast from '../components/Toast';
 
 const SELECTED_MENTOR_STORAGE_KEY = 'unity_selected_mentor_id';
@@ -17,6 +18,13 @@ interface Transaction {
   amount: number;
   status: 'paid' | 'pending' | 'failed';
   type: 'session' | 'subscription' | 'refund';
+  stripeInvoiceId?: string;
+}
+
+interface MentorOption {
+  id: string;
+  name: string;
+  expertise: string;
 }
 
 const Billing: React.FC = () => {
@@ -28,6 +36,8 @@ const Billing: React.FC = () => {
   const [planLoading, setPlanLoading] = useState<SubscriptionTier | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionTier>('starter');
+  const [selectedMentorId, setSelectedMentorId] = useState('');
+  const [availableMentors, setAvailableMentors] = useState<MentorOption[]>([]);
   const [toastMessage, setToastMessage] = useState('');
   
   // Check if coming from mentorship booking
@@ -52,15 +62,24 @@ const Billing: React.FC = () => {
     if (user) {
       loadTransactions();
       loadUserPlan();
+      loadMentors();
     }
   }, [user]);
 
   useEffect(() => {
+    if (mentorIdFromQuery) {
+      setSelectedMentorId(mentorIdFromQuery);
+      return;
+    }
+
+    if (mentorId) {
+      setSelectedMentorId(mentorId);
+    }
+  }, [mentorId, mentorIdFromQuery]);
+
+  useEffect(() => {
     if (billingStatus === 'success') {
-      setToastMessage('Subscription checkout completed. Your plan will be activated shortly.');
-      loadUserPlan();
-      loadTransactions();
-      navigate('/billing', { replace: true });
+      syncSubscriptionAfterCheckout();
     }
 
     if (billingStatus === 'cancelled') {
@@ -68,6 +87,85 @@ const Billing: React.FC = () => {
       navigate('/billing', { replace: true });
     }
   }, [billingStatus, navigate]);
+
+  const pollAttemptsRef = useRef(0);
+  const MAX_POLL_ATTEMPTS = 5;
+  const POLL_INTERVAL_MS = 2500;
+
+  const syncSubscriptionAfterCheckout = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
+      if (!userSnap.exists()) return;
+
+      const userData = userSnap.data();
+
+      const activeSubSnapshot = await getDocs(
+        query(
+          collection(db, 'subscriptions'),
+          where('userId', '==', user.uid),
+          where('status', '==', 'active'),
+          limit(1)
+        )
+      );
+
+      if (!activeSubSnapshot.empty) {
+        const activeSub = activeSubSnapshot.docs[0].data() as Record<string, any>;
+
+        await setDoc(userRef, {
+          subscriptionTier: activeSub.tier || userData.subscriptionTier || 'starter',
+          subscriptionStatus: 'active',
+          subscriptionMentorId: activeSub.mentorId || userData.subscriptionMentorId || null,
+          sessionsPerMonth: activeSub.sessionsPerMonth || userData.sessionsPerMonth || 1,
+          pendingSubscriptionMentorId: null,
+          pendingSubscriptionTier: null,
+          subscriptionUpdatedAt: Timestamp.now(),
+        }, { merge: true });
+
+        setToastMessage('Payment confirmed. Your plan is now active.');
+        loadUserPlan();
+        loadTransactions();
+        navigate('/mentorship/history', { replace: true });
+        return;
+      }
+
+      // Webhook may not have fired yet — retry with polling
+      if (pollAttemptsRef.current < MAX_POLL_ATTEMPTS) {
+        pollAttemptsRef.current += 1;
+        setToastMessage(`Confirming payment with Stripe... (attempt ${pollAttemptsRef.current}/${MAX_POLL_ATTEMPTS})`);
+        setTimeout(() => syncSubscriptionAfterCheckout(), POLL_INTERVAL_MS);
+        return;
+      }
+
+      // Max retries reached — check if at least billing setup completed
+      const refreshedUserDoc = await getDoc(userRef);
+      const refreshedUser = refreshedUserDoc.data() || {};
+      const setupComplete = Boolean(refreshedUser.billingSetupComplete || refreshedUser.paymentMethodOnFile);
+
+      if (setupComplete) {
+        await setDoc(userRef, {
+          subscriptionTier: refreshedUser.subscriptionTier || 'starter',
+          subscriptionStatus: 'active',
+          pendingSubscriptionMentorId: null,
+          pendingSubscriptionTier: null,
+          subscriptionUpdatedAt: Timestamp.now(),
+        }, { merge: true });
+        setToastMessage('Card details saved. Billing setup is complete.');
+      } else {
+        setToastMessage('Payment submitted. It may take a moment to activate — please refresh shortly.');
+      }
+
+      loadUserPlan();
+      loadTransactions();
+      navigate('/mentorship/history', { replace: true });
+    } catch (err) {
+      errorService.handleError(err, 'Error syncing subscription after checkout');
+      setToastMessage('We could not verify activation yet. Please refresh in a moment.');
+      navigate('/billing', { replace: true });
+    }
+  }, [user, navigate]);
 
   const normalizePlan = (rawPlan: unknown): SubscriptionTier => {
     switch (rawPlan) {
@@ -150,39 +248,45 @@ const Billing: React.FC = () => {
     }
   };
 
-  const handlePayment = async (amount: number, description: string) => {
-    if (!user) return;
+  const loadMentors = async () => {
     try {
-      await addDoc(collection(db, 'transactions'), {
-        userId: user.uid,
-        amount,
-        description,
-        status: 'paid',
-        type: 'session',
-        date: Timestamp.now(),
+      const mentorsQuery = query(
+        collection(db, 'users'),
+        where('isMentor', '==', true),
+        where('mentorStatus', '==', 'approved'),
+        limit(50)
+      );
+      const mentorsSnapshot = await getDocs(mentorsQuery);
+      const mentors = mentorsSnapshot.docs.map((mentorDoc) => {
+        const data = mentorDoc.data() as Record<string, any>;
+        return {
+          id: mentorDoc.id,
+          name: String(data.displayName || data.name || 'Mentor'),
+          expertise: String(data.mentorExpertise || 'Mentorship'),
+        };
       });
-      
-      // Create payment notification
-      await addDoc(collection(db, 'notifications'), {
-        userId: user.uid,
-        type: 'payment',
-        title: 'Payment Confirmed',
-        message: `Payment of $${amount.toFixed(2)} for ${description} was successful`,
-        read: false,
-        createdAt: Timestamp.now(),
-        actionUrl: '/billing',
-      });
-      
-      setToastMessage('Payment successful.');
-      if (mentorId) {
-        navigate(`/quick-chat?user=${mentorId}`);
-      } else {
-        loadTransactions();
+
+      setAvailableMentors(mentors);
+
+      if (!selectedMentorId && mentors.length > 0) {
+        const storedMentorId = sessionStorage.getItem(SELECTED_MENTOR_STORAGE_KEY) || '';
+        const resolvedMentorId = mentors.find((m) => m.id === storedMentorId)?.id || mentors[0].id;
+        setSelectedMentorId(resolvedMentorId);
+        sessionStorage.setItem(SELECTED_MENTOR_STORAGE_KEY, resolvedMentorId);
       }
     } catch (err) {
-      errorService.handleError(err, 'Payment error');
-      setToastMessage('Payment failed. Please try again.');
+      errorService.handleError(err, 'Error loading mentors for billing');
     }
+  };
+
+  const startSecureCheckout = (tier: SubscriptionTier) => {
+    if (!selectedMentorId) {
+      setToastMessage('Select a mentor first to continue to secure card entry.');
+      return;
+    }
+
+    sessionStorage.setItem(SELECTED_MENTOR_STORAGE_KEY, selectedMentorId);
+    navigate(`/billing/checkout?tier=${tier}&mentor=${selectedMentorId}`);
   };
 
   const handleSelectPlan = async (planId: SubscriptionTier) => {
@@ -191,38 +295,25 @@ const Billing: React.FC = () => {
     try {
       setPlanLoading(planId);
 
+      // Starter is free — switch directly without checkout
       if (planId === 'starter') {
-        await setDoc(
-          doc(db, 'users', user.uid),
-          {
-            subscriptionTier: 'starter',
-            subscriptionStatus: 'active',
-            subscriptionUpdatedAt: Timestamp.now(),
-          },
-          { merge: true }
-        );
-
+        await updateDoc(doc(db, 'users', user.uid), {
+          subscriptionTier: 'starter',
+          subscriptionStatus: 'active',
+          subscriptionUpdatedAt: Timestamp.now(),
+        });
         setSelectedPlan('starter');
-        setToastMessage('You are now on the STARTER plan.');
+        setToastMessage('Switched to Starter plan.');
         return;
       }
 
-      if (!mentorId) {
-        setToastMessage('Select a mentor first so your subscription can be linked to the right mentor.');
-        navigate('/mentorship/match');
+      if (!selectedMentorId) {
+        setToastMessage('Select a mentor first so billing can be linked correctly.');
         return;
       }
 
-      const checkout = await stripeService.createCheckoutSession({
-        tier: planId,
-        mentorId,
-      });
-
-      if (!checkout.checkoutUrl) {
-        throw new Error('Checkout URL was not returned.');
-      }
-
-      window.location.href = checkout.checkoutUrl;
+      sessionStorage.setItem(SELECTED_MENTOR_STORAGE_KEY, selectedMentorId);
+      navigate(`/billing/checkout?tier=${planId}&mentor=${selectedMentorId}`);
     } catch (err) {
       errorService.handleError(err, 'Plan selection error');
       setToastMessage('Unable to start checkout. Please try again.');
@@ -240,6 +331,24 @@ const Billing: React.FC = () => {
       window.location.href = portal.url;
     } catch (err) {
       errorService.handleError(err, 'Billing portal error');
+
+      const message = String((err as any)?.message || '').toLowerCase();
+      const missingCustomer =
+        message.includes('no stripe customer found') ||
+        message.includes('failed-precondition') ||
+        message.includes('customer');
+
+      if (missingCustomer) {
+        if (!selectedMentorId) {
+          setToastMessage('Select a mentor first, then choose a paid plan to enter card details.');
+          return;
+        }
+
+        const setupTier: SubscriptionTier = selectedPlan === 'career-accelerator' ? 'career-accelerator' : 'job-ready';
+        navigate(`/billing/checkout?tier=${setupTier}&mentor=${selectedMentorId}`);
+        return;
+      }
+
       setToastMessage('Unable to open billing portal right now.');
     } finally {
       setPortalLoading(false);
@@ -253,67 +362,7 @@ const Billing: React.FC = () => {
     return 'N/A';
   };
 
-  const plans: Array<{
-    id: SubscriptionTier;
-    name: string;
-    subtitle: string;
-    price: number;
-    period: string;
-    features: string[];
-    color: string;
-    popular: boolean;
-  }> = [
-    {
-      id: 'starter',
-      name: 'STARTER',
-      subtitle: 'Career Clarity Session',
-      price: 0,
-      period: 'month',
-      features: [
-        '1 Career Clarity Session',
-        'Industry pathway discussion',
-        'Skills gap identification',
-        'Job-readiness assessment',
-        'Mentor matching guidance',
-      ],
-      color: 'from-gray-500 to-gray-600',
-      popular: false,
-    },
-    {
-      id: 'job-ready',
-      name: 'JOB-READY',
-      subtitle: 'Structured Employment Preparation',
-      price: 45,
-      period: 'month',
-      features: [
-        'Biweekly 1-on-1 Mentorship Sessions (2/month)',
-        'CV & LinkedIn optimization',
-        'Target job strategy planning',
-        'Interview preparation',
-        'Application review and feedback',
-        'Monthly networking event access',
-      ],
-      color: 'from-blue-500 to-indigo-600',
-      popular: true,
-    },
-    {
-      id: 'career-accelerator',
-      name: 'CAREER ACCELERATOR',
-      subtitle: 'Fast-Track to Employment',
-      price: 95,
-      period: 'month',
-      features: [
-        'Everything in Job-Ready',
-        'Weekly mentorship sessions (4/month)',
-        'Personalized career strategy plan',
-        'Advanced CV and portfolio review',
-        'Intensive mock interviews',
-        'Priority mentor access',
-      ],
-      color: 'from-purple-500 to-pink-600',
-      popular: false,
-    },
-  ];
+  const plans = SUBSCRIPTION_PLANS;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 py-8 px-4">
@@ -342,7 +391,40 @@ const Billing: React.FC = () => {
             >
               {portalLoading ? 'Opening Portal...' : 'Manage Subscription'}
             </button>
+            <button
+              onClick={() => navigate('/billing/manage')}
+              className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-black hover:bg-blue-700 transition"
+            >
+              Subscription Center
+            </button>
           </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-xl border border-gray-100 dark:border-gray-700">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center">
+              <span className="material-symbols-outlined text-white text-2xl">person_search</span>
+            </div>
+            <div>
+              <h2 className="text-2xl font-black text-gray-900 dark:text-white">Select Mentor For Paid Plans</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Card details are entered securely on Stripe after you choose a paid plan.</p>
+            </div>
+          </div>
+
+          <label className="block text-xs font-black uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">Linked Mentor</label>
+          <select
+            value={selectedMentorId}
+            onChange={(e) => {
+              setSelectedMentorId(e.target.value);
+              sessionStorage.setItem(SELECTED_MENTOR_STORAGE_KEY, e.target.value);
+            }}
+            className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-bold text-gray-800 dark:text-gray-200"
+          >
+            <option value="">Select a mentor</option>
+            {availableMentors.map((mentor) => (
+              <option key={mentor.id} value={mentor.id}>{mentor.name} - {mentor.expertise}</option>
+            ))}
+          </select>
         </div>
 
         {/* Session Payment (if coming from booking) */}
@@ -353,8 +435,8 @@ const Billing: React.FC = () => {
                 <span className="material-symbols-outlined text-white text-2xl">event_available</span>
               </div>
               <div>
-                <h2 className="text-2xl font-black text-gray-900 dark:text-white">Session Payment</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Complete payment to confirm your booking</p>
+                <h2 className="text-2xl font-black text-gray-900 dark:text-white">Secure Payment Required</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Card details are entered on Stripe and charges are processed there.</p>
               </div>
             </div>
 
@@ -365,23 +447,32 @@ const Billing: React.FC = () => {
               </div>
               <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
                 <div className="flex justify-between">
-                  <span>Platform Fee (10%)</span>
-                  <span className="font-bold">${(parseFloat(sessionCost) * 0.1).toFixed(2)}</span>
+                  <span>Card entry is secure and hosted by Stripe</span>
+                  <span className="font-bold">PCI Compliant</span>
                 </div>
                 <div className="flex justify-between pt-2 border-t border-green-200 dark:border-green-700">
-                  <span className="font-bold text-gray-900 dark:text-white">Total</span>
-                  <span className="font-black text-gray-900 dark:text-white">${(parseFloat(sessionCost) * 1.1).toFixed(2)}</span>
+                  <span className="font-bold text-gray-900 dark:text-white">Activation</span>
+                  <span className="font-black text-gray-900 dark:text-white">After successful charge</span>
                 </div>
               </div>
             </div>
 
-            <button
-              onClick={() => handlePayment(parseFloat(sessionCost) * 1.1, 'Mentorship Session')}
-              className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white py-4 rounded-2xl font-black text-lg shadow-xl shadow-green-500/30 dark:shadow-green-900/30 hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
-            >
-              <span className="material-symbols-outlined">lock</span>
-              Pay Securely
-            </button>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <button
+                onClick={() => startSecureCheckout('job-ready')}
+                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-4 rounded-2xl font-black text-base shadow-xl shadow-blue-500/30 dark:shadow-blue-900/30 transition-all flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined">lock</span>
+                Enter Card Details - Job-Ready
+              </button>
+              <button
+                onClick={() => startSecureCheckout('career-accelerator')}
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-4 rounded-2xl font-black text-base shadow-xl shadow-purple-500/30 dark:shadow-purple-900/30 transition-all flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined">workspace_premium</span>
+                Enter Card Details - Career Accelerator
+              </button>
+            </div>
           </div>
         )}
 
@@ -411,7 +502,7 @@ const Billing: React.FC = () => {
               <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2">{plan.name}</h3>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-3 font-medium">{plan.subtitle}</p>
               <div className="flex items-baseline gap-2 mb-6">
-                <span className="text-5xl font-black text-gray-900 dark:text-white">${plan.price}</span>
+                <span className="text-5xl font-black text-gray-900 dark:text-white">${plan.priceMonthly}</span>
                 <span className="text-gray-500 dark:text-gray-400 font-bold">/{plan.period}</span>
               </div>
 
@@ -439,7 +530,7 @@ const Billing: React.FC = () => {
                   ? 'Current Plan'
                   : plan.id === 'starter'
                   ? 'Switch to Starter'
-                  : 'Checkout'}
+                  : 'Continue to Card Entry'}
               </button>
             </div>
           ))}
@@ -503,7 +594,10 @@ const Billing: React.FC = () => {
                         </span>
                       </td>
                       <td className="py-4 px-4">
-                        <button className="text-blue-600 dark:text-blue-400 hover:underline text-sm font-bold flex items-center gap-1">
+                        <button
+                          onClick={() => handleManageSubscription()}
+                          className="text-blue-600 dark:text-blue-400 hover:underline text-sm font-bold flex items-center gap-1"
+                        >
                           <span className="material-symbols-outlined text-lg">download</span>
                           Invoice
                         </button>
@@ -529,25 +623,32 @@ const Billing: React.FC = () => {
           </div>
 
           <div className="grid md:grid-cols-2 gap-4">
-            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-6 text-white relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
-              <div className="relative z-10">
-                <p className="text-xs font-bold opacity-80 mb-4">Primary Card</p>
-                <p className="text-2xl font-black mb-6 tracking-wider">•••• •••• •••• 4242</p>
-                <div className="flex justify-between items-end">
-                  <div>
-                    <p className="text-xs opacity-80">Expires</p>
-                    <p className="font-black">12/25</p>
-                  </div>
-                  <span className="material-symbols-outlined text-4xl opacity-20">credit_card</span>
-                </div>
-              </div>
+            <div className="rounded-2xl p-6 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-slate-900">
+              <p className="text-sm font-black text-gray-900 dark:text-white mb-2">Secure Card Entry</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Card details and saved payment methods are managed directly in Stripe's secure portal.
+              </p>
+              <button
+                onClick={handleManageSubscription}
+                disabled={portalLoading}
+                className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black disabled:opacity-60"
+              >
+                {portalLoading ? 'Opening Portal...' : 'Open Stripe Billing Portal'}
+              </button>
             </div>
 
-            <button className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-2xl p-6 hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all flex flex-col items-center justify-center gap-3 group">
-              <span className="material-symbols-outlined text-4xl text-gray-400 dark:text-gray-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors">add_circle</span>
-              <span className="font-bold text-gray-600 dark:text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Add New Card</span>
-            </button>
+            <div className="rounded-2xl p-6 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-slate-900">
+              <p className="text-sm font-black text-gray-900 dark:text-white mb-2">Subscription Management</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                View current plan, mentor linkage, usage, and billing history in one place.
+              </p>
+              <button
+                onClick={() => navigate('/billing/manage')}
+                className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-black"
+              >
+                Go To Subscription Center
+              </button>
+            </div>
           </div>
         </div>
       </div>

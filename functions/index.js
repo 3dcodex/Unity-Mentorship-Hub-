@@ -27,11 +27,61 @@ const getTierConfig = (tier) => {
     return tiers[tier] || null;
 };
 
+const getStripePriceIdForTier = (tier, fallbackPriceId) => {
+    const priceByTier = {
+        'job-ready': process.env.STRIPE_PRICE_JOB_READY || process.env.VITE_STRIPE_PRICE_JOB_READY,
+        'career-accelerator': process.env.STRIPE_PRICE_CAREER_ACCELERATOR || process.env.VITE_STRIPE_PRICE_CAREER_ACCELERATOR,
+    };
+
+    const priceId = priceByTier[tier] || fallbackPriceId || null;
+    if (!priceId) {
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            `Missing Stripe price configuration for tier: ${tier}`
+        );
+    }
+
+    return priceId;
+};
+
 const calculateCommissionSplit = (totalAmount) => {
     const mentorAmount = Number((totalAmount * 0.85).toFixed(2));
     const platformFee = Number((totalAmount - mentorAmount).toFixed(2));
 
     return { mentorAmount, platformFee };
+};
+
+const ensureStripeCustomerId = async({ stripe, userRef, userData, userId }) => {
+    let stripeCustomerId = userData?.stripeCustomerId;
+
+    if (stripeCustomerId) {
+        try {
+            await stripe.customers.retrieve(stripeCustomerId);
+            return stripeCustomerId;
+        } catch (error) {
+            functions.logger.warn('Stored Stripe customer ID is invalid for current key; creating a new customer', {
+                userId,
+                stripeCustomerId,
+                error: error.message,
+            });
+        }
+    }
+
+    const customer = await stripe.customers.create({
+        email: userData?.email,
+        name: userData?.name || userData?.displayName || undefined,
+        metadata: {
+            userId,
+        },
+    });
+
+    stripeCustomerId = customer.id;
+    await userRef.update({
+        stripeCustomerId,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return stripeCustomerId;
 };
 
 exports.adminResetPassword = functions.https.onCall(async(data, context) => {
@@ -44,7 +94,7 @@ exports.adminResetPassword = functions.https.onCall(async(data, context) => {
 
     // Verify admin role
     const adminDoc = await admin.firestore().collection('users').doc(context.auth.uid).get();
-    const adminRole = adminDoc.data() ? .role;
+    const adminRole = adminDoc.data()?.role;
 
     if (!['admin', 'super_admin'].includes(adminRole)) {
         throw new functions.https.HttpsError('permission-denied', 'Only admins can reset passwords');
@@ -86,7 +136,7 @@ exports.adminChangeEmail = functions.https.onCall(async(data, context) => {
 
     // Verify admin role
     const adminDoc = await admin.firestore().collection('users').doc(context.auth.uid).get();
-    const adminRole = adminDoc.data() ? .role;
+    const adminRole = adminDoc.data()?.role;
 
     if (!['admin', 'super_admin'].includes(adminRole)) {
         throw new functions.https.HttpsError('permission-denied', 'Only admins can change user emails');
@@ -148,9 +198,9 @@ exports.createStripeCheckoutSession = functions.https.onCall(async(data, context
         throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
     }
 
-    const { tier, mentorId, priceId, successUrl, cancelUrl } = data || {};
+    const { tier, mentorId, successUrl, cancelUrl, priceId: fallbackPriceId } = data || {};
 
-    if (!tier || !mentorId || !priceId || !successUrl || !cancelUrl) {
+    if (!tier || !mentorId || !successUrl || !cancelUrl) {
         throw new functions.https.HttpsError('invalid-argument', 'Missing checkout session parameters');
     }
 
@@ -158,6 +208,8 @@ exports.createStripeCheckoutSession = functions.https.onCall(async(data, context
     if (!tierConfig || tierConfig.priceMonthly <= 0) {
         throw new functions.https.HttpsError('invalid-argument', 'Invalid paid subscription tier');
     }
+
+    const priceId = getStripePriceIdForTier(tier, fallbackPriceId);
 
     const db = admin.firestore();
     const userRef = db.collection('users').doc(context.auth.uid);
@@ -173,29 +225,19 @@ exports.createStripeCheckoutSession = functions.https.onCall(async(data, context
     }
 
     const mentorData = mentorDoc.data();
-    if (!mentorData ? .isMentor || mentorData ? .mentorStatus !== 'approved' || mentorData ? .mentorApplicationVersion !== 2) {
+    if (!mentorData?.isMentor || mentorData?.mentorStatus !== 'approved' || mentorData?.mentorApplicationVersion !== 2) {
         throw new functions.https.HttpsError('failed-precondition', 'Selected mentor is not approved');
     }
 
     const userData = userDoc.data();
     const stripe = getStripeClient();
 
-    let stripeCustomerId = userData ? .stripeCustomerId;
-    if (!stripeCustomerId) {
-        const customer = await stripe.customers.create({
-            email: userData ? .email,
-            name: userData ? .name || userData ? .displayName || undefined,
-            metadata: {
-                userId: context.auth.uid,
-            },
-        });
-
-        stripeCustomerId = customer.id;
-        await userRef.update({
-            stripeCustomerId,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-    }
+    const stripeCustomerId = await ensureStripeCustomerId({
+        stripe,
+        userRef,
+        userData,
+        userId: context.auth.uid,
+    });
 
     const session = await stripe.checkout.sessions.create({
         mode: 'subscription',
@@ -229,6 +271,72 @@ exports.createStripeCheckoutSession = functions.https.onCall(async(data, context
     };
 });
 
+exports.createStripeSetupSession = functions.https.onCall(async(data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+    }
+
+    const { mentorId, successUrl, cancelUrl } = data || {};
+    if (!mentorId || !successUrl || !cancelUrl) {
+        throw new functions.https.HttpsError('invalid-argument', 'Missing setup session parameters');
+    }
+
+    const db = admin.firestore();
+    const userRef = db.collection('users').doc(context.auth.uid);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'User profile not found');
+    }
+
+    const mentorDoc = await db.collection('users').doc(mentorId).get();
+    if (!mentorDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Mentor profile not found');
+    }
+
+    const mentorData = mentorDoc.data();
+    if (!mentorData?.isMentor || mentorData?.mentorStatus !== 'approved' || mentorData?.mentorApplicationVersion !== 2) {
+        throw new functions.https.HttpsError('failed-precondition', 'Selected mentor is not approved');
+    }
+
+    const userData = userDoc.data();
+    const stripe = getStripeClient();
+
+    const stripeCustomerId = await ensureStripeCustomerId({
+        stripe,
+        userRef,
+        userData,
+        userId: context.auth.uid,
+    });
+
+    const session = await stripe.checkout.sessions.create({
+        mode: 'setup',
+        customer: stripeCustomerId,
+        payment_method_types: ['card'],
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        metadata: {
+            action: 'billing_setup',
+            userId: context.auth.uid,
+            mentorId,
+            tier: 'starter',
+        },
+        setup_intent_data: {
+            metadata: {
+                action: 'billing_setup',
+                userId: context.auth.uid,
+                mentorId,
+                tier: 'starter',
+            },
+        },
+    });
+
+    return {
+        sessionId: session.id,
+        checkoutUrl: session.url,
+    };
+});
+
 exports.createStripeBillingPortalSession = functions.https.onCall(async(data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
@@ -246,12 +354,26 @@ exports.createStripeBillingPortalSession = functions.https.onCall(async(data, co
         throw new functions.https.HttpsError('not-found', 'User profile not found');
     }
 
-    const stripeCustomerId = userDoc.data() ? .stripeCustomerId;
+    const stripeCustomerId = userDoc.data()?.stripeCustomerId;
     if (!stripeCustomerId) {
         throw new functions.https.HttpsError('failed-precondition', 'No Stripe customer found for user');
     }
 
     const stripe = getStripeClient();
+    try {
+        await stripe.customers.retrieve(stripeCustomerId);
+    } catch (error) {
+        await db.collection('users').doc(context.auth.uid).update({
+            stripeCustomerId: admin.firestore.FieldValue.delete(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        throw new functions.https.HttpsError(
+            'failed-precondition',
+            'Stored Stripe customer is invalid for current Stripe mode. Please start checkout again.'
+        );
+    }
+
     const portalSession = await stripe.billingPortal.sessions.create({
         customer: stripeCustomerId,
         return_url: returnUrl,
@@ -279,17 +401,17 @@ exports.createStripeConnectOnboardingLink = functions.https.onCall(async(data, c
     }
 
     const mentorData = mentorDoc.data();
-    if (!mentorData ? .isMentor || mentorData ? .mentorStatus !== 'approved' || mentorData ? .mentorApplicationVersion !== 2) {
+    if (!mentorData?.isMentor || mentorData?.mentorStatus !== 'approved' || mentorData?.mentorApplicationVersion !== 2) {
         throw new functions.https.HttpsError('permission-denied', 'Only approved mentors can connect payouts');
     }
 
     const stripe = getStripeClient();
-    let connectedAccountId = mentorData ? .stripeConnectedAccountId;
+    let connectedAccountId = mentorData?.stripeConnectedAccountId;
 
     if (!connectedAccountId) {
         const account = await stripe.accounts.create({
             type: 'express',
-            email: mentorData ? .email,
+            email: mentorData?.email,
             metadata: {
                 mentorId: context.auth.uid,
             },
@@ -346,6 +468,26 @@ exports.stripeWebhook = functions.https.onRequest(async(req, res) => {
         if (event.type === 'checkout.session.completed') {
             const session = event.data.object;
             const metadata = session.metadata || {};
+
+            if (session.mode === 'setup' || metadata.action === 'billing_setup') {
+                await db.collection('users').doc(metadata.userId).set({
+                    stripeCustomerId: session.customer || null,
+                    subscriptionTier: 'starter',
+                    subscriptionStatus: 'active',
+                    subscriptionMentorId: metadata.mentorId || null,
+                    sessionsPerMonth: 1,
+                    sessionsUsedThisMonth: 0,
+                    billingSetupComplete: true,
+                    paymentMethodOnFile: true,
+                    pendingSubscriptionMentorId: null,
+                    pendingSubscriptionTier: null,
+                    subscriptionUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                }, { merge: true });
+
+                return res.status(200).send({ received: true });
+            }
+
             const tierConfig = getTierConfig(metadata.tier);
 
             if (!tierConfig) {
@@ -354,7 +496,7 @@ exports.stripeWebhook = functions.https.onRequest(async(req, res) => {
 
             const subscriptionId = typeof session.subscription === 'string' ?
                 session.subscription :
-                session.subscription ? .id;
+                session.subscription?.id;
 
             let currentPeriodEnd = null;
             if (subscriptionId) {
@@ -376,7 +518,7 @@ exports.stripeWebhook = functions.https.onRequest(async(req, res) => {
                 sessionsRemaining: tierConfig.sessionsPerMonth,
                 stripeCustomerId: session.customer,
                 stripeSubscriptionId: subscriptionId || null,
-                stripePriceId: session.metadata ? .priceId || null,
+                stripePriceId: session.metadata?.priceId || null,
                 currentPeriodStart: admin.firestore.FieldValue.serverTimestamp(),
                 currentPeriodEnd,
                 billingCycleAnchor: admin.firestore.FieldValue.serverTimestamp(),
@@ -389,6 +531,10 @@ exports.stripeWebhook = functions.https.onRequest(async(req, res) => {
                 stripeCustomerId: session.customer,
                 subscriptionTier: metadata.tier,
                 subscriptionStatus: 'active',
+                subscriptionMentorId: metadata.mentorId || null,
+                sessionsPerMonth: tierConfig.sessionsPerMonth,
+                sessionsUsedThisMonth: 0,
+                subscriptionUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             });
         }
@@ -397,7 +543,7 @@ exports.stripeWebhook = functions.https.onRequest(async(req, res) => {
             const invoice = event.data.object;
             const subscriptionId = typeof invoice.subscription === 'string' ?
                 invoice.subscription :
-                invoice.subscription ? .id;
+                invoice.subscription?.id;
 
             if (subscriptionId) {
                 const subscriptionSnapshot = await db
@@ -449,7 +595,7 @@ exports.stripeWebhook = functions.https.onRequest(async(req, res) => {
             const invoice = event.data.object;
             const subscriptionId = typeof invoice.subscription === 'string' ?
                 invoice.subscription :
-                invoice.subscription ? .id;
+                invoice.subscription?.id;
 
             if (subscriptionId) {
                 const subscriptionSnapshot = await db
@@ -609,7 +755,7 @@ exports.sendNotificationEmail = functions.https.onCall(async(data, context) => {
 
     // Allow admins and internal system calls
     const callerDoc = await admin.firestore().collection('users').doc(context.auth.uid).get();
-    const callerRole = callerDoc.data() ? .role;
+    const callerRole = callerDoc.data()?.role;
     if (!['admin', 'super_admin'].includes(callerRole)) {
         throw new functions.https.HttpsError('permission-denied', 'Only admins can send notification emails');
     }

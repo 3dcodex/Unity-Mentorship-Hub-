@@ -43,6 +43,8 @@ const CoverLetterTemplates = lazy(() => import('./pages/career/CoverLetterTempla
 const LiveEvent = lazy(() => import('./pages/LiveEvent'));
 const PendingApproval = lazy(() => import('./pages/PendingApproval'));
 const Billing = lazy(() => import('./pages/Billing'));
+const BillingCheckout = lazy(() => import('./pages/BillingCheckout'));
+const ManageSubscription = lazy(() => import('./pages/ManageSubscription'));
 const ProfileView = lazy(() => import('./pages/ProfileView'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const OurImpact = lazy(() => import('./pages/OurImpact'));
@@ -144,6 +146,11 @@ const ProtectedLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
   // Protected routes should always require authentication first.
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Block users who haven't verified their email
+  if (!user.emailVerified) {
+    return <Navigate to="/login?verified=pending" replace />;
   }
 
   // Keep onboarding redirect behavior for authenticated users only.
@@ -250,6 +257,8 @@ const App: React.FC = () => {
         <Route path="/profile-view/:userId" element={<ProtectedLayout><ProfileView /></ProtectedLayout>} />
         
         <Route path="/billing" element={<ProtectedLayout><Billing /></ProtectedLayout>} />
+        <Route path="/billing/checkout" element={<ProtectedLayout><BillingCheckout /></ProtectedLayout>} />
+        <Route path="/billing/manage" element={<ProtectedLayout><ManageSubscription /></ProtectedLayout>} />
         <Route path="/notifications" element={<ProtectedLayout><Notifications /></ProtectedLayout>} />
         <Route path="/messages" element={<ProtectedLayout><Messages /></ProtectedLayout>} />
         

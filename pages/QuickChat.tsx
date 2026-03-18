@@ -6,6 +6,7 @@ import { db } from '../src/firebase';
 import { collection, query, where, getDocs, addDoc, updateDoc, doc, onSnapshot, orderBy, Timestamp, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { presenceService } from '../services/presenceService';
 import { errorService } from '../services/errorService';
+import { useToast } from '../components/AdminToast';
 
 interface Connection {
   id: string;
@@ -44,6 +45,12 @@ const QuickChat: React.FC = () => {
   const [callStatus, setCallStatus] = useState<'ringing' | 'connecting' | 'connected' | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => void | Promise<void>;
+    confirmLabel?: string;
+  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -51,6 +58,16 @@ const QuickChat: React.FC = () => {
   const localStreamRef = useRef<MediaStream | null>(null);
   const callIdRef = useRef<string | null>(null);
   const callListenersRef = useRef<(() => void) | null>(null);
+  const { showToast, ToastComponent } = useToast();
+
+  const openConfirmDialog = (
+    title: string,
+    message: string,
+    onConfirm: () => void | Promise<void>,
+    confirmLabel = 'Confirm'
+  ) => {
+    setConfirmDialog({ title, message, onConfirm, confirmLabel });
+  };
 
   useEffect(() => {
     if (user) {
@@ -195,77 +212,77 @@ const QuickChat: React.FC = () => {
   };
 
   const deleteConversation = async (connectionId: string, otherUserId: string) => {
-    if (!user || !confirm('Delete this conversation? This action cannot be undone.')) return;
-    
-    try {
-      const conversationId = [user.uid, otherUserId].sort().join('_');
-      
-      // Delete all messages in the conversation
-      const messagesQuery = query(collection(db, 'conversations', conversationId, 'messages'));
-      const messagesSnapshot = await getDocs(messagesQuery);
-      
-      const deletePromises = messagesSnapshot.docs.map(messageDoc => 
-        deleteDoc(doc(db, 'conversations', conversationId, 'messages', messageDoc.id))
-      );
-      await Promise.all(deletePromises);
-      
-      // Delete the conversation document
-      await deleteDoc(doc(db, 'conversations', conversationId));
-      
-      // Delete the connection
-      await deleteDoc(doc(db, 'connections', connectionId));
-      
-      // Refresh connections
-      await loadConnections();
-      setSelectedChat(null);
-      setMessages([]);
-      
-      alert('Conversation deleted successfully');
-    } catch (err) {
-      errorService.handleError(err, 'Error deleting conversation');
-      alert('Failed to delete conversation');
-    }
+    if (!user) return;
+    openConfirmDialog(
+      'Delete Conversation',
+      'Delete this conversation? This action cannot be undone.',
+      async () => {
+        try {
+          const conversationId = [user.uid, otherUserId].sort().join('_');
+
+          const messagesQuery = query(collection(db, 'conversations', conversationId, 'messages'));
+          const messagesSnapshot = await getDocs(messagesQuery);
+
+          const deletePromises = messagesSnapshot.docs.map(messageDoc =>
+            deleteDoc(doc(db, 'conversations', conversationId, 'messages', messageDoc.id))
+          );
+          await Promise.all(deletePromises);
+
+          await deleteDoc(doc(db, 'conversations', conversationId));
+          await deleteDoc(doc(db, 'connections', connectionId));
+
+          await loadConnections();
+          setSelectedChat(null);
+          setMessages([]);
+          showToast('Conversation deleted successfully', 'success');
+        } catch (err) {
+          errorService.handleError(err, 'Error deleting conversation');
+          showToast('Failed to delete conversation', 'error');
+        }
+      },
+      'Delete'
+    );
   };
 
   const clearAllConversations = async () => {
-    if (!user || !confirm('Clear all conversations? This will delete all your messages and connections.')) return;
-    
-    try {
-      // Delete all connections for this user
-      const connectionsQuery = query(collection(db, 'connections'), where('participants', 'array-contains', user.uid));
-      const connectionsSnapshot = await getDocs(connectionsQuery);
-      
-      for (const connectionDoc of connectionsSnapshot.docs) {
-        const connectionData = connectionDoc.data();
-        const otherUserId = connectionData.participants.find((id: string) => id !== user.uid);
-        const conversationId = [user.uid, otherUserId].sort().join('_');
-        
-        // Delete all messages in this conversation
-        const messagesQuery = query(collection(db, 'conversations', conversationId, 'messages'));
-        const messagesSnapshot = await getDocs(messagesQuery);
-        
-        const deletePromises = messagesSnapshot.docs.map(messageDoc => 
-          deleteDoc(doc(db, 'conversations', conversationId, 'messages', messageDoc.id))
-        );
-        await Promise.all(deletePromises);
-        
-        // Delete the conversation document
-        await deleteDoc(doc(db, 'conversations', conversationId));
-        
-        // Delete the connection
-        await deleteDoc(doc(db, 'connections', connectionDoc.id));
-      }
-      
-      // Refresh the UI
-      setConnections([]);
-      setSelectedChat(null);
-      setMessages([]);
-      
-      alert('All conversations cleared successfully');
-    } catch (err) {
-      errorService.handleError(err, 'Error clearing conversations');
-      alert('Failed to clear conversations');
-    }
+    if (!user) return;
+
+    openConfirmDialog(
+      'Clear All Conversations',
+      'This will delete all your messages and connections. Continue?',
+      async () => {
+        try {
+          const connectionsQuery = query(collection(db, 'connections'), where('participants', 'array-contains', user.uid));
+          const connectionsSnapshot = await getDocs(connectionsQuery);
+
+          for (const connectionDoc of connectionsSnapshot.docs) {
+            const connectionData = connectionDoc.data();
+            const otherUserId = connectionData.participants.find((id: string) => id !== user.uid);
+            const conversationId = [user.uid, otherUserId].sort().join('_');
+
+            const messagesQuery = query(collection(db, 'conversations', conversationId, 'messages'));
+            const messagesSnapshot = await getDocs(messagesQuery);
+
+            const deletePromises = messagesSnapshot.docs.map(messageDoc =>
+              deleteDoc(doc(db, 'conversations', conversationId, 'messages', messageDoc.id))
+            );
+            await Promise.all(deletePromises);
+
+            await deleteDoc(doc(db, 'conversations', conversationId));
+            await deleteDoc(doc(db, 'connections', connectionDoc.id));
+          }
+
+          setConnections([]);
+          setSelectedChat(null);
+          setMessages([]);
+          showToast('All conversations cleared', 'success');
+        } catch (err) {
+          errorService.handleError(err, 'Error clearing conversations');
+          showToast('Failed to clear conversations', 'error');
+        }
+      },
+      'Clear All'
+    );
   };
 
   const createPeerConnection = () => {
@@ -342,7 +359,7 @@ const QuickChat: React.FC = () => {
       setShowCallModal(true);
     } catch (err) {
       errorService.handleError(err, 'Error starting call');
-      alert('Could not access camera/microphone. Please check your browser permissions.');
+      showToast('Could not access camera/microphone. Check your permissions.', 'error');
       endCall();
     }
   };
@@ -471,7 +488,8 @@ const QuickChat: React.FC = () => {
     } catch (err) {
       errorService.handleError(err, 'Error sending message');
       setMessageText(messageToSend); // Restore message on error
-      alert(`Failed to send message: ${err.message}`);
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      showToast(`Failed to send message: ${message}`, 'error');
     }
   };
 
@@ -792,6 +810,35 @@ const QuickChat: React.FC = () => {
           </div>
         </div>
       )}
+
+      {confirmDialog && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl ${isDark ? 'bg-slate-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <h3 className={`text-lg font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>{confirmDialog.title}</h3>
+            <p className={`mt-2 text-sm ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{confirmDialog.message}</p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmDialog(null)}
+                className={`px-4 py-2 rounded-xl font-bold ${isDark ? 'bg-slate-700 text-gray-200' : 'bg-gray-100 text-gray-700'}`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  const action = confirmDialog.onConfirm;
+                  setConfirmDialog(null);
+                  await action();
+                }}
+                className="px-4 py-2 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700"
+              >
+                {confirmDialog.confirmLabel || 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {ToastComponent}
     </div>
   );
 };

@@ -6,6 +6,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import { presenceService } from '../services/presenceService';
 import { errorService } from '../services/errorService';
+import { useToast } from '../components/AdminToast';
 
 interface Session {
   id: string;
@@ -46,10 +47,28 @@ const SessionHistory: React.FC = () => {
   const [callType, setCallType] = useState<'video' | 'voice'>('video');
   const [callMentorId, setCallMentorId] = useState<string | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<{[userId: string]: boolean}>({});
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    confirmVariant?: 'danger' | 'primary';
+  } | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const { showToast, ToastComponent } = useToast();
+
+  const openConfirmDialog = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    confirmLabel = 'Confirm',
+    confirmVariant: 'danger' | 'primary' = 'primary'
+  ) => {
+    setConfirmDialog({ title, message, onConfirm, confirmLabel, confirmVariant });
+  };
 
   useEffect(() => {
     if (user) {
@@ -162,28 +181,35 @@ const SessionHistory: React.FC = () => {
   };
 
   const handleCancelSession = async (sessionId: string) => {
-    if (!confirm('Are you sure you want to cancel this session?')) return;
-    try {
-      await updateDoc(doc(db, 'bookings', sessionId), { status: 'cancelled' });
-      setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, status: 'cancelled' as const } : s));
-      
-      // Create notification
-      const session = sessions.find(s => s.id === sessionId);
-      if (session) {
-        await addDoc(collection(db, 'notifications'), {
-          userId: session.mentorId,
-          type: 'booking',
-          title: 'Session Cancelled',
-          message: 'A student has cancelled their session with you',
-          read: false,
-          createdAt: Timestamp.now(),
-          actionUrl: '/mentorship/history',
-        });
-      }
-    } catch (err) {
-      errorService.handleError(err, 'Error cancelling session');
-      alert('Failed to cancel session');
-    }
+    openConfirmDialog(
+      'Cancel Session',
+      'Are you sure you want to cancel this session?',
+      async () => {
+        try {
+          await updateDoc(doc(db, 'bookings', sessionId), { status: 'cancelled' });
+          setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, status: 'cancelled' as const } : s));
+
+          const session = sessions.find(s => s.id === sessionId);
+          if (session) {
+            await addDoc(collection(db, 'notifications'), {
+              userId: session.mentorId,
+              type: 'booking',
+              title: 'Session Cancelled',
+              message: 'A student has cancelled their session with you',
+              read: false,
+              createdAt: Timestamp.now(),
+              actionUrl: '/mentorship/history',
+            });
+          }
+          showToast('Session cancelled successfully', 'success');
+        } catch (err) {
+          errorService.handleError(err, 'Error cancelling session');
+          showToast('Failed to cancel session', 'error');
+        }
+      },
+      'Cancel Session',
+      'danger'
+    );
   };
 
   const isHiddenForUser = (session: Session) => {
@@ -203,20 +229,28 @@ const SessionHistory: React.FC = () => {
 
   const handleDeleteSession = async (sessionId: string) => {
     if (!user) return;
-    if (!confirm('Delete this session from your history view? You can only restore it from Firestore admin tools.')) return;
-    try {
-      await updateDoc(doc(db, 'bookings', sessionId), {
-        [`hiddenBy.${user.uid}`]: true,
-        updatedAt: Timestamp.now(),
-      });
-      setSessions(prev => prev.map(s => s.id === sessionId
-        ? { ...s, hiddenBy: { ...(s.hiddenBy || {}), [user.uid]: true } }
-        : s
-      ));
-    } catch (err) {
-      errorService.handleError(err, 'Error deleting session from history');
-      alert('Failed to remove session from your history');
-    }
+    openConfirmDialog(
+      'Delete From History',
+      'Delete this session from your history view?',
+      async () => {
+        try {
+          await updateDoc(doc(db, 'bookings', sessionId), {
+            [`hiddenBy.${user.uid}`]: true,
+            updatedAt: Timestamp.now(),
+          });
+          setSessions(prev => prev.map(s => s.id === sessionId
+            ? { ...s, hiddenBy: { ...(s.hiddenBy || {}), [user.uid]: true } }
+            : s
+          ));
+          showToast('Session removed from your history', 'success');
+        } catch (err) {
+          errorService.handleError(err, 'Error deleting session from history');
+          showToast('Failed to remove session from your history', 'error');
+        }
+      },
+      'Delete',
+      'danger'
+    );
   };
 
   const toggleBookmark = async (sessionId: string) => {
@@ -235,7 +269,7 @@ const SessionHistory: React.FC = () => {
       ));
     } catch (err) {
       errorService.handleError(err, 'Error updating bookmark');
-      alert('Failed to update bookmark');
+      showToast('Failed to update bookmark', 'error');
     }
   };
 
@@ -255,39 +289,46 @@ const SessionHistory: React.FC = () => {
       ));
     } catch (err) {
       errorService.handleError(err, 'Error updating archive');
-      alert('Failed to update archive status');
+      showToast('Failed to update archive status', 'error');
     }
   };
 
   const handleClearHistory = async () => {
     if (!user) return;
     if (filteredSessions.length === 0) return;
-    if (!confirm(`Clear ${filteredSessions.length} session(s) from your current history view?`)) return;
+    openConfirmDialog(
+      'Clear History View',
+      `Clear ${filteredSessions.length} session(s) from your current history view?`,
+      async () => {
+        try {
+          const batch = writeBatch(db);
+          filteredSessions.forEach((session) => {
+            batch.update(doc(db, 'bookings', session.id), {
+              [`hiddenBy.${user.uid}`]: true,
+              updatedAt: Timestamp.now(),
+            });
+          });
+          await batch.commit();
 
-    try {
-      const batch = writeBatch(db);
-      filteredSessions.forEach((session) => {
-        batch.update(doc(db, 'bookings', session.id), {
-          [`hiddenBy.${user.uid}`]: true,
-          updatedAt: Timestamp.now(),
-        });
-      });
-      await batch.commit();
-
-      const ids = new Set(filteredSessions.map(s => s.id));
-      setSessions(prev => prev.map(s => ids.has(s.id)
-        ? { ...s, hiddenBy: { ...(s.hiddenBy || {}), [user.uid]: true } }
-        : s
-      ));
-    } catch (err) {
-      errorService.handleError(err, 'Error clearing history');
-      alert('Failed to clear history');
-    }
+          const ids = new Set(filteredSessions.map(s => s.id));
+          setSessions(prev => prev.map(s => ids.has(s.id)
+            ? { ...s, hiddenBy: { ...(s.hiddenBy || {}), [user.uid]: true } }
+            : s
+          ));
+          showToast('History cleared for current view', 'success');
+        } catch (err) {
+          errorService.handleError(err, 'Error clearing history');
+          showToast('Failed to clear history', 'error');
+        }
+      },
+      'Clear',
+      'danger'
+    );
   };
 
   const handleRescheduleSession = async (sessionId: string) => {
     if (!rescheduleDate || !rescheduleTime) {
-      alert('Please select both date and time');
+      showToast('Please select both date and time', 'warning');
       return;
     }
     
@@ -323,10 +364,10 @@ const SessionHistory: React.FC = () => {
       setShowReschedule(null);
       setRescheduleDate('');
       setRescheduleTime('');
-      alert('Session rescheduled successfully');
+      showToast('Session rescheduled successfully', 'success');
     } catch (err) {
       errorService.handleError(err, 'Error rescheduling session');
-      alert('Failed to reschedule session');
+      showToast('Failed to reschedule session', 'error');
     }
   };
 
@@ -357,7 +398,7 @@ const SessionHistory: React.FC = () => {
     const isOnline = onlineUsers[mentorId];
     if (!isOnline) {
       const mentorName = mentors[mentorId]?.displayName || mentors[mentorId]?.name || 'Mentor';
-      alert(`${mentorName} is currently offline. They will receive a notification about your call attempt.`);
+      showToast(`${mentorName} is currently offline. They will receive a call notification.`, 'info');
       
       // Send offline call notification
       await addDoc(collection(db, 'notifications'), {
@@ -428,7 +469,7 @@ const SessionHistory: React.FC = () => {
       setShowCallModal(true);
     } catch (err) {
       errorService.handleError(err, 'Error starting call');
-      alert('Failed to start call. Please check your camera/microphone permissions.');
+      showToast('Failed to start call. Check camera/microphone permissions.', 'error');
       endCall();
     }
   };
@@ -622,25 +663,25 @@ const SessionHistory: React.FC = () => {
               return (
                 <div
                   key={session.id}
-                  className={`rounded-3xl p-6 backdrop-blur-sm border shadow-xl transition-all hover:scale-[1.01] ${
+                  className={`rounded-2xl sm:rounded-3xl p-3 sm:p-6 backdrop-blur-sm border shadow-xl transition-all ${
                     isDark ? 'bg-slate-800/80 border-gray-700' : 'bg-white/80 border-white/50'
                   }`}
                 >
-                  <div className="flex flex-col md:flex-row gap-6">
+                  <div className="flex flex-col gap-3 sm:gap-6">
                     {/* User Info */}
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="size-16 rounded-2xl overflow-hidden border-2 border-blue-500/20 cursor-pointer hover:scale-110 transition-all bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold"
+                    <div className="flex items-center gap-3 sm:gap-4 flex-1">
+                      <div className="size-10 sm:size-16 rounded-xl sm:rounded-2xl overflow-hidden border-2 border-blue-500/20 cursor-pointer transition-all bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold flex-shrink-0"
                         onClick={() => navigate(`/profile-view/${otherUserId}`)}>
                         {otherUser.photoURL ? (
                           <img src={otherUser.photoURL} className="w-full h-full object-cover" alt={isUserMentor ? 'Student' : 'Mentor'} />
                         ) : (
-                          <span className="text-2xl">
+                          <span className="text-base sm:text-2xl">
                             {(otherUser.displayName || otherUser.name || (isUserMentor ? 'Student' : 'Mentor'))[0]?.toUpperCase()}
                           </span>
                         )}
                       </div>
                       <div className="flex-1">
-                        <h3 className={`text-lg font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        <h3 className={`text-sm sm:text-lg font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>
                           {otherUser.displayName || otherUser.name || (isUserMentor ? 'Student' : 'Mentor')}
                         </h3>
                         <p className={`text-sm font-bold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -673,29 +714,29 @@ const SessionHistory: React.FC = () => {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-1.5 sm:gap-2">
                       {isActionableUpcoming ? (
                         <>
                           <button
                             onClick={() => startCall('video', otherUserId)}
-                            className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2"
+                            className="px-2.5 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-1"
                           >
                             <span className="material-symbols-outlined text-sm">videocam</span>
-                            Video Call
+                            <span className="hidden sm:inline">Video</span>
                           </button>
                           <button
                             onClick={() => startCall('voice', otherUserId)}
-                            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2"
+                            className="px-2.5 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-1"
                           >
                             <span className="material-symbols-outlined text-sm">call</span>
-                            Voice Call
+                            <span className="hidden sm:inline">Voice</span>
                           </button>
                           <button
                             onClick={() => navigate(`/quick-chat?user=${otherUserId}`)}
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition-all flex items-center gap-2"
+                            className="px-2.5 sm:px-4 py-1.5 sm:py-2 bg-blue-600 text-white rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-1"
                           >
                             <span className="material-symbols-outlined text-sm">chat</span>
-                            Message
+                            <span className="hidden sm:inline">Msg</span>
                           </button>
                           <button
                             onClick={() => setShowReschedule(session.id)}
@@ -707,7 +748,7 @@ const SessionHistory: React.FC = () => {
                           </button>
                           <button
                             onClick={() => handleCancelSession(session.id)}
-                            className="px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-xl font-bold hover:scale-105 transition-all"
+                            className="px-2.5 sm:px-4 py-1.5 sm:py-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm"
                           >
                             Cancel
                           </button>
@@ -773,7 +814,7 @@ const SessionHistory: React.FC = () => {
 
                       <button
                         onClick={() => handleDeleteSession(session.id)}
-                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-all"
+                        className="px-2.5 sm:px-4 py-1.5 sm:py-2 bg-red-600 text-white rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm"
                       >
                         Delete
                       </button>
@@ -1000,6 +1041,35 @@ const SessionHistory: React.FC = () => {
           </div>
         </div>
       )}
+
+      {confirmDialog && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl ${isDark ? 'bg-slate-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <h3 className={`text-lg font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>{confirmDialog.title}</h3>
+            <p className={`mt-2 text-sm ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{confirmDialog.message}</p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmDialog(null)}
+                className={`px-4 py-2 rounded-xl font-bold ${isDark ? 'bg-slate-700 text-gray-200' : 'bg-gray-100 text-gray-700'}`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  const action = confirmDialog.onConfirm;
+                  setConfirmDialog(null);
+                  await action();
+                }}
+                className={`px-4 py-2 rounded-xl font-bold text-white ${confirmDialog.confirmVariant === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+              >
+                {confirmDialog.confirmLabel || 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {ToastComponent}
     </div>
   );
 };

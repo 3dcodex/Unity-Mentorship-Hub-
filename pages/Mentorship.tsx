@@ -10,7 +10,7 @@ const Mentorship: React.FC = () => {
     <div className="animate-in fade-in duration-500 space-y-6 sm:space-y-8 md:space-y-16 bg-white dark:bg-slate-900 min-h-screen">
       {/* Hero Section */}
       <section className="bg-white dark:bg-slate-800 rounded-2xl sm:rounded-3xl md:rounded-[40px] border border-gray-100 dark:border-gray-700 overflow-hidden shadow-xl shadow-gray-200/50 dark:shadow-black/30 flex flex-col md:flex-row">
-        <div className="p-6 sm:p-4 sm:p-6 md:p-8 md:p-12 md:p-16 flex-1 space-y-4 sm:space-y-6 md:space-y-8">
+        <div className="p-4 sm:p-6 md:p-12 lg:p-16 flex-1 space-y-4 sm:space-y-6 md:space-y-8">
           <div className="inline-flex px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 text-primary text-[10px] font-black uppercase tracking-widest">DEI Focused Support</div>
           <h1 className="text-2xl sm:text-3xl md:text-5xl font-black text-gray-900 dark:text-white leading-tight">
             Peer-Powered <br/> Mentorship
@@ -21,19 +21,19 @@ const Mentorship: React.FC = () => {
           <div className="flex flex-wrap gap-4 pt-4">
             <button 
               onClick={() => navigate('/mentorship/tracks')}
-              className="px-10 py-4 bg-primary text-white font-black rounded-2xl shadow-xl shadow-primary/20 hover:scale-105 transition-all"
+              className="px-6 sm:px-10 py-3 sm:py-4 bg-primary text-white font-black rounded-2xl shadow-xl shadow-primary/20 hover:scale-105 transition-all"
             >
               Explore Tracks
             </button>
             <button 
               onClick={() => navigate('/mentorship/how-it-works')}
-              className="px-10 py-4 bg-white dark:bg-slate-700 border-2 border-gray-100 dark:border-gray-600 text-gray-900 dark:text-white font-bold rounded-2xl hover:bg-gray-50 dark:hover:bg-slate-600 transition-all"
+              className="px-6 sm:px-10 py-3 sm:py-4 bg-white dark:bg-slate-700 border-2 border-gray-100 dark:border-gray-600 text-gray-900 dark:text-white font-bold rounded-2xl hover:bg-gray-50 dark:hover:bg-slate-600 transition-all"
             >
               How it Works
             </button>
           </div>
         </div>
-        <div className="flex-1 min-h-[400px]">
+        <div className="flex-1 min-h-[200px] sm:min-h-[400px]">
           <img 
             src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&q=80&w=1000" 
             className="w-full h-full object-cover"
@@ -43,8 +43,8 @@ const Mentorship: React.FC = () => {
       </section>
 
       {/* Matching Quiz CTA */}
-      <section className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl sm:rounded-3xl md:rounded-[40px] p-6 md:p-12 md:p-16 flex flex-col md:flex-row items-center gap-6 border border-blue-100 dark:border-blue-800 shadow-sm relative overflow-hidden group">
-        <div className="absolute top-0 right-0 p-6 sm:p-4 sm:p-6 md:p-8 md:p-12 opacity-5">
+      <section className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl sm:rounded-3xl md:rounded-[40px] p-4 sm:p-6 md:p-12 lg:p-16 flex flex-col md:flex-row items-center gap-6 border border-blue-100 dark:border-blue-800 shadow-sm relative overflow-hidden group">
+        <div className="absolute top-0 right-0 p-4 sm:p-6 md:p-12 opacity-5">
            <span className="material-symbols-outlined text-[200px] text-primary">psychology</span>
         </div>
         <div className="flex-1 space-y-4 sm:space-y-6 md:space-y-8 relative z-10">
@@ -69,8 +69,8 @@ const Mentorship: React.FC = () => {
 
       {/* Tracks Section */}
       <section>
-        <h2 className="text-base sm:text-lg sm:text-base sm:text-base sm:text-lg md:text-xl md:text-2xl font-black mb-10 dark:text-white">Mentorship Tracks</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 md:gap-4 sm:p-6 md:p-8">
+        <h2 className="text-base sm:text-lg md:text-2xl font-black mb-10 dark:text-white">Mentorship Tracks</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
           <TrackCard 
             img="https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80&w=600"
             title="Peer Mentoring"
@@ -99,17 +99,17 @@ const Mentorship: React.FC = () => {
       </section>
 
       {/* CTA Section */}
-      <section className="bg-gray-900 rounded-2xl sm:rounded-3xl md:rounded-[40px] p-6 md:p-12 md:p-20 text-white flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+      <section className="bg-gray-900 rounded-2xl sm:rounded-3xl md:rounded-[40px] p-4 sm:p-6 md:p-12 lg:p-20 text-white flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-primary/10 to-transparent pointer-events-none"></div>
         <div className="space-y-4 max-w-xl">
-          <h2 className="text-2xl sm:text-xl sm:text-2xl md:text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black leading-tight">Ready to make an impact?</h2>
+          <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black leading-tight">Ready to make an impact?</h2>
           <p className="text-gray-400 font-medium text-base sm:text-lg leading-relaxed">
             If you've navigated student life and want to help others succeed, join our mentor community. Gain leadership skills, expand your network, and give back.
           </p>
         </div>
         <button
           onClick={() => navigate('/become-mentor')}
-          className="px-12 py-5 bg-primary text-white font-black rounded-2xl shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all min-w-[240px]"
+          className="px-8 sm:px-12 py-4 sm:py-5 bg-primary text-white font-black rounded-2xl shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all min-w-[200px] sm:min-w-[240px]"
         >
           Become a Mentor
         </button>

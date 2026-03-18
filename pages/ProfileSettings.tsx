@@ -417,7 +417,7 @@ const ProfileSettings: React.FC = () => {
         
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-2xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
             Profile Settings
           </h1>
           <p className="text-slate-600 dark:text-slate-400">Manage your account and preferences</p>

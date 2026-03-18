@@ -4,10 +4,32 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UnityMentor Hub</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block" rel="stylesheet">
     <script>
+        document.documentElement.classList.add('fonts-loading');
+
+        const markFontsLoaded = () => {
+            document.documentElement.classList.remove('fonts-loading');
+            document.documentElement.classList.add('fonts-loaded');
+        };
+
+        // Fallback timeout prevents icons staying hidden if font network fails.
+        const fontLoadTimeout = setTimeout(markFontsLoaded, 3000);
+
+        if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(() => {
+                clearTimeout(fontLoadTimeout);
+                markFontsLoaded();
+            }).catch(() => {
+                clearTimeout(fontLoadTimeout);
+                markFontsLoaded();
+            });
+        }
+
         tailwind.config = {
             darkMode: 'class',
             theme: {
