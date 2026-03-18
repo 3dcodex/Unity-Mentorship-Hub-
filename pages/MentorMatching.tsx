@@ -43,14 +43,14 @@ const MentorMatching: React.FC = () => {
     setStep('loading');
     setMatchMessage('');
 
-    if (user) {
-      await updateDoc(doc(db, 'users', user.uid), {
-        seekingTags: selectedInterests,
-        updatedAt: Timestamp.now()
-      });
-    }
-
     try {
+      if (user) {
+        await updateDoc(doc(db, 'users', user.uid), {
+          seekingTags: selectedInterests,
+          updatedAt: Timestamp.now()
+        }).catch(() => {});
+      }
+
       const q = query(
         collection(db, 'users'),
         where('mentorStatus', '==', 'approved'),

@@ -17,6 +17,7 @@ const BillingCheckout: React.FC = () => {
   const [mentorName, setMentorName] = useState('Selected mentor');
   const [processing, setProcessing] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const [promoCode, setPromoCode] = useState('');
 
   const searchParams = new URLSearchParams(location.search);
   const tierParam = searchParams.get('tier') || '';
@@ -85,7 +86,11 @@ const BillingCheckout: React.FC = () => {
 
       const checkout = selectedTier === 'starter'
         ? await stripeService.createSetupSession({ mentorId })
-        : await stripeService.createCheckoutSession({ tier: selectedTier, mentorId });
+        : await stripeService.createCheckoutSession({
+            tier: selectedTier,
+            mentorId,
+            promotionCode: promoCode.trim() || undefined,
+          });
 
       if (!checkout.checkoutUrl) {
         throw new Error('Checkout URL was not returned by Stripe session setup.');
@@ -101,6 +106,8 @@ const BillingCheckout: React.FC = () => {
         setToastMessage('Please sign in again, then retry checkout.');
       } else if (message.includes('mentor')) {
         setToastMessage('Selected mentor is not eligible for paid checkout. Choose another mentor.');
+      } else if (message.includes('promotion code')) {
+        setToastMessage('Promo code is invalid, expired, or not eligible for this plan.');
       } else {
         setToastMessage('Unable to open secure card entry. Please try again.');
       }
@@ -146,7 +153,13 @@ const BillingCheckout: React.FC = () => {
 
           {selectedTier !== 'starter' && (
             <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-4 mb-6">
-              <p className="text-sm font-black text-emerald-800 dark:text-emerald-300">If you have a promo code, enter it on the Stripe checkout page to apply your discount.</p>
+              <p className="text-sm font-black text-emerald-800 dark:text-emerald-300 mb-3">Enter promo code (or coupon ID) to validate and apply before redirecting to Stripe.</p>
+              <input
+                value={promoCode}
+                onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                placeholder="Enter promo code"
+                className="w-full rounded-xl border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-bold text-gray-800 dark:text-gray-200"
+              />
             </div>
           )}
 

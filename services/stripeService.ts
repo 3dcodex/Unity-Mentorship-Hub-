@@ -7,6 +7,7 @@ import { errorService } from './errorService';
 interface CreateCheckoutSessionPayload {
   tier: SubscriptionTier;
   mentorId: string;
+  promotionCode?: string;
   priceId?: string;
   successUrl?: string;
   cancelUrl?: string;
