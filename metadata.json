@@ -1,8 +1,0 @@
-{
-  "name": "UnityMentor Hub",
-  "description": "A comprehensive student inclusion and support platform featuring AI-powered mentorship matching, career toolkit, and community resources.",
-  "requestFramePermissions": [
-    "camera",
-    "microphone"
-  ]
-}

@@ -25,7 +25,6 @@ const QuickChat = lazy(() => import('./pages/QuickChat'));
 const ExploreTracks = lazy(() => import('./pages/ExploreTracks'));
 const HowItWorks = lazy(() => import('./pages/HowItWorks'));
 const MentorMatching = lazy(() => import('./pages/MentorMatching'));
-const BookChat = lazy(() => import('./pages/BookChat'));
 const Resources = lazy(() => import('./pages/resources/Resources'));
 const Community = lazy(() => import('./pages/community/Community'));
 const HelpCenterNew = lazy(() => import('./pages/support/HelpCenterNew'));
@@ -218,7 +217,7 @@ const App: React.FC = () => {
         <Route path="/mentorship/tracks" element={<ProtectedLayout><ExploreTracks /></ProtectedLayout>} />
         <Route path="/mentorship/how-it-works" element={<ProtectedLayout><HowItWorks /></ProtectedLayout>} />
         <Route path="/mentorship/match" element={<ProtectedLayout><MentorMatching /></ProtectedLayout>} />
-        <Route path="/mentorship/book-chat" element={<ProtectedLayout><BookChat /></ProtectedLayout>} />
+        <Route path="/mentorship/book-chat" element={<ProtectedLayout><Navigate to="/mentorship/book" replace /></ProtectedLayout>} />
         <Route path="/mentorship/book" element={<ProtectedLayout><MentorshipBooking /></ProtectedLayout>} />
         <Route path="/mentorship/history" element={<ProtectedLayout><SessionHistory /></ProtectedLayout>} />
         <Route path="/become-mentor" element={<ProtectedLayout><BecomeMentor /></ProtectedLayout>} />

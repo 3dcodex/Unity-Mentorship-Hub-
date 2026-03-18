@@ -20,3 +20,28 @@ build/
 
 # OS
 Thumbs.db
+
+# Security rules (keep local only)
+database.rules.json
+firestore.rules
+firestore-messaging.rules
+storage.rules
+
+# Cloud Functions source & secrets
+functions/.env
+functions/index.js
+functions/sendCustomPasswordReset.js
+functions/firebase-debug.log
+
+# Firebase project config
+.firebaserc
+
+# Admin scripts (sensitive)
+make-super-admin.js
+setup-admin.ps1
+setup-super-admin.cjs
+fixAdminRoles.ts
+
+# Misc junk
+metadata.json
+old_profile.txt

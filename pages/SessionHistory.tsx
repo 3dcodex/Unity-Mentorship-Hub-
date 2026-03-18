@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { db } from '../src/firebase';
-import { collection, getDocs, query, where, doc, getDoc, updateDoc, addDoc, Timestamp, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, getDoc, updateDoc, addDoc, Timestamp, writeBatch, limit } from 'firebase/firestore';
 import { useAuth } from '../App';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigate } from 'react-router-dom';
@@ -37,6 +37,9 @@ const SessionHistory: React.FC = () => {
   const [sortBy, setSortBy] = useState<'newest' | 'oldest'>('newest');
   const [userPlan, setUserPlan] = useState<SubscriptionTier>('starter');
   const [sessionCount, setSessionCount] = useState({ used: 0, total: 0 });
+  const [canBookSessions, setCanBookSessions] = useState(true);
+  const [quotaMessage, setQuotaMessage] = useState('');
+  const [cycleEndsAt, setCycleEndsAt] = useState<Date | null>(null);
   const [showReschedule, setShowReschedule] = useState<string | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleTime, setRescheduleTime] = useState('');
@@ -74,6 +77,14 @@ const SessionHistory: React.FC = () => {
     'career-accelerator': 4,
   };
 
+  const toDateValue = (value: any): Date | null => {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    if (typeof value?.toDate === 'function') return value.toDate();
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
   const openConfirmDialog = (
     title: string,
     message: string,
@@ -97,12 +108,90 @@ const SessionHistory: React.FC = () => {
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       if (userDoc.exists()) {
         const data = userDoc.data();
-        const plan = normalizeTier(data?.subscriptionTier || data?.subscriptionPlan);
+        let activeSub: Record<string, any> | null = null;
+        try {
+          const activeSubSnapshot = await getDocs(
+            query(
+              collection(db, 'subscriptions'),
+              where('userId', '==', user.uid),
+              where('status', '==', 'active'),
+              limit(1)
+            )
+          );
+          if (!activeSubSnapshot.empty) {
+            activeSub = activeSubSnapshot.docs[0].data() as Record<string, any>;
+          }
+        } catch (subErr) {
+          errorService.handleError(subErr, 'Unable to read active subscription for session quota');
+        }
+
+        const plan = normalizeTier(activeSub?.tier || data?.subscriptionTier || data?.subscriptionPlan);
+        const subscriptionStatus = String(activeSub?.status || data?.subscriptionStatus || 'active');
+        const cycleStart =
+          toDateValue(activeSub?.currentPeriodStart || data?.subscriptionCurrentPeriodStart) ||
+          new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+        const cycleEnd =
+          toDateValue(activeSub?.currentPeriodEnd || data?.subscriptionCurrentPeriodEnd) ||
+          new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1);
+
+        setCycleEndsAt(cycleEnd);
+
+        const studentBookingSnapshots = await Promise.all([
+          getDocs(query(collection(db, 'bookings'), where('studentId', '==', user.uid))),
+          getDocs(query(collection(db, 'bookings'), where('menteeId', '==', user.uid))),
+        ]);
+
+        const studentCombined = [...studentBookingSnapshots[0].docs, ...studentBookingSnapshots[1].docs]
+          .filter((snap, index, arr) => arr.findIndex((d) => d.id === snap.id) === index)
+          .map((snap) => snap.data());
+
+        const usedThisCycle = studentCombined.filter((b: any) => {
+          if (b.status === 'cancelled') return false;
+          const bookingDate = b.scheduledDate
+            ? new Date(`${b.scheduledDate}T00:00:00`)
+            : b.slotDate
+            ? new Date(`${b.slotDate}T00:00:00`)
+            : b.createdAt?.toDate
+            ? b.createdAt.toDate()
+            : null;
+          if (!bookingDate) return false;
+          return bookingDate >= cycleStart && bookingDate < cycleEnd;
+        }).length;
+
+        const total = Number(activeSub?.sessionsPerMonth || data?.sessionsPerMonth || planLimits[plan]);
+        const remaining =
+          plan === 'starter'
+            ? Math.max(total - usedThisCycle, 0)
+            : Number(activeSub?.sessionsRemaining ?? Math.max(total - usedThisCycle, 0));
+
         setUserPlan(plan);
-        setSessionCount((prev) => ({
-          ...prev,
-          total: Number(data?.sessionsPerMonth || planLimits[plan]),
-        }));
+
+        setSessionCount({
+          used: usedThisCycle,
+          total,
+        });
+
+        const setupComplete = Boolean(data?.billingSetupComplete || data?.paymentMethodOnFile || data?.stripeCustomerId);
+        const isActiveStatus = subscriptionStatus === 'active';
+        const isCycleValid = !cycleEnd || new Date() < cycleEnd;
+        const hasQuota = remaining > 0;
+        const canBook = Boolean(data?.hasFreeAccess || (setupComplete && isActiveStatus && isCycleValid && hasQuota));
+
+        setCanBookSessions(canBook);
+
+        if (!canBook) {
+          if (!setupComplete) {
+            setQuotaMessage('Complete billing setup before booking more sessions.');
+          } else if (!isActiveStatus) {
+            setQuotaMessage('Your subscription is not active. Update billing to continue booking.');
+          } else if (!isCycleValid) {
+            setQuotaMessage('Your billing cycle has ended. Waiting for automatic renewal payment confirmation.');
+          } else {
+            setQuotaMessage('Your session quota is exhausted for this billing cycle.');
+          }
+        } else {
+          setQuotaMessage('');
+        }
       }
     } catch (err) {
       errorService.handleError(err, 'Error loading plan');
@@ -158,15 +247,6 @@ const SessionHistory: React.FC = () => {
         index === self.findIndex(s => s.id === session.id)
       );
       setSessions(uniqueSessions);
-      
-      // Calculate session usage
-      const now = new Date();
-      const thisMonth = uniqueSessions.filter(s => {
-        const sessionDate = new Date(s.slotDate || s.createdAt?.toDate?.() || now);
-        return sessionDate.getMonth() === now.getMonth() && sessionDate.getFullYear() === now.getFullYear();
-      });
-      
-      setSessionCount((prev) => ({ ...prev, used: thisMonth.length }));
       
       // Load mentor/student data and track their online status
       const userIds = [...new Set([
@@ -603,13 +683,27 @@ const SessionHistory: React.FC = () => {
           <div className="flex items-center justify-between mb-6">
             <h1 className={`text-3xl font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>My Sessions</h1>
             <button
-              onClick={() => navigate('/mentorship/book')}
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-xl font-bold shadow-xl hover:scale-105 transition-all flex items-center gap-2"
+              onClick={() => {
+                if (!canBookSessions) {
+                  showToast(quotaMessage || 'You cannot book a new session with your current plan state.', 'warning');
+                  return;
+                }
+                navigate('/mentorship/book');
+              }}
+              disabled={!canBookSessions}
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-xl font-bold shadow-xl hover:scale-105 transition-all flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               <span className="material-symbols-outlined">add</span>
               Book Session
             </button>
           </div>
+
+          {quotaMessage && (
+            <p className={`text-xs font-bold ${isDark ? 'text-amber-300' : 'text-amber-700'}`}>
+              {quotaMessage}
+              {cycleEndsAt ? ` Next cycle refresh: ${cycleEndsAt.toLocaleDateString()}.` : ''}
+            </p>
+          )}
 
           <div className="grid md:grid-cols-3 gap-3">
             <div className="md:col-span-2 flex flex-wrap gap-2">
