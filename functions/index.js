@@ -52,7 +52,7 @@ const calculateCommissionSplit = (totalAmount) => {
 };
 
 const ensureStripeCustomerId = async({ stripe, userRef, userData, userId }) => {
-    let stripeCustomerId = userData?.stripeCustomerId;
+    let stripeCustomerId = userData ? .stripeCustomerId;
 
     if (stripeCustomerId) {
         try {
@@ -68,8 +68,8 @@ const ensureStripeCustomerId = async({ stripe, userRef, userData, userId }) => {
     }
 
     const customer = await stripe.customers.create({
-        email: userData?.email,
-        name: userData?.name || userData?.displayName || undefined,
+        email: userData ? .email,
+        name: userData ? .name || userData ? .displayName || undefined,
         metadata: {
             userId,
         },
@@ -94,7 +94,7 @@ exports.adminResetPassword = functions.https.onCall(async(data, context) => {
 
     // Verify admin role
     const adminDoc = await admin.firestore().collection('users').doc(context.auth.uid).get();
-    const adminRole = adminDoc.data()?.role;
+    const adminRole = adminDoc.data() ? .role;
 
     if (!['admin', 'super_admin'].includes(adminRole)) {
         throw new functions.https.HttpsError('permission-denied', 'Only admins can reset passwords');
@@ -136,7 +136,7 @@ exports.adminChangeEmail = functions.https.onCall(async(data, context) => {
 
     // Verify admin role
     const adminDoc = await admin.firestore().collection('users').doc(context.auth.uid).get();
-    const adminRole = adminDoc.data()?.role;
+    const adminRole = adminDoc.data() ? .role;
 
     if (!['admin', 'super_admin'].includes(adminRole)) {
         throw new functions.https.HttpsError('permission-denied', 'Only admins can change user emails');
@@ -225,7 +225,7 @@ exports.createStripeCheckoutSession = functions.https.onCall(async(data, context
     }
 
     const mentorData = mentorDoc.data();
-    if (!mentorData?.isMentor || mentorData?.mentorStatus !== 'approved' || mentorData?.mentorApplicationVersion !== 2) {
+    if (!mentorData ? .isMentor || mentorData ? .mentorStatus !== 'approved' || mentorData ? .mentorApplicationVersion !== 2) {
         throw new functions.https.HttpsError('failed-precondition', 'Selected mentor is not approved');
     }
 
@@ -295,7 +295,7 @@ exports.createStripeSetupSession = functions.https.onCall(async(data, context) =
     }
 
     const mentorData = mentorDoc.data();
-    if (!mentorData?.isMentor || mentorData?.mentorStatus !== 'approved' || mentorData?.mentorApplicationVersion !== 2) {
+    if (!mentorData ? .isMentor || mentorData ? .mentorStatus !== 'approved' || mentorData ? .mentorApplicationVersion !== 2) {
         throw new functions.https.HttpsError('failed-precondition', 'Selected mentor is not approved');
     }
 
@@ -354,7 +354,7 @@ exports.createStripeBillingPortalSession = functions.https.onCall(async(data, co
         throw new functions.https.HttpsError('not-found', 'User profile not found');
     }
 
-    const stripeCustomerId = userDoc.data()?.stripeCustomerId;
+    const stripeCustomerId = userDoc.data() ? .stripeCustomerId;
     if (!stripeCustomerId) {
         throw new functions.https.HttpsError('failed-precondition', 'No Stripe customer found for user');
     }
@@ -401,17 +401,17 @@ exports.createStripeConnectOnboardingLink = functions.https.onCall(async(data, c
     }
 
     const mentorData = mentorDoc.data();
-    if (!mentorData?.isMentor || mentorData?.mentorStatus !== 'approved' || mentorData?.mentorApplicationVersion !== 2) {
+    if (!mentorData ? .isMentor || mentorData ? .mentorStatus !== 'approved' || mentorData ? .mentorApplicationVersion !== 2) {
         throw new functions.https.HttpsError('permission-denied', 'Only approved mentors can connect payouts');
     }
 
     const stripe = getStripeClient();
-    let connectedAccountId = mentorData?.stripeConnectedAccountId;
+    let connectedAccountId = mentorData ? .stripeConnectedAccountId;
 
     if (!connectedAccountId) {
         const account = await stripe.accounts.create({
             type: 'express',
-            email: mentorData?.email,
+            email: mentorData ? .email,
             metadata: {
                 mentorId: context.auth.uid,
             },
@@ -473,6 +473,7 @@ exports.stripeWebhook = functions.https.onRequest(async(req, res) => {
                 await db.collection('users').doc(metadata.userId).set({
                     stripeCustomerId: session.customer || null,
                     subscriptionTier: 'starter',
+                    subscriptionPlan: 'starter',
                     subscriptionStatus: 'active',
                     subscriptionMentorId: metadata.mentorId || null,
                     sessionsPerMonth: 1,
@@ -494,23 +495,55 @@ exports.stripeWebhook = functions.https.onRequest(async(req, res) => {
                 throw new Error('Unknown subscription tier in checkout metadata');
             }
 
+            const userProfileSnap = await db.collection('users').doc(metadata.userId).get();
+            const mentorProfileSnap = await db.collection('users').doc(metadata.mentorId).get();
+            const userProfile = userProfileSnap.exists ? userProfileSnap.data() : {};
+            const mentorProfile = mentorProfileSnap.exists ? mentorProfileSnap.data() : {};
+
             const subscriptionId = typeof session.subscription === 'string' ?
                 session.subscription :
-                session.subscription?.id;
+                session.subscription ? .id;
 
+            let currentPeriodStart = null;
             let currentPeriodEnd = null;
+            let billingCycleInterval = 'month';
+            let billingCycleIntervalCount = 1;
+            let billingCycleDays = 30;
+
             if (subscriptionId) {
                 const stripeSubscription = await stripe.subscriptions.retrieve(subscriptionId);
+                currentPeriodStart = stripeSubscription.current_period_start ?
+                    admin.firestore.Timestamp.fromMillis(stripeSubscription.current_period_start * 1000) :
+                    null;
                 currentPeriodEnd = stripeSubscription.current_period_end ?
                     admin.firestore.Timestamp.fromMillis(stripeSubscription.current_period_end * 1000) :
                     null;
+
+                const priceRecurring = stripeSubscription.items?.data?.[0]?.price?.recurring || null;
+                if (priceRecurring?.interval) {
+                    billingCycleInterval = priceRecurring.interval;
+                }
+                if (priceRecurring?.interval_count) {
+                    billingCycleIntervalCount = Number(priceRecurring.interval_count) || 1;
+                }
+
+                const intervalDayMap = {
+                    day: 1,
+                    week: 7,
+                    month: 30,
+                    year: 365,
+                };
+                billingCycleDays = (intervalDayMap[billingCycleInterval] || 30) * billingCycleIntervalCount;
             }
 
             const subRef = db.collection('subscriptions').doc();
             await subRef.set({
                 id: subRef.id,
                 userId: metadata.userId,
+                userName: userProfile ? .name || userProfile ? .displayName || 'Unknown User',
+                userEmail: userProfile ? .email || '',
                 mentorId: metadata.mentorId,
+                mentorName: mentorProfile ? .name || mentorProfile ? .displayName || 'Unknown Mentor',
                 tier: metadata.tier,
                 status: 'active',
                 priceMonthly: tierConfig.priceMonthly,
@@ -518,10 +551,13 @@ exports.stripeWebhook = functions.https.onRequest(async(req, res) => {
                 sessionsRemaining: tierConfig.sessionsPerMonth,
                 stripeCustomerId: session.customer,
                 stripeSubscriptionId: subscriptionId || null,
-                stripePriceId: session.metadata?.priceId || null,
-                currentPeriodStart: admin.firestore.FieldValue.serverTimestamp(),
+                stripePriceId: session.metadata ? .priceId || null,
+                currentPeriodStart: currentPeriodStart || admin.firestore.FieldValue.serverTimestamp(),
                 currentPeriodEnd,
                 billingCycleAnchor: admin.firestore.FieldValue.serverTimestamp(),
+                billingCycleInterval,
+                billingCycleIntervalCount,
+                billingCycleDays,
                 cancelAtPeriodEnd: false,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -530,10 +566,18 @@ exports.stripeWebhook = functions.https.onRequest(async(req, res) => {
             await db.collection('users').doc(metadata.userId).update({
                 stripeCustomerId: session.customer,
                 subscriptionTier: metadata.tier,
+                subscriptionPlan: metadata.tier,
                 subscriptionStatus: 'active',
                 subscriptionMentorId: metadata.mentorId || null,
                 sessionsPerMonth: tierConfig.sessionsPerMonth,
                 sessionsUsedThisMonth: 0,
+                billingSetupComplete: true,
+                paymentMethodOnFile: true,
+                subscriptionCurrentPeriodStart: currentPeriodStart || null,
+                subscriptionCurrentPeriodEnd: currentPeriodEnd || null,
+                subscriptionCycleDays: billingCycleDays,
+                pendingSubscriptionMentorId: null,
+                pendingSubscriptionTier: null,
                 subscriptionUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             });
@@ -543,7 +587,7 @@ exports.stripeWebhook = functions.https.onRequest(async(req, res) => {
             const invoice = event.data.object;
             const subscriptionId = typeof invoice.subscription === 'string' ?
                 invoice.subscription :
-                invoice.subscription?.id;
+                invoice.subscription ? .id;
 
             if (subscriptionId) {
                 const subscriptionSnapshot = await db
@@ -585,8 +629,35 @@ exports.stripeWebhook = functions.https.onRequest(async(req, res) => {
                         status: 'active',
                         lastPaymentDate: admin.firestore.FieldValue.serverTimestamp(),
                         sessionsRemaining: subData.sessionsPerMonth,
+                        currentPeriodStart: invoice.period_start ?
+                            admin.firestore.Timestamp.fromMillis(invoice.period_start * 1000) :
+                            admin.firestore.FieldValue.serverTimestamp(),
+                        currentPeriodEnd: invoice.period_end ?
+                            admin.firestore.Timestamp.fromMillis(invoice.period_end * 1000) :
+                            subData.currentPeriodEnd || null,
                         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                     });
+
+                    await db.collection('users').doc(subData.userId).set({
+                        stripeCustomerId: subData.stripeCustomerId || invoice.customer || null,
+                        subscriptionTier: subData.tier,
+                        subscriptionPlan: subData.tier,
+                        subscriptionStatus: 'active',
+                        subscriptionMentorId: subData.mentorId || null,
+                        sessionsPerMonth: subData.sessionsPerMonth,
+                        sessionsUsedThisMonth: 0,
+                        billingSetupComplete: true,
+                        paymentMethodOnFile: true,
+                        subscriptionCurrentPeriodStart: invoice.period_start ?
+                            admin.firestore.Timestamp.fromMillis(invoice.period_start * 1000) :
+                            null,
+                        subscriptionCurrentPeriodEnd: invoice.period_end ?
+                            admin.firestore.Timestamp.fromMillis(invoice.period_end * 1000) :
+                            null,
+                        subscriptionCycleDays: subData.billingCycleDays || 30,
+                        subscriptionUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    }, { merge: true });
                 }
             }
         }
@@ -595,7 +666,7 @@ exports.stripeWebhook = functions.https.onRequest(async(req, res) => {
             const invoice = event.data.object;
             const subscriptionId = typeof invoice.subscription === 'string' ?
                 invoice.subscription :
-                invoice.subscription?.id;
+                invoice.subscription ? .id;
 
             if (subscriptionId) {
                 const subscriptionSnapshot = await db
@@ -610,6 +681,13 @@ exports.stripeWebhook = functions.https.onRequest(async(req, res) => {
                         status: 'past_due',
                         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                     });
+
+                    const subData = subDoc.data();
+                    await db.collection('users').doc(subData.userId).set({
+                        subscriptionStatus: 'past_due',
+                        subscriptionUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    }, { merge: true });
                 }
             }
         }
@@ -624,10 +702,17 @@ exports.stripeWebhook = functions.https.onRequest(async(req, res) => {
 
             if (!subscriptionSnapshot.empty) {
                 const subDoc = subscriptionSnapshot.docs[0];
+                const subData = subDoc.data();
                 await subDoc.ref.update({
                     status: 'cancelled',
                     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                 });
+
+                await db.collection('users').doc(subData.userId).set({
+                    subscriptionStatus: 'cancelled',
+                    subscriptionUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                }, { merge: true });
             }
         }
 
@@ -755,7 +840,7 @@ exports.sendNotificationEmail = functions.https.onCall(async(data, context) => {
 
     // Allow admins and internal system calls
     const callerDoc = await admin.firestore().collection('users').doc(context.auth.uid).get();
-    const callerRole = callerDoc.data()?.role;
+    const callerRole = callerDoc.data() ? .role;
     if (!['admin', 'super_admin'].includes(callerRole)) {
         throw new functions.https.HttpsError('permission-denied', 'Only admins can send notification emails');
     }

@@ -144,6 +144,12 @@ const BillingCheckout: React.FC = () => {
             </div>
           </div>
 
+          {selectedTier !== 'starter' && (
+            <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-4 mb-6">
+              <p className="text-sm font-black text-emerald-800 dark:text-emerald-300">If you have a promo code, enter it on the Stripe checkout page to apply your discount.</p>
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row gap-3">
             <button
               onClick={() => navigate('/billing')}

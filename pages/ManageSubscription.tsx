@@ -50,20 +50,33 @@ const ManageSubscription: React.FC = () => {
       setLoading(true);
 
       const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
+      const [userSnap, activeSubSnap] = await Promise.all([
+        getDoc(userRef),
+        getDocs(
+          query(
+            collection(db, 'subscriptions'),
+            where('userId', '==', user.uid),
+            where('status', '==', 'active'),
+            limit(1)
+          )
+        ),
+      ]);
+
+      const activeSub = activeSubSnap.empty ? null : (activeSubSnap.docs[0].data() as Record<string, any>);
 
       if (userSnap.exists()) {
         const data = userSnap.data() as Record<string, any>;
-        const tier = (data.subscriptionTier || 'starter') as SubscriptionTier;
+        const tier = ((activeSub?.tier || data.subscriptionTier || data.subscriptionPlan || 'starter') as SubscriptionTier);
+        const resolvedMentorId = String(data.subscriptionMentorId || activeSub?.mentorId || '');
 
         setSubscriptionTier(tier);
-        setSubscriptionStatus(String(data.subscriptionStatus || 'active'));
-        setSessionsPerMonth(Number(data.sessionsPerMonth || (tier === 'career-accelerator' ? 4 : tier === 'job-ready' ? 2 : 1)));
+        setSubscriptionStatus(String(activeSub?.status || data.subscriptionStatus || 'active'));
+        setSessionsPerMonth(Number(activeSub?.sessionsPerMonth || data.sessionsPerMonth || (tier === 'career-accelerator' ? 4 : tier === 'job-ready' ? 2 : 1)));
         setSessionsUsedThisMonth(Number(data.sessionsUsedThisMonth || 0));
 
-        if (data.subscriptionMentorId) {
-          setLinkedMentorId(String(data.subscriptionMentorId));
-          const mentorSnap = await getDoc(doc(db, 'users', String(data.subscriptionMentorId)));
+        if (resolvedMentorId) {
+          setLinkedMentorId(resolvedMentorId);
+          const mentorSnap = await getDoc(doc(db, 'users', resolvedMentorId));
           if (mentorSnap.exists()) {
             const mentorData = mentorSnap.data() as Record<string, any>;
             setMentorName(String(mentorData.displayName || mentorData.name || 'Linked mentor'));
@@ -181,6 +194,12 @@ const ManageSubscription: React.FC = () => {
           <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow border border-gray-100 dark:border-gray-700">
             <p className="text-xs font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">Current Plan</p>
             <p className="text-2xl font-black text-gray-900 dark:text-white mt-2">{formatTier(subscriptionTier)}</p>
+            <button
+              onClick={() => navigate('/billing')}
+              className="mt-4 text-sm font-black text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              Change or compare plans
+            </button>
           </div>
           <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow border border-gray-100 dark:border-gray-700">
             <p className="text-xs font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">Status</p>

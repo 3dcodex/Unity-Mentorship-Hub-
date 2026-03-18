@@ -44,7 +44,6 @@ const Billing: React.FC = () => {
   const searchParams = new URLSearchParams(location.search);
   const mentorIdFromQuery = searchParams.get('mentor');
   const mentorId = mentorIdFromQuery || sessionStorage.getItem(SELECTED_MENTOR_STORAGE_KEY);
-  const sessionCost = searchParams.get('cost') || '25';
   const billingStatus = searchParams.get('status');
 
   useEffect(() => {
@@ -116,9 +115,12 @@ const Billing: React.FC = () => {
 
         await setDoc(userRef, {
           subscriptionTier: activeSub.tier || userData.subscriptionTier || 'starter',
+          subscriptionPlan: activeSub.tier || userData.subscriptionTier || 'starter',
           subscriptionStatus: 'active',
           subscriptionMentorId: activeSub.mentorId || userData.subscriptionMentorId || null,
           sessionsPerMonth: activeSub.sessionsPerMonth || userData.sessionsPerMonth || 1,
+          billingSetupComplete: true,
+          paymentMethodOnFile: true,
           pendingSubscriptionMentorId: null,
           pendingSubscriptionTier: null,
           subscriptionUpdatedAt: Timestamp.now(),
@@ -143,11 +145,15 @@ const Billing: React.FC = () => {
       const refreshedUserDoc = await getDoc(userRef);
       const refreshedUser = refreshedUserDoc.data() || {};
       const setupComplete = Boolean(refreshedUser.billingSetupComplete || refreshedUser.paymentMethodOnFile);
+      const pendingTier = normalizePlan(refreshedUser.pendingSubscriptionTier || refreshedUser.subscriptionTier);
 
-      if (setupComplete) {
+      if (setupComplete && pendingTier === 'starter') {
         await setDoc(userRef, {
-          subscriptionTier: refreshedUser.subscriptionTier || 'starter',
+          subscriptionTier: 'starter',
+          subscriptionPlan: 'starter',
           subscriptionStatus: 'active',
+          billingSetupComplete: true,
+          paymentMethodOnFile: true,
           pendingSubscriptionMentorId: null,
           pendingSubscriptionTier: null,
           subscriptionUpdatedAt: Timestamp.now(),
@@ -186,11 +192,37 @@ const Billing: React.FC = () => {
   const loadUserPlan = async () => {
     if (!user) return;
     try {
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      const userRef = doc(db, 'users', user.uid);
+      const [userDoc, activeSubSnapshot] = await Promise.all([
+        getDoc(userRef),
+        getDocs(
+          query(
+            collection(db, 'subscriptions'),
+            where('userId', '==', user.uid),
+            where('status', '==', 'active'),
+            limit(1)
+          )
+        ),
+      ]);
+
       if (userDoc.exists()) {
         const userData = userDoc.data();
-        const plan = normalizePlan(userData?.subscriptionTier || userData?.subscriptionPlan);
+        const activeSub = activeSubSnapshot.empty ? null : (activeSubSnapshot.docs[0].data() as Record<string, any>);
+        const plan = normalizePlan(activeSub?.tier || userData?.subscriptionTier || userData?.subscriptionPlan);
         setSelectedPlan(plan);
+
+        if (activeSub) {
+          await setDoc(userRef, {
+            subscriptionTier: plan,
+            subscriptionPlan: plan,
+            subscriptionStatus: activeSub.status || 'active',
+            subscriptionMentorId: activeSub.mentorId || userData?.subscriptionMentorId || null,
+            sessionsPerMonth: activeSub.sessionsPerMonth || userData?.sessionsPerMonth || 1,
+            billingSetupComplete: true,
+            paymentMethodOnFile: true,
+            subscriptionUpdatedAt: Timestamp.now(),
+          }, { merge: true });
+        }
       }
     } catch (err) {
       errorService.handleError(err, 'Error loading user plan');
@@ -299,6 +331,7 @@ const Billing: React.FC = () => {
       if (planId === 'starter') {
         await updateDoc(doc(db, 'users', user.uid), {
           subscriptionTier: 'starter',
+          subscriptionPlan: 'starter',
           subscriptionStatus: 'active',
           subscriptionUpdatedAt: Timestamp.now(),
         });
@@ -427,55 +460,6 @@ const Billing: React.FC = () => {
           </select>
         </div>
 
-        {/* Session Payment (if coming from booking) */}
-        {mentorId && (
-          <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-xl border border-gray-100 dark:border-gray-700">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center">
-                <span className="material-symbols-outlined text-white text-2xl">event_available</span>
-              </div>
-              <div>
-                <h2 className="text-2xl font-black text-gray-900 dark:text-white">Secure Payment Required</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Card details are entered on Stripe and charges are processed there.</p>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-2xl p-6 border border-green-100 dark:border-green-800 mb-6">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Session Cost</span>
-                <span className="text-3xl font-black text-gray-900 dark:text-white">${sessionCost}</span>
-              </div>
-              <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                <div className="flex justify-between">
-                  <span>Card entry is secure and hosted by Stripe</span>
-                  <span className="font-bold">PCI Compliant</span>
-                </div>
-                <div className="flex justify-between pt-2 border-t border-green-200 dark:border-green-700">
-                  <span className="font-bold text-gray-900 dark:text-white">Activation</span>
-                  <span className="font-black text-gray-900 dark:text-white">After successful charge</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid sm:grid-cols-2 gap-3">
-              <button
-                onClick={() => startSecureCheckout('job-ready')}
-                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-4 rounded-2xl font-black text-base shadow-xl shadow-blue-500/30 dark:shadow-blue-900/30 transition-all flex items-center justify-center gap-2"
-              >
-                <span className="material-symbols-outlined">lock</span>
-                Enter Card Details - Job-Ready
-              </button>
-              <button
-                onClick={() => startSecureCheckout('career-accelerator')}
-                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-4 rounded-2xl font-black text-base shadow-xl shadow-purple-500/30 dark:shadow-purple-900/30 transition-all flex items-center justify-center gap-2"
-              >
-                <span className="material-symbols-outlined">workspace_premium</span>
-                Enter Card Details - Career Accelerator
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Subscription Plans */}
         <div className="grid md:grid-cols-3 gap-6">
           {plans.map((plan) => (
@@ -516,7 +500,13 @@ const Billing: React.FC = () => {
               </ul>
 
               <button
-                onClick={() => handleSelectPlan(plan.id)}
+                onClick={() => {
+                  if (selectedPlan === plan.id) {
+                    navigate('/billing/manage');
+                    return;
+                  }
+                  handleSelectPlan(plan.id);
+                }}
                 disabled={planLoading !== null}
                 className={`w-full py-3 rounded-xl font-black transition-all ${
                   selectedPlan === plan.id
@@ -527,7 +517,7 @@ const Billing: React.FC = () => {
                 {planLoading === plan.id
                   ? 'Processing...'
                   : selectedPlan === plan.id
-                  ? 'Current Plan'
+                  ? 'View Current Plan'
                   : plan.id === 'starter'
                   ? 'Switch to Starter'
                   : 'Continue to Card Entry'}

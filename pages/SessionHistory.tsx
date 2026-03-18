@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { db } from '../src/firebase';
-import { collection, getDocs, query, where, doc, updateDoc, addDoc, Timestamp, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, getDoc, updateDoc, addDoc, Timestamp, writeBatch } from 'firebase/firestore';
 import { useAuth } from '../App';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import { presenceService } from '../services/presenceService';
 import { errorService } from '../services/errorService';
 import { useToast } from '../components/AdminToast';
+import type { SubscriptionTier } from '../types';
 
 interface Session {
   id: string;
@@ -34,7 +35,7 @@ const SessionHistory: React.FC = () => {
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'completed' | 'cancelled' | 'bookmarked' | 'archived'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest'>('newest');
-  const [userPlan, setUserPlan] = useState<'free' | 'basic' | 'premium'>('free');
+  const [userPlan, setUserPlan] = useState<SubscriptionTier>('starter');
   const [sessionCount, setSessionCount] = useState({ used: 0, total: 0 });
   const [showReschedule, setShowReschedule] = useState<string | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState('');
@@ -60,6 +61,19 @@ const SessionHistory: React.FC = () => {
   const localStreamRef = useRef<MediaStream | null>(null);
   const { showToast, ToastComponent } = useToast();
 
+  const normalizeTier = (value: unknown): SubscriptionTier => {
+    if (value === 'job-ready' || value === 'career-accelerator' || value === 'starter') return value;
+    if (value === 'basic') return 'job-ready';
+    if (value === 'premium') return 'career-accelerator';
+    return 'starter';
+  };
+
+  const planLimits: Record<SubscriptionTier, number> = {
+    starter: 1,
+    'job-ready': 2,
+    'career-accelerator': 4,
+  };
+
   const openConfirmDialog = (
     title: string,
     message: string,
@@ -80,10 +94,15 @@ const SessionHistory: React.FC = () => {
   const loadUserPlan = async () => {
     if (!user) return;
     try {
-      const userDoc = await getDocs(query(collection(db, 'users'), where('__name__', '==', user.uid)));
-      if (!userDoc.empty) {
-        const plan = userDoc.docs[0].data()?.subscriptionPlan || 'free';
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        const plan = normalizeTier(data?.subscriptionTier || data?.subscriptionPlan);
         setUserPlan(plan);
+        setSessionCount((prev) => ({
+          ...prev,
+          total: Number(data?.sessionsPerMonth || planLimits[plan]),
+        }));
       }
     } catch (err) {
       errorService.handleError(err, 'Error loading plan');
@@ -147,8 +166,7 @@ const SessionHistory: React.FC = () => {
         return sessionDate.getMonth() === now.getMonth() && sessionDate.getFullYear() === now.getFullYear();
       });
       
-      const limits = { free: 1, basic: 5, premium: 999 };
-      setSessionCount({ used: thisMonth.length, total: limits[userPlan] });
+      setSessionCount((prev) => ({ ...prev, used: thisMonth.length }));
       
       // Load mentor/student data and track their online status
       const userIds = [...new Set([

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { db } from '../src/firebase';
-import { doc, getDoc, addDoc, collection, query, where, getDocs, Timestamp, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, addDoc, collection, query, where, getDocs, Timestamp, updateDoc, limit, runTransaction, increment } from 'firebase/firestore';
 import { useAuth } from '../App';
 import { useTheme } from '../contexts/ThemeContext';
 import { errorService } from '../services/errorService';
@@ -43,6 +43,10 @@ const MentorshipBooking: React.FC = () => {
   const [userPlan, setUserPlan] = useState<SubscriptionTier>('starter');
   const [planMentorId, setPlanMentorId] = useState<string | null>(null);
   const [sessionsUsedThisMonth, setSessionsUsedThisMonth] = useState(0);
+  const [sessionQuota, setSessionQuota] = useState(1);
+  const [sessionsRemaining, setSessionsRemaining] = useState<number | null>(null);
+  const [activeSubscriptionId, setActiveSubscriptionId] = useState<string | null>(null);
+  const [cycleEndsAt, setCycleEndsAt] = useState<Date | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
@@ -83,6 +87,14 @@ const MentorshipBooking: React.FC = () => {
       day: 'numeric',
       year: 'numeric',
     });
+  };
+
+  const toDateValue = (value: any): Date | null => {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    if (typeof value?.toDate === 'function') return value.toDate();
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
   };
 
   useEffect(() => {
@@ -154,19 +166,71 @@ const MentorshipBooking: React.FC = () => {
     try {
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       const userData = userDoc.data();
-      const plan = normalizeTier(userData?.subscriptionTier || userData?.subscriptionPlan);
+      let activeSub: Record<string, any> | null = null;
+      let activeSubDocId: string | null = null;
+
+      // Subscription reads can fail under strict rules; fall back to user profile data instead of blocking access.
+      try {
+        const activeSubSnapshot = await getDocs(
+          query(
+            collection(db, 'subscriptions'),
+            where('userId', '==', user.uid),
+            where('status', '==', 'active'),
+            limit(1)
+          )
+        );
+        if (!activeSubSnapshot.empty) {
+          activeSubDocId = activeSubSnapshot.docs[0].id;
+          activeSub = activeSubSnapshot.docs[0].data() as Record<string, any>;
+        }
+      } catch (subErr) {
+        errorService.handleError(subErr, 'Unable to read active subscription; using user profile fallback');
+      }
+
+      const plan = normalizeTier(activeSub?.tier || userData?.subscriptionTier || userData?.subscriptionPlan);
       const hasFreeAccess = userData?.hasFreeAccess || false;
-      const subscriptionStatus = userData?.subscriptionStatus || 'active';
-      const linkedMentor = userData?.subscriptionMentorId || null;
-      const billingSetupComplete = Boolean(userData?.billingSetupComplete || userData?.paymentMethodOnFile || userData?.stripeCustomerId);
+      const subscriptionStatus = activeSub?.status || userData?.subscriptionStatus || 'active';
+      const linkedMentor = userData?.subscriptionMentorId || activeSub?.mentorId || null;
+      const sessionsPerMonth = Number(activeSub?.sessionsPerMonth || userData?.sessionsPerMonth || planLimits[plan]);
+      const activeCycleEnd = toDateValue(activeSub?.currentPeriodEnd || userData?.subscriptionCurrentPeriodEnd);
+      const activeCycleStart = toDateValue(activeSub?.currentPeriodStart || userData?.subscriptionCurrentPeriodStart);
+      const billingSetupComplete = Boolean(
+        userData?.billingSetupComplete ||
+        userData?.paymentMethodOnFile ||
+        userData?.stripeCustomerId ||
+        activeSub ||
+        (plan !== 'starter' && subscriptionStatus === 'active')
+      );
 
       setUserPlan(plan);
       setPlanMentorId(linkedMentor);
+      setSessionQuota(sessionsPerMonth);
+      setActiveSubscriptionId(activeSubDocId);
+      setCycleEndsAt(activeCycleEnd);
 
-      // Count sessions used this month for quota checks.
+      if (activeSub) {
+        try {
+          await updateDoc(doc(db, 'users', user.uid), {
+            subscriptionTier: plan,
+            subscriptionPlan: plan,
+            subscriptionStatus,
+            subscriptionMentorId: linkedMentor,
+            sessionsPerMonth,
+            billingSetupComplete: true,
+            paymentMethodOnFile: true,
+            subscriptionUpdatedAt: Timestamp.now(),
+            updatedAt: Timestamp.now(),
+          });
+        } catch (syncErr) {
+          // Do not block booking access if profile sync write fails.
+          errorService.handleError(syncErr, 'Non-blocking subscription profile sync failed during access check');
+        }
+      }
+
+      // Count sessions used in current cycle for quota checks.
       const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const cycleStart = activeCycleStart || new Date(now.getFullYear(), now.getMonth(), 1);
+      const cycleEnd = activeCycleEnd || new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
       const bookingSnapshots = await Promise.all([
         getDocs(query(collection(db, 'bookings'), where('studentId', '==', user.uid))),
@@ -177,15 +241,24 @@ const MentorshipBooking: React.FC = () => {
         .filter((snap, index, arr) => arr.findIndex((d) => d.id === snap.id) === index)
         .map((snap) => snap.data());
 
-      const usedThisMonth = combined.filter((b: any) => {
+      const usedThisCycle = combined.filter((b: any) => {
         const dateRaw = b.scheduledDate || b.slotDate;
         const fallbackDate = b.createdAt?.toDate ? b.createdAt.toDate() : null;
         const bookingDate = dateRaw ? new Date(`${dateRaw}T00:00:00`) : fallbackDate;
         if (!bookingDate) return false;
         if (b.status === 'cancelled') return false;
-        return bookingDate >= startOfMonth && bookingDate < endOfMonth;
+        return bookingDate >= cycleStart && bookingDate < cycleEnd;
       }).length;
-      setSessionsUsedThisMonth(usedThisMonth);
+      setSessionsUsedThisMonth(usedThisCycle);
+
+      const resolvedRemaining =
+        plan === 'starter'
+          ? Math.max(1 - usedThisCycle, 0)
+          : Number(
+              activeSub?.sessionsRemaining ??
+                Math.max(sessionsPerMonth - usedThisCycle, 0)
+            );
+      setSessionsRemaining(Number.isFinite(resolvedRemaining) ? resolvedRemaining : 0);
 
       if (hasFreeAccess) {
         setHasAccess(true);
@@ -200,20 +273,38 @@ const MentorshipBooking: React.FC = () => {
       }
 
       if (plan === 'starter') {
+        if (resolvedRemaining <= 0) {
+          setHasAccess(false);
+          setAccessReason('Starter plan quota is exhausted for this month. Access will reset next cycle.');
+          return;
+        }
         setHasAccess(true);
         setAccessReason('Starter plan is active with card on file: 1 session per month with any mentor.');
         return;
       }
 
-      if (subscriptionStatus !== 'active') {
+      if (subscriptionStatus !== 'active' && !activeSub) {
         setHasAccess(false);
         setAccessReason('Your paid subscription is not active. Please update billing.');
         return;
       }
 
-      if (!linkedMentor) {
+      if (activeCycleEnd && now > activeCycleEnd) {
         setHasAccess(false);
-        setAccessReason('Your paid plan is missing a linked mentor. Reopen billing and select your mentor.');
+        setAccessReason('Your billing cycle has ended. Waiting for automatic renewal payment confirmation.');
+        return;
+      }
+
+      if (resolvedRemaining <= 0) {
+        setHasAccess(false);
+        setAccessReason('Your session quota is exhausted for the current billing cycle. Access resumes after renewal.');
+        return;
+      }
+
+      if (!linkedMentor) {
+        // Do not hard-lock active subscribers if mentor linkage is temporarily missing.
+        setHasAccess(true);
+        setAccessReason('Your paid plan is active. Mentor linkage is missing, so you can book while billing sync catches up.');
         return;
       }
 
@@ -245,8 +336,14 @@ const MentorshipBooking: React.FC = () => {
       showToast('Recurring end date must be after booking date', 'warning');
       return;
     }
-    if (sessionsUsedThisMonth >= currentPlanLimit) {
-      showToast(`You have reached your ${userPlan.toUpperCase()} plan limit for this month.`, 'warning');
+    const remainingQuota = isPaidPlan ? (sessionsRemaining ?? 0) : Math.max(currentPlanLimit - sessionsUsedThisMonth, 0);
+    if (remainingQuota <= 0) {
+      showToast(
+        isPaidPlan
+          ? 'You have reached your paid plan quota for this billing cycle.'
+          : `You have reached your ${userPlan.toUpperCase()} plan limit for this month.`,
+        'warning'
+      );
       return;
     }
     if (isPaidPlan && planMentorId && selectedMentorId !== planMentorId) {
@@ -264,7 +361,7 @@ const MentorshipBooking: React.FC = () => {
     if (!user || !selectedMentorId || !selectedDate || !selectedTime) return;
     setSubmitting(true);
     try {
-      const sessionDoc = await addDoc(collection(db, 'bookings'), {
+      const bookingPayload = {
         studentId: user.uid,
         menteeId: user.uid,
         mentorId: selectedMentorId,
@@ -282,17 +379,50 @@ const MentorshipBooking: React.FC = () => {
         status: 'confirmed',
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
-      });
+      };
+
+      let bookedSessionId = '';
+
+      if (isPaidPlan && activeSubscriptionId) {
+        const bookingRef = doc(collection(db, 'bookings'));
+        const subRef = doc(db, 'subscriptions', activeSubscriptionId);
+
+        await runTransaction(db, async (tx) => {
+          const subSnap = await tx.get(subRef);
+          if (!subSnap.exists()) throw new Error('SUBSCRIPTION_NOT_FOUND');
+
+          const subData = subSnap.data() as Record<string, any>;
+          const subStatus = String(subData.status || 'inactive');
+          const subRemaining = Number(subData.sessionsRemaining || 0);
+          const subPeriodEnd = toDateValue(subData.currentPeriodEnd);
+
+          if (subStatus !== 'active') throw new Error('SUBSCRIPTION_INACTIVE');
+          if (subPeriodEnd && new Date() > subPeriodEnd) throw new Error('SUBSCRIPTION_CYCLE_ENDED');
+          if (subRemaining <= 0) throw new Error('SUBSCRIPTION_QUOTA_EXHAUSTED');
+
+          tx.update(subRef, {
+            sessionsRemaining: subRemaining - 1,
+            updatedAt: Timestamp.now(),
+          });
+          tx.set(bookingRef, bookingPayload);
+        });
+
+        bookedSessionId = bookingRef.id;
+        setSessionsRemaining((prev) => (typeof prev === 'number' ? Math.max(prev - 1, 0) : prev));
+      } else {
+        const sessionDoc = await addDoc(collection(db, 'bookings'), bookingPayload);
+        bookedSessionId = sessionDoc.id;
+      }
       
       // Create connection and conversation
       const { createConnection, createConversation } = await import('../services/messagingService');
-      await createConnection(user.uid, selectedMentorId, sessionDoc.id);
-      await createConversation(user.uid, selectedMentorId, sessionDoc.id);
+      await createConnection(user.uid, selectedMentorId, bookedSessionId);
+      await createConversation(user.uid, selectedMentorId, bookedSessionId);
 
-      // Update monthly usage counter for quick feedback in UI.
+      // Update usage counter for quick feedback in UI.
       try {
         await updateDoc(doc(db, 'users', user.uid), {
-          sessionsUsedThisMonth: sessionsUsedThisMonth + 1,
+          sessionsUsedThisMonth: increment(1),
           subscriptionLastBookedAt: Timestamp.now(),
           updatedAt: Timestamp.now(),
         });
@@ -344,7 +474,16 @@ const MentorshipBooking: React.FC = () => {
       }, 2000);
     } catch (err) {
       errorService.handleError(err, 'Booking error');
-      showToast('Failed to book session. Please try again.', 'error');
+      const code = String((err as any)?.message || '');
+      if (code === 'SUBSCRIPTION_QUOTA_EXHAUSTED') {
+        showToast('Your paid plan quota is exhausted for this billing cycle.', 'warning');
+      } else if (code === 'SUBSCRIPTION_CYCLE_ENDED') {
+        showToast('Billing cycle ended. Waiting for auto-renewal payment confirmation.', 'warning');
+      } else if (code === 'SUBSCRIPTION_INACTIVE') {
+        showToast('Subscription is not active. Update billing to continue booking.', 'warning');
+      } else {
+        showToast('Failed to book session. Please try again.', 'error');
+      }
     } finally {
       setSubmitting(false);
       setShowConfirmDialog(false);
@@ -402,7 +541,7 @@ const MentorshipBooking: React.FC = () => {
               </li>
               <li className="flex items-center gap-3 animate-in slide-in-from-left-4" style={{animationDelay: '200ms'}}>
                 <span className="material-symbols-outlined text-blue-500">check_circle</span>
-                <span>Select a subscription plan (Basic or Premium)</span>
+                <span>Select a subscription plan (Job-Ready or Career Accelerator)</span>
               </li>
               <li className="flex items-center gap-3 animate-in slide-in-from-left-4" style={{animationDelay: '300ms'}}>
                 <span className="material-symbols-outlined text-blue-500">check_circle</span>
@@ -739,8 +878,18 @@ const MentorshipBooking: React.FC = () => {
                   : '1 session/month with any available mentor'}
               </p>
               <p className={`mt-2 text-xs font-bold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                Used this month: {sessionsUsedThisMonth}/{currentPlanLimit}
+                {isPaidPlan ? 'Used this cycle' : 'Used this month'}: {sessionsUsedThisMonth}/{sessionQuota}
               </p>
+              {isPaidPlan && (
+                <p className={`mt-1 text-xs font-bold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Remaining this cycle: {sessionsRemaining ?? Math.max(sessionQuota - sessionsUsedThisMonth, 0)}
+                </p>
+              )}
+              {isPaidPlan && cycleEndsAt && (
+                <p className={`mt-1 text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Cycle renews on: {cycleEndsAt.toLocaleDateString()}
+                </p>
+              )}
               {accessReason && (
                 <p className={`mt-2 text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{accessReason}</p>
               )}
