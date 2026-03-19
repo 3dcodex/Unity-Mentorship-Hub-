@@ -50,17 +50,27 @@ const ManageSubscription: React.FC = () => {
       setLoading(true);
 
       const userRef = doc(db, 'users', user.uid);
-      const [userSnap, activeSubSnap] = await Promise.all([
-        getDoc(userRef),
-        getDocs(
+      let activeSubSnap = await getDocs(
+        query(
+          collection(db, 'subscriptions'),
+          where('userId', '==', user.uid),
+          where('status', '==', 'active'),
+          limit(1)
+        )
+      );
+
+      if (activeSubSnap.empty) {
+        activeSubSnap = await getDocs(
           query(
             collection(db, 'subscriptions'),
             where('userId', '==', user.uid),
-            where('status', '==', 'active'),
+            where('status', '==', 'trialing'),
             limit(1)
           )
-        ),
-      ]);
+        );
+      }
+
+      const [userSnap] = await Promise.all([getDoc(userRef)]);
 
       const activeSub = activeSubSnap.empty ? null : (activeSubSnap.docs[0].data() as Record<string, any>);
 

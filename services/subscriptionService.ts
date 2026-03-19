@@ -100,13 +100,24 @@ export const subscriptionService = {
    */
   async getUserSubscription(userId: string): Promise<Subscription | null> {
     try {
-      const q = query(
-        collection(db, 'subscriptions'),
-        where('userId', '==', userId),
-        where('status', '==', 'active')
+      // Check active first, then trialing
+      let snapshot = await getDocs(
+        query(
+          collection(db, 'subscriptions'),
+          where('userId', '==', userId),
+          where('status', '==', 'active')
+        )
       );
 
-      const snapshot = await getDocs(q);
+      if (snapshot.empty) {
+        snapshot = await getDocs(
+          query(
+            collection(db, 'subscriptions'),
+            where('userId', '==', userId),
+            where('status', '==', 'trialing')
+          )
+        );
+      }
 
       if (snapshot.empty) {
         return null;

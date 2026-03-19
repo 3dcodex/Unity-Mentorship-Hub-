@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { db } from '../src/firebase';
 import { doc, getDoc, addDoc, collection, query, where, getDocs, Timestamp, updateDoc, limit, runTransaction, increment } from 'firebase/firestore';
@@ -6,6 +6,7 @@ import { useAuth } from '../App';
 import { useTheme } from '../contexts/ThemeContext';
 import { errorService } from '../services/errorService';
 import { useToast } from '../components/AdminToast';
+import { stripeService } from '../services/stripeService';
 import type { SubscriptionTier } from '../types';
 
 const SELECTED_MENTOR_STORAGE_KEY = 'unity_selected_mentor_id';
@@ -38,6 +39,7 @@ const MentorshipBooking: React.FC = () => {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [hasAccess, setHasAccess] = useState(false);
   const [accessReason, setAccessReason] = useState('');
+  const [accessReasonCode, setAccessReasonCode] = useState('unknown');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [userPlan, setUserPlan] = useState<SubscriptionTier>('starter');
@@ -55,6 +57,7 @@ const MentorshipBooking: React.FC = () => {
   const queryParams = new URLSearchParams(location.search);
   const mentorIdFromQuery = queryParams.get('mentor') || '';
   const [mentor, setMentor] = useState<MentorProfile | null>(null);
+  const resyncAttemptedRef = useRef(false);
 
   const timeSlots = ['09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
   const planLimits: Record<SubscriptionTier, number> = {
@@ -168,39 +171,120 @@ const MentorshipBooking: React.FC = () => {
       const userData = userDoc.data();
       let activeSub: Record<string, any> | null = null;
       let activeSubDocId: string | null = null;
+      const paidLikeStatuses = new Set(['active', 'trialing']);
+      const blockedPaidStatuses = new Set(['past_due', 'incomplete', 'unpaid', 'canceled', 'cancelled', 'incomplete_expired']);
 
-      // Subscription reads can fail under strict rules; fall back to user profile data instead of blocking access.
+      // Try multiple query strategies — Firestore rules require userId match.
       try {
-        const activeSubSnapshot = await getDocs(
+        // First try: query with status == 'active' (most common, rule-safe)
+        let subSnapshot = await getDocs(
           query(
             collection(db, 'subscriptions'),
             where('userId', '==', user.uid),
             where('status', '==', 'active'),
-            limit(1)
+            limit(5)
           )
         );
-        if (!activeSubSnapshot.empty) {
-          activeSubDocId = activeSubSnapshot.docs[0].id;
-          activeSub = activeSubSnapshot.docs[0].data() as Record<string, any>;
+
+        // Second try: also check 'trialing' status (Stripe may set this)
+        if (subSnapshot.empty) {
+          subSnapshot = await getDocs(
+            query(
+              collection(db, 'subscriptions'),
+              where('userId', '==', user.uid),
+              where('status', '==', 'trialing'),
+              limit(5)
+            )
+          );
+        }
+
+        if (!subSnapshot.empty) {
+          const rankedSubs = subSnapshot.docs
+            .map((subDoc) => ({ id: subDoc.id, ...(subDoc.data() as Record<string, any>) })) as Array<Record<string, any> & { id: string }>;
+
+          rankedSubs.sort((a, b) => {
+              const aUpdated = toDateValue(a['updatedAt'])?.getTime() || 0;
+              const bUpdated = toDateValue(b['updatedAt'])?.getTime() || 0;
+              return bUpdated - aUpdated;
+            });
+
+          activeSubDocId = rankedSubs[0].id;
+          activeSub = rankedSubs[0];
         }
       } catch (subErr) {
         errorService.handleError(subErr, 'Unable to read active subscription; using user profile fallback');
       }
 
-      const plan = normalizeTier(activeSub?.tier || userData?.subscriptionTier || userData?.subscriptionPlan);
+      const entitlement = userData?.entitlementSnapshot || null;
+      const plan = normalizeTier(activeSub?.tier || entitlement?.plan || userData?.subscriptionTier || userData?.subscriptionPlan);
       const hasFreeAccess = userData?.hasFreeAccess || false;
-      const subscriptionStatus = activeSub?.status || userData?.subscriptionStatus || 'active';
-      const linkedMentor = userData?.subscriptionMentorId || activeSub?.mentorId || null;
-      const sessionsPerMonth = Number(activeSub?.sessionsPerMonth || userData?.sessionsPerMonth || planLimits[plan]);
-      const activeCycleEnd = toDateValue(activeSub?.currentPeriodEnd || userData?.subscriptionCurrentPeriodEnd);
-      const activeCycleStart = toDateValue(activeSub?.currentPeriodStart || userData?.subscriptionCurrentPeriodStart);
+      const subscriptionStatusRaw = activeSub?.status || entitlement?.status || userData?.subscriptionStatus || 'active';
+      const subscriptionStatus = String(subscriptionStatusRaw).toLowerCase();
+      const linkedMentor = userData?.subscriptionMentorId || activeSub?.mentorId || entitlement?.mentorId || null;
+      const sessionsPerMonth = Number(activeSub?.sessionsPerMonth || entitlement?.sessionsPerMonth || userData?.sessionsPerMonth || planLimits[plan]);
+      const activeCycleEnd = toDateValue(activeSub?.currentPeriodEnd || entitlement?.cycleEnd || userData?.subscriptionCurrentPeriodEnd);
+      const activeCycleStart = toDateValue(activeSub?.currentPeriodStart || entitlement?.cycleStart || userData?.subscriptionCurrentPeriodStart);
       const billingSetupComplete = Boolean(
         userData?.billingSetupComplete ||
         userData?.paymentMethodOnFile ||
         userData?.stripeCustomerId ||
         activeSub ||
-        (plan !== 'starter' && subscriptionStatus === 'active')
+        (plan !== 'starter' && paidLikeStatuses.has(subscriptionStatus)) ||
+        userData?.stripeSubscriptionId ||
+        entitlement?.status === 'active' ||
+        entitlement?.status === 'trialing'
       );
+
+      const hasPaidFootprint = Boolean(
+        userData?.pendingSubscriptionTier ||
+        userData?.subscriptionTier === 'job-ready' ||
+        userData?.subscriptionTier === 'career-accelerator' ||
+        userData?.subscriptionPlan === 'job-ready' ||
+        userData?.subscriptionPlan === 'career-accelerator' ||
+        entitlement?.plan === 'job-ready' ||
+        entitlement?.plan === 'career-accelerator' ||
+        activeSub?.stripeSubscriptionId ||
+        userData?.stripeSubscriptionId
+      );
+
+      const shouldAttemptSelfResync = Boolean(
+        userData?.stripeCustomerId &&
+        !resyncAttemptedRef.current &&
+        (
+          (!activeSub && (plan !== 'starter' || hasPaidFootprint || blockedPaidStatuses.has(subscriptionStatus))) ||
+          (plan !== 'starter' && blockedPaidStatuses.has(subscriptionStatus)) ||
+          (plan !== 'starter' && paidLikeStatuses.has(subscriptionStatus) && activeCycleEnd && new Date() > activeCycleEnd)
+        )
+      );
+
+      if (shouldAttemptSelfResync) {
+        resyncAttemptedRef.current = true;
+        try {
+          await stripeService.resyncMySubscription();
+          return checkAccess();
+        } catch (resyncErr) {
+          errorService.handleError(resyncErr, 'Self-service subscription resync failed in booking access check');
+        }
+      }
+
+      const applyAccessDecision = (allow: boolean, reason: string, code: string) => {
+        setHasAccess(allow);
+        setAccessReason(reason);
+        setAccessReasonCode(code);
+        console.info('[BookingAccessDecision]', {
+          userId: user.uid,
+          allow,
+          reason,
+          code,
+          plan,
+          subscriptionStatus,
+          sessionsPerMonth,
+          activeSubDocId,
+          billingSetupComplete,
+          resolvedMentorId: linkedMentor,
+          cycleEnd: activeCycleEnd?.toISOString?.() || null,
+        });
+      };
 
       setUserPlan(plan);
       setPlanMentorId(linkedMentor);
@@ -213,7 +297,7 @@ const MentorshipBooking: React.FC = () => {
           await updateDoc(doc(db, 'users', user.uid), {
             subscriptionTier: plan,
             subscriptionPlan: plan,
-            subscriptionStatus,
+            subscriptionStatus: subscriptionStatusRaw,
             subscriptionMentorId: linkedMentor,
             sessionsPerMonth,
             billingSetupComplete: true,
@@ -261,59 +345,62 @@ const MentorshipBooking: React.FC = () => {
       setSessionsRemaining(Number.isFinite(resolvedRemaining) ? resolvedRemaining : 0);
 
       if (hasFreeAccess) {
-        setHasAccess(true);
-        setAccessReason('Access granted by admin override.');
+        applyAccessDecision(true, 'Access granted by admin override.', 'admin_override');
         return;
       }
 
-      if (!billingSetupComplete) {
-        setHasAccess(false);
-        setAccessReason('Billing setup is required. Add card details before booking sessions.');
+      if (!billingSetupComplete && plan === 'starter') {
+        applyAccessDecision(false, 'Billing setup is required. Add card details before booking sessions.', 'billing_setup_missing');
+        return;
+      }
+
+      // Paid users with a stripeCustomerId but no active sub doc — try resync before blocking
+      if (!billingSetupComplete && plan !== 'starter') {
+        applyAccessDecision(false, 'Your subscription is being verified. Please visit Billing to confirm your payment status.', 'billing_verification_pending');
         return;
       }
 
       if (plan === 'starter') {
         if (resolvedRemaining <= 0) {
-          setHasAccess(false);
-          setAccessReason('Starter plan quota is exhausted for this month. Access will reset next cycle.');
+          applyAccessDecision(false, 'Starter plan quota is exhausted for this month. Access will reset next cycle.', 'starter_quota_exhausted');
           return;
         }
-        setHasAccess(true);
-        setAccessReason('Starter plan is active with card on file: 1 session per month with any mentor.');
+        applyAccessDecision(true, 'Starter plan is active with card on file: 1 session per month with any mentor.', 'starter_ok');
         return;
       }
 
-      if (subscriptionStatus !== 'active' && !activeSub) {
-        setHasAccess(false);
-        setAccessReason('Your paid subscription is not active. Please update billing.');
+      if (!paidLikeStatuses.has(subscriptionStatus) && !activeSub && !entitlement) {
+        applyAccessDecision(false, 'Your paid subscription is not active. Please update billing.', 'paid_subscription_not_active');
+        return;
+      }
+
+      if (blockedPaidStatuses.has(subscriptionStatus)) {
+        applyAccessDecision(false, 'Your subscription payment needs attention. Please update billing to continue booking sessions.', 'payment_attention_required');
         return;
       }
 
       if (activeCycleEnd && now > activeCycleEnd) {
-        setHasAccess(false);
-        setAccessReason('Your billing cycle has ended. Waiting for automatic renewal payment confirmation.');
+        applyAccessDecision(false, 'Your billing cycle has ended. Waiting for automatic renewal payment confirmation.', 'cycle_expired');
         return;
       }
 
       if (resolvedRemaining <= 0) {
-        setHasAccess(false);
-        setAccessReason('Your session quota is exhausted for the current billing cycle. Access resumes after renewal.');
+        applyAccessDecision(false, 'Your session quota is exhausted for the current billing cycle. Access resumes after renewal.', 'paid_quota_exhausted');
         return;
       }
 
       if (!linkedMentor) {
         // Do not hard-lock active subscribers if mentor linkage is temporarily missing.
-        setHasAccess(true);
-        setAccessReason('Your paid plan is active. Mentor linkage is missing, so you can book while billing sync catches up.');
+        applyAccessDecision(true, 'Your paid plan is active. Mentor linkage is missing, so you can book while billing sync catches up.', 'mentor_link_missing_but_allowed');
         return;
       }
 
-      setHasAccess(true);
-      setAccessReason('Paid plans can book only with the mentor linked in billing.');
+      applyAccessDecision(true, 'Paid plans can book only with the mentor linked in billing.', 'paid_ok');
     } catch (err) {
       errorService.handleError(err, 'Error checking access');
       setHasAccess(false);
       setAccessReason('Unable to verify subscription access. Please try again.');
+      setAccessReasonCode('access_check_failed');
     } finally {
       setLoading(false);
     }
@@ -512,6 +599,21 @@ const MentorshipBooking: React.FC = () => {
     );
   }
 
+  const accessReasonLower = accessReason.toLowerCase();
+  const hasBillingIssue =
+    accessReasonLower.includes('billing setup') ||
+    accessReasonLower.includes('not active') ||
+    accessReasonLower.includes('payment needs attention') ||
+    accessReasonLower.includes('update billing');
+  const accessTitle = hasBillingIssue ? 'Access Restricted' : 'Booking Temporarily Unavailable';
+  const accessDescription = hasBillingIssue
+    ? 'We need to confirm your billing eligibility before booking.'
+    : 'Your plan is detected, but booking is paused due to cycle or quota rules.';
+  const primaryActionPath = hasBillingIssue
+    ? (selectedMentorId ? `/billing?mentor=${selectedMentorId}` : '/billing')
+    : '/billing/manage';
+  const primaryActionLabel = hasBillingIssue ? 'Go to Billing' : 'Manage Subscription';
+
   if (!hasAccess) {
     return (
       <div className={`min-h-screen flex items-center justify-center p-4 relative overflow-hidden ${isDark ? 'bg-slate-900' : 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50'}`}>
@@ -525,38 +627,41 @@ const MentorshipBooking: React.FC = () => {
           <div className="size-24 bg-gradient-to-br from-red-500 via-pink-500 to-purple-500 rounded-full flex items-center justify-center mx-auto shadow-2xl shadow-pink-500/50 animate-bounce">
             <span className="material-symbols-outlined text-white text-5xl">lock</span>
           </div>
-          <h1 className={`text-2xl sm:text-4xl font-black bg-gradient-to-r from-red-500 via-pink-500 to-purple-500 bg-clip-text text-transparent`}>Access Restricted</h1>
+          <h1 className={`text-2xl sm:text-4xl font-black bg-gradient-to-r from-red-500 via-pink-500 to-purple-500 bg-clip-text text-transparent`}>{accessTitle}</h1>
           <p className={`text-lg font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-            You need to complete billing and select a payment plan to book mentorship sessions.
+            {accessDescription}
           </p>
           {accessReason && (
-            <p className={`text-sm font-semibold ${isDark ? 'text-amber-300' : 'text-amber-700'}`}>{accessReason}</p>
+            <div className="space-y-1">
+              <p className={`text-sm font-semibold ${isDark ? 'text-amber-300' : 'text-amber-700'}`}>{accessReason}</p>
+              <p className={`text-xs font-mono ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Reason code: {accessReasonCode}</p>
+            </div>
           )}
           <div className={`rounded-2xl p-6 backdrop-blur-sm ${isDark ? 'bg-slate-700/50 border border-slate-600' : 'bg-blue-50/50 border border-blue-100'}`}>
-            <p className={`text-sm font-bold mb-4 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>To get access:</p>
+            <p className={`text-sm font-bold mb-4 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{hasBillingIssue ? 'To restore access:' : 'To continue booking:'}</p>
             <ul className={`space-y-2 text-left ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
               <li className="flex items-center gap-3 animate-in slide-in-from-left-4" style={{animationDelay: '100ms'}}>
                 <span className="material-symbols-outlined text-blue-500">check_circle</span>
-                <span>Complete your billing information</span>
+                <span>{hasBillingIssue ? 'Confirm your payment method and subscription status' : 'Check your remaining sessions for this cycle'}</span>
               </li>
               <li className="flex items-center gap-3 animate-in slide-in-from-left-4" style={{animationDelay: '200ms'}}>
                 <span className="material-symbols-outlined text-blue-500">check_circle</span>
-                <span>Select a subscription plan (Job-Ready or Career Accelerator)</span>
+                <span>{hasBillingIssue ? 'Ensure your paid plan (Job-Ready or Career Accelerator) is active' : 'Verify your renewal date and billing cycle status'}</span>
               </li>
               <li className="flex items-center gap-3 animate-in slide-in-from-left-4" style={{animationDelay: '300ms'}}>
                 <span className="material-symbols-outlined text-blue-500">check_circle</span>
-                <span>Or make a session payment</span>
+                <span>{hasBillingIssue ? 'Retry checkout if payment is still processing' : 'Use Manage Subscription to adjust your plan if needed'}</span>
               </li>
             </ul>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
             <button
-              onClick={() => navigate(selectedMentorId ? `/billing?mentor=${selectedMentorId}` : '/billing')}
+              onClick={() => navigate(primaryActionPath)}
               className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:via-indigo-700 hover:to-purple-700 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-2xl font-black shadow-2xl shadow-blue-500/50 hover:scale-105 transition-all flex items-center justify-center gap-2 relative overflow-hidden group"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
               <span className="material-symbols-outlined relative z-10">payments</span>
-              <span className="relative z-10">Go to Billing</span>
+              <span className="relative z-10">{primaryActionLabel}</span>
             </button>
             <button
               onClick={() => navigate('/dashboard')}

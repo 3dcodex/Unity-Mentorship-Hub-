@@ -22,6 +22,24 @@ interface Transaction {
   status: string;
 }
 
+interface PaymentRecord {
+  id: string;
+  totalAmount?: number;
+  status?: string;
+  createdAt?: Timestamp;
+  paidAt?: Timestamp;
+  stripeInvoiceId?: string;
+}
+
+interface PaymentHistoryItem {
+  id: string;
+  amount: number;
+  status: string;
+  date: any;
+  source: 'stripe' | 'legacy';
+  reference?: string;
+}
+
 interface Report {
   id: string;
   reason: string;
@@ -61,6 +79,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({ userId, onClose, onUp
   const [user, setUser] = useState<UserData | null>(null);
   const [sessions, setSessions] = useState<SessionData[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [notes, setNotes] = useState<UserNote[]>([]);
@@ -92,13 +111,21 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({ userId, onClose, onUp
       const sessionsSnap = await getDocs(sessionsQuery);
       setSessions(sessionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
-      // Load transactions
+      // Load legacy transactions
       const transactionsQuery = query(
         collection(db, 'transactions'),
         where('userId', '==', userId)
       );
       const transactionsSnap = await getDocs(transactionsQuery);
       setTransactions(transactionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+      // Load Stripe-backed payments (canonical billing records)
+      const paymentsQuery = query(
+        collection(db, 'payments'),
+        where('userId', '==', userId)
+      );
+      const paymentsSnap = await getDocs(paymentsQuery);
+      setPayments(paymentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as PaymentRecord[]);
 
       // Load reports (filed by or against user)
       const reportsByQuery = query(
@@ -175,6 +202,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({ userId, onClose, onUp
     const data = {
       user,
       sessions,
+      payments,
       transactions,
       reports,
       reviews,
@@ -214,6 +242,34 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({ userId, onClose, onUp
       </div>
     );
   }
+
+  const succeededStripePayments = payments.filter((payment) => payment.status === 'succeeded');
+  const stripeTotalSpent = succeededStripePayments.reduce((sum, payment) => sum + Number(payment.totalAmount || 0), 0);
+  const legacyTotalSpent = transactions.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  const effectiveTotalSpent = stripeTotalSpent > 0 ? stripeTotalSpent : legacyTotalSpent;
+
+  const paymentHistory: PaymentHistoryItem[] = [
+    ...payments.map((payment) => ({
+      id: `stripe-${payment.id}`,
+      amount: Number(payment.totalAmount || 0),
+      status: payment.status || 'unknown',
+      date: payment.paidAt || payment.createdAt || null,
+      source: 'stripe' as const,
+      reference: payment.stripeInvoiceId,
+    })),
+    ...transactions.map((transaction) => ({
+      id: `legacy-${transaction.id}`,
+      amount: Number(transaction.amount || 0),
+      status: transaction.status || 'unknown',
+      date: (transaction as any).createdAt || transaction.date || null,
+      source: 'legacy' as const,
+      reference: undefined,
+    })),
+  ].sort((a, b) => {
+    const aTime = (a.date?.toDate?.() || new Date(a.date || 0)).getTime();
+    const bTime = (b.date?.toDate?.() || new Date(b.date || 0)).getTime();
+    return bTime - aTime;
+  });
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
@@ -306,7 +362,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({ userId, onClose, onUp
                 <div className="bg-green-50 rounded-xl p-4">
                   <p className="text-sm text-green-600 font-bold">Total Spent</p>
                   <p className="text-3xl font-black text-green-900">
-                    {formatCurrency(transactions.reduce((sum, t) => sum + (t.amount || 0), 0))}
+                    {formatCurrency(effectiveTotalSpent)}
                   </p>
                 </div>
                 <div className="bg-purple-50 rounded-xl p-4">
@@ -385,18 +441,25 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({ userId, onClose, onUp
 
           {activeTab === 'payments' && (
             <div className="space-y-4">
-              <h3 className="text-xl font-black">Payment History ({transactions.length})</h3>
-              {transactions.length === 0 ? (
-                <p className="text-gray-600">No transactions found</p>
+              <h3 className="text-xl font-black">Payment History ({paymentHistory.length})</h3>
+              <p className="text-sm text-gray-500">
+                Stripe payments: {payments.length} | Legacy transactions: {transactions.length}
+              </p>
+              {paymentHistory.length === 0 ? (
+                <p className="text-gray-600">No payment records found</p>
               ) : (
                 <div className="space-y-2">
-                  {transactions.map((transaction) => (
-                    <div key={transaction.id} className="bg-gray-50 rounded-xl p-4 flex items-center justify-between">
+                  {paymentHistory.map((payment) => (
+                    <div key={payment.id} className="bg-gray-50 rounded-xl p-4 flex items-center justify-between gap-4">
                       <div>
-                        <p className="font-bold">{formatCurrency(transaction.amount)}</p>
-                        <p className="text-sm text-gray-600">{formatDateTime(transaction.createdAt)}</p>
+                        <p className="font-bold">{formatCurrency(payment.amount)}</p>
+                        <p className="text-sm text-gray-600">{formatDateTime(payment.date)}</p>
+                        <p className="text-xs text-gray-500 uppercase tracking-wide">
+                          {payment.source === 'stripe' ? 'Stripe Payment' : 'Legacy Transaction'}
+                          {payment.reference ? ` • ${payment.reference}` : ''}
+                        </p>
                       </div>
-                      <StatusBadge status={transaction.status} />
+                      <StatusBadge status={payment.status} />
                     </div>
                   ))}
                 </div>

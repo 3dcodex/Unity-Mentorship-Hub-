@@ -39,6 +39,20 @@ const MentorMatching: React.FC = () => {
     return 'Potential fit';
   };
 
+  const summarizeMentorBio = (mentor: MentorMatchResult, maxLength = 140) => {
+    const rawText = (mentor.mentorBio || mentor.bio || 'Experienced mentor ready to help you succeed.').trim();
+    const cleanText = rawText.replace(/\s+/g, ' ');
+
+    if (cleanText.length <= maxLength) {
+      return cleanText;
+    }
+
+    const truncated = cleanText.slice(0, maxLength);
+    const lastSpaceIndex = truncated.lastIndexOf(' ');
+    const safeSlice = lastSpaceIndex > 0 ? truncated.slice(0, lastSpaceIndex) : truncated;
+    return `${safeSlice}...`;
+  };
+
   const handleMatch = async () => {
     setStep('loading');
     setMatchMessage('');
@@ -160,11 +174,11 @@ const MentorMatching: React.FC = () => {
               <p className="text-gray-500 font-medium">No approved mentors are available right now. Check back soon.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {(matchedMentors.length > 0 ? matchedMentors : fallbackMentors).map(mentor => (
-                <div key={mentor.id} className="bg-white p-4 sm:p-6 md:p-8 rounded-xl sm:rounded-2xl md:rounded-[32px] border border-gray-100 shadow-lg flex flex-col space-y-4 hover:-translate-y-2 transition-transform">
-                  <div className="flex items-start justify-between">
-                    <div className="size-16 rounded-full overflow-hidden bg-gray-100 border-2 border-primary/20">
+                <div key={mentor.id} className="rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-gray-200 bg-gray-50 transition-all hover:scale-105 flex flex-col space-y-3 sm:space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="size-12 sm:size-14 rounded-full overflow-hidden bg-gray-100 border-2 border-primary/20 flex-shrink-0">
                       <img src={mentor.photoURL || 'https://i.pravatar.cc/100'} alt={mentor.displayName} className="w-full h-full object-cover" />
                     </div>
                     {mentor.matchScore > 0 ? (
@@ -178,8 +192,8 @@ const MentorMatching: React.FC = () => {
                     )}
                   </div>
                   <div>
-                    <h3 className="text-base sm:text-lg font-black text-gray-900 leading-tight">{mentor.displayName || mentor.name || 'Mentor'}</h3>
-                    <p className="text-xs font-bold text-primary mt-1">{mentor.mentorExpertise || mentor.role || 'Expert Mentor'}</p>
+                    <h3 className="text-sm sm:text-base font-black text-gray-900 leading-tight">{mentor.displayName || mentor.name || 'Mentor'}</h3>
+                    <p className="text-xs text-gray-600 mt-1 font-medium">{mentor.mentorExpertise || mentor.role || 'Expert Mentor'}</p>
                     {mentor.matchedFocusAreas.length > 0 ? (
                       <div className="flex flex-wrap gap-1 mt-2">
                         {mentor.matchedFocusAreas.slice(0, 3).map(area => (
@@ -198,15 +212,20 @@ const MentorMatching: React.FC = () => {
                       </div>
                     )}
                   </div>
-                  <p className="text-sm text-gray-500 leading-relaxed font-medium flex-1">{mentor.mentorBio || mentor.bio || 'Experienced mentor ready to help you succeed.'}</p>
+                  <p className="text-xs sm:text-sm text-gray-600 leading-relaxed min-h-[64px]">
+                    {summarizeMentorBio(mentor)}
+                  </p>
                   {mentor.matchReasons.length > 0 && (
-                    <div className="rounded-2xl bg-slate-50 px-4 py-3 text-xs font-medium text-slate-600">
+                    <div
+                      className="rounded-lg sm:rounded-xl bg-white px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-medium text-slate-600 min-h-[56px] border border-gray-200"
+                      style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                    >
                       {mentor.matchReasons[0]}
                     </div>
                   )}
                   <button 
                     onClick={() => navigate(`/mentorship/book?mentor=${mentor.id}`)}
-                    className="w-full py-3 bg-gray-50 text-primary font-bold rounded-xl text-sm hover:bg-primary hover:text-white transition-all"
+                    className="w-full px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm transition-all"
                   >
                     Book This Mentor
                   </button>

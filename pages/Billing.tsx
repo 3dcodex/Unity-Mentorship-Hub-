@@ -88,8 +88,8 @@ const Billing: React.FC = () => {
   }, [billingStatus, navigate]);
 
   const pollAttemptsRef = useRef(0);
-  const MAX_POLL_ATTEMPTS = 5;
-  const POLL_INTERVAL_MS = 2500;
+  const MAX_POLL_ATTEMPTS = 12;
+  const POLL_INTERVAL_MS = 3000;
 
   const syncSubscriptionAfterCheckout = useCallback(async () => {
     if (!user) return;
@@ -101,7 +101,8 @@ const Billing: React.FC = () => {
 
       const userData = userSnap.data();
 
-      const activeSubSnapshot = await getDocs(
+      // Check for active OR trialing subscriptions (Stripe may use either status)
+      let activeSubSnapshot = await getDocs(
         query(
           collection(db, 'subscriptions'),
           where('userId', '==', user.uid),
@@ -110,19 +111,44 @@ const Billing: React.FC = () => {
         )
       );
 
+      if (activeSubSnapshot.empty) {
+        activeSubSnapshot = await getDocs(
+          query(
+            collection(db, 'subscriptions'),
+            where('userId', '==', user.uid),
+            where('status', '==', 'trialing'),
+            limit(1)
+          )
+        );
+      }
+
       if (!activeSubSnapshot.empty) {
         const activeSub = activeSubSnapshot.docs[0].data() as Record<string, any>;
+        const resolvedStatus = activeSub.status || 'active';
 
         await setDoc(userRef, {
           subscriptionTier: activeSub.tier || userData.subscriptionTier || 'starter',
           subscriptionPlan: activeSub.tier || userData.subscriptionTier || 'starter',
-          subscriptionStatus: 'active',
+          subscriptionStatus: resolvedStatus,
           subscriptionMentorId: activeSub.mentorId || userData.subscriptionMentorId || null,
           sessionsPerMonth: activeSub.sessionsPerMonth || userData.sessionsPerMonth || 1,
           billingSetupComplete: true,
           paymentMethodOnFile: true,
           pendingSubscriptionMentorId: null,
           pendingSubscriptionTier: null,
+          entitlementSnapshot: {
+            plan: activeSub.tier || userData.subscriptionTier || 'starter',
+            status: resolvedStatus,
+            mentorId: activeSub.mentorId || userData.subscriptionMentorId || null,
+            sessionsPerMonth: activeSub.sessionsPerMonth || userData.sessionsPerMonth || 1,
+            sessionsRemaining: activeSub.sessionsRemaining ?? activeSub.sessionsPerMonth ?? userData.sessionsPerMonth ?? 1,
+            cycleStart: activeSub.currentPeriodStart || null,
+            cycleEnd: activeSub.currentPeriodEnd || null,
+            billingCycleDays: activeSub.billingCycleDays || 30,
+            source: 'billing_checkout_sync',
+            reasonCode: 'checkout_success_sync',
+            lastSyncedAt: Timestamp.now(),
+          },
           subscriptionUpdatedAt: Timestamp.now(),
         }, { merge: true });
 
@@ -131,6 +157,13 @@ const Billing: React.FC = () => {
         loadTransactions();
         navigate('/mentorship/history', { replace: true });
         return;
+      }
+
+      // Attempt a direct Stripe reconciliation before retrying polling.
+      try {
+        await stripeService.resyncMySubscription();
+      } catch (resyncErr) {
+        errorService.handleError(resyncErr, 'Post-checkout self resync attempt failed');
       }
 
       // Webhook may not have fired yet — retry with polling
@@ -156,6 +189,19 @@ const Billing: React.FC = () => {
           paymentMethodOnFile: true,
           pendingSubscriptionMentorId: null,
           pendingSubscriptionTier: null,
+          entitlementSnapshot: {
+            plan: 'starter',
+            status: 'active',
+            mentorId: refreshedUser.subscriptionMentorId || null,
+            sessionsPerMonth: 1,
+            sessionsRemaining: 1,
+            cycleStart: null,
+            cycleEnd: null,
+            billingCycleDays: 30,
+            source: 'billing_checkout_sync',
+            reasonCode: 'setup_complete_sync',
+            lastSyncedAt: Timestamp.now(),
+          },
           subscriptionUpdatedAt: Timestamp.now(),
         }, { merge: true });
         setToastMessage('Card details saved. Billing setup is complete.');
@@ -193,23 +239,41 @@ const Billing: React.FC = () => {
     if (!user) return;
     try {
       const userRef = doc(db, 'users', user.uid);
-      const [userDoc, activeSubSnapshot] = await Promise.all([
-        getDoc(userRef),
-        getDocs(
+      let activeSubSnapshot = await getDocs(
+        query(
+          collection(db, 'subscriptions'),
+          where('userId', '==', user.uid),
+          where('status', '==', 'active'),
+          limit(1)
+        )
+      );
+
+      if (activeSubSnapshot.empty) {
+        activeSubSnapshot = await getDocs(
           query(
             collection(db, 'subscriptions'),
             where('userId', '==', user.uid),
-            where('status', '==', 'active'),
+            where('status', '==', 'trialing'),
             limit(1)
           )
-        ),
-      ]);
+        );
+      }
+
+      const [userDoc] = await Promise.all([getDoc(userRef)]);
 
       if (userDoc.exists()) {
         const userData = userDoc.data();
         const activeSub = activeSubSnapshot.empty ? null : (activeSubSnapshot.docs[0].data() as Record<string, any>);
         const plan = normalizePlan(activeSub?.tier || userData?.subscriptionTier || userData?.subscriptionPlan);
         setSelectedPlan(plan);
+
+        if (!activeSub && userData?.stripeCustomerId && plan !== 'starter') {
+          try {
+            await stripeService.resyncMySubscription();
+          } catch (resyncErr) {
+            errorService.handleError(resyncErr, 'loadUserPlan self resync attempt failed');
+          }
+        }
 
         if (activeSub) {
           await setDoc(userRef, {
@@ -220,6 +284,19 @@ const Billing: React.FC = () => {
             sessionsPerMonth: activeSub.sessionsPerMonth || userData?.sessionsPerMonth || 1,
             billingSetupComplete: true,
             paymentMethodOnFile: true,
+            entitlementSnapshot: {
+              plan,
+              status: activeSub.status || 'active',
+              mentorId: activeSub.mentorId || userData?.subscriptionMentorId || null,
+              sessionsPerMonth: activeSub.sessionsPerMonth || userData?.sessionsPerMonth || 1,
+              sessionsRemaining: activeSub.sessionsRemaining ?? activeSub.sessionsPerMonth ?? userData?.sessionsPerMonth ?? 1,
+              cycleStart: activeSub.currentPeriodStart || null,
+              cycleEnd: activeSub.currentPeriodEnd || null,
+              billingCycleDays: activeSub.billingCycleDays || userData?.subscriptionCycleDays || 30,
+              source: 'billing_load_user_plan',
+              reasonCode: 'active_subscription_sync',
+              lastSyncedAt: Timestamp.now(),
+            },
             subscriptionUpdatedAt: Timestamp.now(),
           }, { merge: true });
         }

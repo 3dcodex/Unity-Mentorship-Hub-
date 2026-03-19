@@ -32,6 +32,15 @@ interface ConnectOnboardingResponse {
   url: string;
 }
 
+interface SubscriptionResyncResponse {
+  userId: string;
+  reconciled: boolean;
+  reason?: string;
+  tier?: string;
+  status?: string;
+  stripeSubscriptionId?: string;
+}
+
 const functions = getFunctions(app, STRIPE_ENV_CONFIG.functionsRegion);
 
 export const stripeService = {
@@ -132,6 +141,24 @@ export const stripeService = {
       return result.data;
     } catch (error) {
       errorService.handleError(error, 'createStripeConnectOnboardingLink');
+      throw error;
+    }
+  },
+
+  /**
+   * Forces an authenticated user's billing entitlement refresh from Stripe.
+   */
+  async resyncMySubscription(): Promise<SubscriptionResyncResponse> {
+    try {
+      const callable = httpsCallable<Record<string, never>, SubscriptionResyncResponse>(
+        functions,
+        'resyncMySubscription'
+      );
+
+      const result = await callable({});
+      return result.data;
+    } catch (error) {
+      errorService.handleError(error, 'resyncMySubscription');
       throw error;
     }
   },
