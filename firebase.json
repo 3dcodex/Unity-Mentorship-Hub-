@@ -11,7 +11,7 @@
     "functions": {
         "source": "functions",
         "predeploy": [
-            "npm run guard:functions"
+            "npm --prefix \"$RESOURCE_DIR\" run guard:functions"
         ]
     },
     "hosting": {
